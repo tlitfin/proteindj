@@ -211,7 +211,7 @@ apptainer build --fakeroot bindsweeper.sif bindsweeper.def
 apptainer build --fakeroot boltz2.sif boltz2.def
 apptainer build --fakeroot dl_binder_design.sif dl_binder_design.def
 apptainer build --fakeroot fampnn.sif fampnn.def
-apptainer build --fakeroot pyrosetta_tools.sif pyrosetta_tools.def
+apptainer build --fakeroot python_tools.sif python_tools.def
 apptainer build --fakeroot rfdiffusion.sif rfdiffusion.def
 cd ..
 ```

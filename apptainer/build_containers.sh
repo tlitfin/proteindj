@@ -10,7 +10,7 @@ declare -A CONTAINERS=(
     ["boltz2"]="boltz2.def"
     ["dl_binder_design"]="dl_binder_design.def"
     ["fampnn"]="fampnn.def"
-    ["pyrosetta_tools"]="pyrosetta_tools.def"
+    ["python_tools"]="python_tools.def"
     ["rfdiffusion"]="rfdiffusion.def"
 )
 
@@ -20,7 +20,7 @@ BUILD_BINDCRAFT=1
 BUILD_BOLTZ2=1
 BUILD_DL_BINDER_DESIGN=1
 BUILD_FAMPNN=1
-BUILD_PYROSETTA_TOOLS=1
+BUILD_PYTHON_TOOLS=1
 BUILD_RFDIFFUSION=1
 
 # Function to build a single container
