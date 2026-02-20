@@ -1,5 +1,5 @@
 process PrepFAMPNN {
-    label 'pyrosetta_tools'
+    label 'pyrosetta_tools' //TODO: Replace with PDBFixer in python_tools container
 
     input:
     tuple path(pdb_files), path(json_files)

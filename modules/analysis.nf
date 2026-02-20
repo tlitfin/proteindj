@@ -1,5 +1,5 @@
 process AnalysePredictions {
-    label 'pyrosetta_tools'
+    label 'pyrosetta_tools' //TODO: Replace with BioPython/DSSP in python_tools container. Can look at FreeBindCraft analysis method too.
 
     publishDir "${params.out_dir}/results", mode: 'copy', pattern: "*.csv"
     publishDir "${params.out_dir}/run/analysis", mode: 'copy', pattern: "analysis.log"

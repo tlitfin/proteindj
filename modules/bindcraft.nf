@@ -150,6 +150,7 @@ process RunBC {
     export MPLCONFIGDIR="tmp"
     
     python /opt/BindCraft/bindcraft.py \
+        --no-pyrosetta \
         --settings ${settings_json} \
         --filters ${filters_json} \
         --advanced ${advanced_json} \
