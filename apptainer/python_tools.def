@@ -14,7 +14,8 @@ From: ubuntu:24.04
         coreutils \
         grep \
         pigz \
-        sed
+        sed \
+        dssp
 
     # create and activate virtual environment
     python3 -m venv /opt/venv
@@ -40,7 +41,7 @@ From: ubuntu:24.04
     fi
 
 %help
-    Container with BioPython, Biotite, Matplotlib, Pandas, PDBFixer, PyTorch (CPU), and PyYAML installed in a Python virtual environment.
+    Container with BioPython, Biotite, Matplotlib, Pandas, PDBFixer, PyTorch (CPU), PyYAML, and DSSP (mkdssp) installed in a Python virtual environment.
     To use, run the container and your environment will be activated automatically.
 
 %labels
