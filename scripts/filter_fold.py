@@ -1,8 +1,8 @@
 import argparse
-import os
 from pathlib import Path
-import pyrosetta as pr
-from pyrosetta.rosetta.core.scoring import dssp
+import biotite.application.dssp as dssp
+import biotite.structure as struc
+from biotite.structure.io.pdb import PDBFile
 from multiprocessing import Pool
 import logging
 import sys
@@ -39,6 +39,23 @@ def extract_fold_id(pdb_filename):
     else:
         return None
 
+def load_structure_from_pdb(pdb_path):
+    """Load first model from a PDB file into a Biotite AtomArray."""
+    pdb_file = PDBFile.read(str(pdb_path))
+    try:
+        structure = pdb_file.get_structure(model=1)
+    except Exception:
+        structure = pdb_file.get_structure()
+
+    # If an AtomArrayStack is returned, use first model
+    if hasattr(structure, "stack_depth"):
+        stack_depth = structure.stack_depth() if callable(structure.stack_depth) else structure.stack_depth
+        if stack_depth == 0:
+            raise ValueError("No models found in structure")
+        structure = structure[0]
+
+    return structure
+
 def analyze_structure(args):
     """Analyze structure with automatic chain detection"""
     (pdb_file, fold_min_ss, fold_max_ss, fold_min_helices, fold_max_helices, 
@@ -48,37 +65,45 @@ def analyze_structure(args):
     logger = logging.getLogger('filter_fold')
 
     try:
-        # Load structure with PyRosetta
-        pose = pr.pose_from_pdb(str(pdb_file))
+        # Load structure with Biotite PDB parser
+        structure = load_structure_from_pdb(pdb_file)
 
         # Autodetect chain structure
-        chains = pose.split_by_chain()
-        num_chains = len(chains)
+        chain_ids = [chain_id for chain_id in struc.get_chains(structure) if str(chain_id).strip()]
+        num_chains = len(chain_ids)
 
         if num_chains == 1:
             # Monomer - analyze entire structure (single chain)
-            pose_to_analyze = pose
+            structure_to_analyze = structure
             logger.info(f"{pdb_file.name}: Single chain detected - treating as monomer")
         elif num_chains == 2:
             # Binder - analyze first chain only
-            pose_to_analyze = chains[1]
+            first_chain_id = chain_ids[0]
+            structure_to_analyze = structure[structure.chain_id == first_chain_id]
             logger.info(f"{pdb_file.name}: Two chains detected ({num_chains}) - treating as binder, analyzing first chain only")
         elif num_chains >= 3:
             # Oligomer - analyse all chains
-            pose_to_analyze = pose
+            structure_to_analyze = structure
             logger.info(f"{pdb_file.name}: More than two chains detected - treating as oligomer, analysing all chains")
         else:
             logger.error(f"{pdb_file.name}: No chains found, skipping")
             return None
 
-        # Calculate radius of gyration
-        scorefxn = pr.ScoreFunction()
-        scorefxn.set_weight(pr.rosetta.core.scoring.rg, 1.0)
-        rog = round(scorefxn(pose_to_analyze), 2)
+        # Calculate radius of gyration with Biotite
+        if structure_to_analyze.array_length() == 0:
+            raise ValueError("No atoms available for RoG calculation")
+        rog = round(float(struc.gyration_radius(structure_to_analyze)), 2)
 
         # Count secondary structures
-        dssp_obj = dssp.Dssp(pose_to_analyze)
-        dssp_string = dssp_obj.get_dssp_secstruct()
+        dssp_dict = {'E': 'E', 'B': 'E', 
+                     'H': 'H', 'I': 'H', 'G': 'H',
+                     'C': 'L', 'T': 'L', 'S': 'L'}
+
+        app = dssp.DsspApp(structure_to_analyze)
+        app.start()
+        app.join()
+        sse = app.get_sse()
+        dssp_string = "".join([dssp_dict.get(k, "L") for k in map(str, sse)])
 
         helix_count = 0
         strand_count = 0
@@ -193,9 +218,6 @@ def main():
     # setup logging
     logger = setup_logger()
     logger.info(f"Starting analysis with parameters: {vars(args)}")
-    
-    # initialise pyrosetta
-    pr.init("-out:levels all:error")
     
     # create output directory
     output_dir = args.output_dir
