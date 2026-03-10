@@ -259,30 +259,46 @@ class sample_features:
     def parse_fixed_res(self):
         """
         Parse fixed residues from Rosetta PDB info labels if present.
+        The FIXED labels contain PDB residue sequence numbers. We need to map
+        them to chain-relative 1-based indices for ProteinMPNN.
         """
-        fixed_list = []
+        # Collect all residue numbers marked as FIXED
+        fixed_pdb_resnums = []
         fixed_re = re.compile(r"PDBinfo-LABEL:\s*(\d+)\s+FIXED")
         for line in self.pdb_lines:
             if "PDBinfo-LABEL" not in line or "FIXED" not in line:
                 continue
             match = fixed_re.search(line)
             if match:
-                fixed_list.append(int(match.group(1)))
+                fixed_pdb_resnums.append(int(match.group(1)))
 
-        fixed_list = sorted(set(fixed_list))
+        fixed_pdb_resnums = sorted(set(fixed_pdb_resnums))
 
         if not self.chains:
             self.fixed_res = {}
             return
 
-        if len(self.chains) == 1:
-            self.fixed_res = {self.chains[0]: fixed_list}
-            return
+        # Build mapping from PDB residue sequence numbers to chain-relative indices
+        # For each chain, map: PDB resseq -> 1-based index within that chain
+        chain_resnum_to_index = {}
+        for chain_id in self.chains:
+            chain_resnum_to_index[chain_id] = {}
+            chain_keys = self._chain_residue_keys(chain_id)
+            for idx, key in enumerate(chain_keys, start=1):
+                _, resseq_str, icode = key
+                try:
+                    pdb_resnum = int(resseq_str.strip())
+                    chain_resnum_to_index[chain_id][pdb_resnum] = idx
+                except ValueError:
+                    continue
 
-        self.fixed_res = {
-            self.chains[0]: fixed_list,
-            self.chains[1]: [],
-        }
+        # Map the fixed residue numbers to chain-relative 1-based indices
+        self.fixed_res = {chain_id: [] for chain_id in self.chains}
+        for pdb_resnum in fixed_pdb_resnums:
+            for chain_id in self.chains:
+                if pdb_resnum in chain_resnum_to_index[chain_id]:
+                    self.fixed_res[chain_id].append(chain_resnum_to_index[chain_id][pdb_resnum])
+                    break
 
     def thread_mpnn_seq(self, binder_seq):
         """
