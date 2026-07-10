@@ -83,7 +83,7 @@ nextflow -version
 
 ## Step 3: Download Required Models
 
-> **💡 Tip:** This step downloads ~11 GB of model files. Consider doing this in a shared location so that other users can access the files.
+> **💡 Tip:** This step downloads ~11.2 GB of model files. Consider doing this in a shared location so that other users can access the files.
 
 ### RFdiffusion Models (~3.7 GB)
 
@@ -139,13 +139,48 @@ touch boltz2_aff.ckpt
 cd ../..
 ```
 
+### ProteinMPNN Model Weights (~0.2 GB)
+
+ProteinMPNN weights are required for binder sequence design. Three sets of weights are provided: vanilla (standard), soluble (optimised for solubility), and HyperMPNN (improved accuracy). Update the `mpnn_models` variable in `nextflow.config` to the location of the model directory (e.g. `'./models/mpnn'`):
+
+```bash
+mkdir -p models/mpnn && cd models/mpnn
+
+# Vanilla ProteinMPNN weights
+mkdir vanilla_model_weights && cd vanilla_model_weights
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_002.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_010.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_020.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_030.pt
+cd ..
+
+# Soluble ProteinMPNN weights
+mkdir soluble_model_weights && cd soluble_model_weights
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_002.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_010.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_020.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_030.pt
+cd ..
+
+# HyperMPNN weights
+mkdir hyper_model_weights && cd hyper_model_weights
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_002_epoch240_hyper.pt -O v_48_002.pt
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_010_epoch300_hyper.pt -O v_48_010.pt
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_020_epoch300_hyper.pt -O v_48_020.pt
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_030_epoch300_hyper.pt -O v_48_030.pt
+cd ../../../
+```
+
 **Verify downloads:**
 
 ```bash
 # Check that all required files exist
-ls -la models/rfd/    # Should contain 8 .pt files
-ls -la models/af2/    # Should contain params directory
-ls -la models/boltz/  # Should contain .ckpt files and mols directory
+ls -la models/rfd/                         # Should contain 8 .pt files
+ls -la models/af2/                         # Should contain params directory
+ls -la models/boltz/                       # Should contain .ckpt files and mols directory
+ls -la models/mpnn/vanilla_model_weights/  # Should contain 4 .pt files
+ls -la models/mpnn/soluble_model_weights/  # Should contain 4 .pt files
+ls -la models/mpnn/hyper_model_weights/    # Should contain 4 .pt files
 ```
 
 ---
@@ -206,7 +241,6 @@ If you don't have SLURM or prefer manual building:
 cd apptainer
 
 # Build each container individually
-apptainer build --fakeroot af2.sif af2.def
 apptainer build --fakeroot bindsweeper.sif bindsweeper.def
 apptainer build --fakeroot boltz2.sif boltz2.def
 apptainer build --fakeroot dl_binder_design.sif dl_binder_design.def

@@ -8,7 +8,6 @@ set -e  # Exit on error
 # Configuration
 REGISTRY="oras://ghcr.io/papenfusslab/proteindj"
 CONTAINERS=(
-    "af2"
     "bindcraft"
     "boltz2"
     "dl_binder_design"

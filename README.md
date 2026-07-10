@@ -50,7 +50,7 @@ git clone https://github.com/PapenfussLab/proteindj
 cd proteindj
 ```
 
-Next, download the models for AF2, Boltz, and RFdiffusion (~11 GB) using the download script . This may take a while depending on your internet connection. Note that this only needs to be done once on a cluster as long as the files and containers are in a location that can be accessed by all users (see [Installation Guide](docs/installation.md) for more details):
+Next, download the models for AF2, Boltz, ProteinMPNN and RFdiffusion (~11 GB) using the download script . This may take a while depending on your internet connection. Note that this only needs to be done once on a cluster as long as the files and containers are in a location that can be accessed by all users (see [Installation Guide](docs/installation.md) for more details):
 
 ```
 bash scripts/download_models.sh

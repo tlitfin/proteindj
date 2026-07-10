@@ -5,7 +5,6 @@ BUILD_DIRECTORY="/dev/shm/${USER}/containers"
 
 # Container build configuration
 declare -A CONTAINERS=(
-    ["af2"]="af2.def"
     ["bindcraft"]="bindcraft.def"
     ["boltz2"]="boltz2.def"
     ["dl_binder_design"]="dl_binder_design.def"
