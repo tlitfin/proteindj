@@ -334,8 +334,8 @@ workflow {
             // GPU-aware batching for RunMPNN
             Utils
                 .rebatchGPU(PrepMPNN.out.pdbs, params.gpus)
-                    .set { seq_input_pdbs }
-            
+                .set { seq_input_pdbs }
+
             // Launch ProteinMPNN
             RunMPNN(seq_input_pdbs)
 
