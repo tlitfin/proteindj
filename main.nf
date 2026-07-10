@@ -331,26 +331,11 @@ workflow {
             // Add FIXED labels to PDBs for target residues so the sequence does not change
             PrepMPNN(filt_fold_pdbs_jsons)
             
-            // Method specific batching
-            if (params.mpnn_relax_max_cycles > 0) {
-                // use smaller batches for fast relax (slow) - 1 PDB per batch
-                PrepMPNN.out.pdbs
-                    .flatten()
-                    .collate(1)
-                    .toList()
-                    .flatMap { list -> list.withIndex().collect { item, idx -> [idx, item] } }
+            // GPU-aware batching for RunMPNN
+            Utils
+                .rebatchGPU(PrepMPNN.out.pdbs, params.gpus)
                     .set { seq_input_pdbs }
-            }
-            else {
-                // use larger batches without fast relax
-                PrepMPNN.out.pdbs
-                    .flatten()
-                    .collate(10)
-                    .toList()
-                    .flatMap { list -> list.withIndex().collect { item, idx -> [idx, item] } }
-                    .set { seq_input_pdbs }
-            }
-
+            
             // Launch ProteinMPNN
             RunMPNN(seq_input_pdbs)
 

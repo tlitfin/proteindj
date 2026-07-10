@@ -23,6 +23,7 @@ process PrepMPNN {
 
 process RunMPNN {
     label 'MPNN'
+    label 'gpu'
     cpus 2
 
     publishDir "${params.out_dir}/run/mpnn", mode: 'copy', pattern: "*.log"
@@ -40,14 +41,8 @@ process RunMPNN {
 
     script:
     """
-    export OPENBLAS_NUM_THREADS=1 
-    export MKL_NUM_THREADS=1
-
-    eval "\$(micromamba shell hook --shell bash)"
-    micromamba activate mpnn
-    mkdir results
-        
-    python /dl_binder_design/dl_interface_design_multi.py \
+    mkdir results  
+    python3 /dl_binder_design/dl_interface_design_multi.py \
         -pdbdir "./" \
         -outpdbdir "./results" \
         -augment_eps ${params.mpnn_backbone_noise} \
@@ -61,11 +56,12 @@ process RunMPNN {
         -relax_convergence_max_cycles ${params.mpnn_relax_convergence_max_cycles}\
         -seqs_per_struct ${params.seqs_per_design} \
         -temperature ${params.mpnn_temperature} \
+        -relax_platform "CUDA" \
         -debug \
         ${params.mpnn_extra_config ? params.mpnn_extra_config : ''} \
         2>&1 | tee mpnn_${batch_id}.log
 
-    python /scripts/metadata_converter.py --input_dir results --input_ext ".json" \
+    python3 /scripts/metadata_converter.py --input_dir results --input_ext ".json" \
         --converter mpnn  --output_file "mpnn_metadata_${batch_id}.jsonl"
     """
 }
