@@ -72,7 +72,7 @@ process RunRFD {
     """
 }
 process FilterFold {
-    label 'pyrosetta_tools' //TODO: Replace with BioPython/DSSP in python_tools container
+    label 'python_tools'
     publishDir "${params.out_dir}/run/filter_fold", mode: 'copy', pattern: "*.log"
 
     input:
