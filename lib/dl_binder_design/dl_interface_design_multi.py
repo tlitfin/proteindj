@@ -943,7 +943,7 @@ class StructManager:
             f.writelines(pdb_lines)
 
         if json_data:
-            json_path = os.path.join(self.outpdbdir, f"mpnn_{tag}.json")
+            json_path = os.path.join(self.outpdbdir, f"{tag}.json")
             with open(json_path, 'w') as f:
                 f.write(json.dumps(json_data) + '\n')
 

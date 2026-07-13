@@ -79,29 +79,3 @@ process RunFAMPNN {
     
     """
 }
-process FilterFAMPNN {
-    label 'python_tools'
-
-    publishDir "${params.out_dir}/run/filter_fampnn", mode: 'copy', pattern: '*.log'
-
-    input:
-    tuple path(pdb_files), path(json_files)
-
-    output:
-    path ("filtered_output/*.pdb"), emit: pdbs, optional: true
-    path ("filtered_output/*.json"), emit: jsons, optional: true
-    path ("filter_fampnn_${task.index}.log"), emit: logs
-
-    script:
-    // Only pass parameters if filter values are provided
-    def fampnnParam = Utils.formatFilterParams(params, "fampnn", ["max_psce"])
-
-    """    
-    python /scripts/filter_fampnn.py \
-        --jsons ./ \
-        --pdbs ./ \
-        ${fampnnParam} \
-        --output-dir filtered_output \
-        2>&1 | tee filter_fampnn_${task.index}.log
-    """
-}
