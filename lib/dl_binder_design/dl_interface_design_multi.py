@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import gc
 import glob
 import io
 import json
@@ -9,6 +10,7 @@ import re
 import sys
 import tempfile
 import time
+from itertools import zip_longest
 
 import numpy as np
 import torch
@@ -25,85 +27,377 @@ def range1(iterable):
     return range(1, iterable + 1)
 
 
-def _load_openmm_modules():
-    try:
-        from openmm import CustomExternalForce, LangevinIntegrator, Platform, unit
-        from openmm.app import ForceField, HBonds, NoCutoff, PDBFile, Simulation
-    except ImportError:
-        from simtk import unit
-        from simtk.openmm import CustomExternalForce, LangevinIntegrator, Platform
-        from simtk.openmm.app import ForceField, HBonds, NoCutoff, PDBFile, Simulation
+# ── OpenMM module-level imports ───────────────────────────────────────────────
+try:
+    import openmm as _openmm
+    from openmm import app as _openmm_app, unit as _openmm_unit
+    from openmm import Platform as _openmm_Platform, OpenMMException as _OpenMMException
+    from pdbfixer import PDBFixer as _PDBFixer
+    _HAS_OPENMM = True
+except ImportError:
+    _HAS_OPENMM = False
 
-    return {
-        "CustomExternalForce": CustomExternalForce,
-        "LangevinIntegrator": LangevinIntegrator,
-        "Platform": Platform,
-        "unit": unit,
-        "ForceField": ForceField,
-        "HBonds": HBonds,
-        "NoCutoff": NoCutoff,
-        "PDBFile": PDBFile,
-        "Simulation": Simulation,
-    }
+# ForceField singleton (Amber14 + OBC2 implicit solvent) — avoids repeated XML parsing
+_OPENMM_FF_SINGLETON = None
+
+
+def _get_openmm_forcefield():
+    """Return a cached ForceField instance (Amber14 + OBC2 implicit solvent)."""
+    global _OPENMM_FF_SINGLETON
+    if not _HAS_OPENMM:
+        raise ImportError("OpenMM is not available")
+    if _OPENMM_FF_SINGLETON is None:
+        _OPENMM_FF_SINGLETON = _openmm_app.ForceField('amber14-all.xml', 'implicit/obc2.xml')
+    return _OPENMM_FF_SINGLETON
+
+
+def _k_kj_per_nm2(k_kcal_a2):
+    """Convert kcal/mol/Å² to kJ/mol/nm²."""
+    return k_kcal_a2 * 4.184 * 100.0
+
+
+def _extract_residue_bfactors(pdb_text):
+    """Extract per-residue B-factors from PDB text (CA preferred, else first ATOM per residue).
+    Returns {(chain, resseq, icode): float} for B-factor restoration after relaxation.
+    """
+    bfactors = {}
+    seen_ca = set()
+    for line in pdb_text.splitlines():
+        if not line.startswith("ATOM"):
+            continue
+        atom_name = line[12:16].strip()
+        chain = line[21]
+        resseq = line[22:26]
+        icode = line[26]
+        key = (chain, resseq, icode)
+        try:
+            b = float(line[60:66])
+        except (ValueError, IndexError):
+            continue
+        if atom_name == "CA":
+            bfactors[key] = b
+            seen_ca.add(key)
+        elif key not in seen_ca and key not in bfactors:
+            bfactors[key] = b
+    return bfactors
+
+
+def _apply_residue_bfactors(pdb_text, bfactors):
+    """Write per-residue B-factors back to all ATOM/HETATM records in PDB text."""
+    if not bfactors:
+        return pdb_text
+    lines = []
+    for line in pdb_text.splitlines(keepends=True):
+        if (line.startswith("ATOM") or line.startswith("HETATM")) and len(line) >= 66:
+            key = (line[21], line[22:26], line[26])
+            if key in bfactors:
+                line = line[:60] + f"{bfactors[key]:6.2f}" + line[66:]
+        lines.append(line)
+    return "".join(lines)
 
 
 def _openmm_relax_pdb_text(pdb_text, max_iterations, restraint_k, platform_name):
-    try:
-        from pdbfixer import PDBFixer
-    except ImportError as exc:
+    """
+    3-stage ramped OpenMM minimisation (FreeBindCraft protocol).
+
+    Stages:
+      Pre-ramp: full backbone restraint, no LJ-repulsion, L-BFGS minimisation
+      Stage 1:  full restraint (x1.0), no LJ-rep (x0.0), MD shake + minimise
+      Stage 2:  reduced restraint (x0.4), LJ-rep (x1.5), MD shake + minimise
+      Stage 3:  no restraint (x0.0), max LJ-rep (x3.0), tight tolerance, no MD
+
+    Accept-to-best uses physical energy only (force groups 0+1; LJ-rep group 2
+    excluded) so the varying LJ-rep strength does not bias cross-stage comparisons.
+    Context is reset to best positions at the start of each stage after the first.
+    """
+    if not _HAS_OPENMM:
         raise ImportError(
-            "PDBFixer is required for OpenMM relax. Install it (e.g. `conda install -c conda-forge pdbfixer`)."
-        ) from exc
+            "OpenMM/PDBFixer is required for relaxation. "
+            "Install with: conda install -c conda-forge openmm pdbfixer"
+        )
 
-    omm = _load_openmm_modules()
-    unit = omm["unit"]
+    # Ramp parameters (same as FreeBindCraft defaults)
+    RESTRAINT_RAMP = (1.0, 0.4, 0.0)
+    LJ_REP_RAMP    = (0.0, 1.5, 3.0)
+    LJ_REP_BASE    = 10.0   # kJ/mol base strength
+    MD_STEPS       = 1000   # Langevin steps per shake (stages 1 and 2 only)
+    RAMP_TOL       = 2.0    # kJ/mol/nm force tolerance (ramp stages)
+    FINAL_TOL      = 0.1    # kJ/mol/nm force tolerance (final stage)
+
+    # Preserve input B-factors (AF2 pLDDT) before PDBFixer overwrites them
+    _input_bfactors = _extract_residue_bfactors(pdb_text)
+
+    # Write input to a temp file for PDBFixer
+    tmp_in = tempfile.NamedTemporaryFile(mode='w', suffix='.pdb', delete=False)
+    tmp_in.write(pdb_text)
+    tmp_in.close()
+    in_path = tmp_in.name
 
     try:
-        fixer = PDBFixer(pdbfile=io.StringIO(pdb_text))
-    except TypeError:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.pdb', delete=False) as tmp:
-            tmp.write(pdb_text)
-            tmp_path = tmp.name
+        # ── PDBFixer preparation ───────────────────────────────────────────
+        fixer = _PDBFixer(filename=in_path)
+        fixer.findMissingResidues()
+        fixer.findNonstandardResidues()
+        fixer.replaceNonstandardResidues()
+        fixer.removeHeterogens(keepWater=False)
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(7.0)
+
+        # ── System setup (Amber14 + OBC2 implicit solvent) ────────────────
+        forcefield = _get_openmm_forcefield()
+        system = forcefield.createSystem(
+            fixer.topology,
+            nonbondedMethod=_openmm_app.CutoffNonPeriodic,
+            nonbondedCutoff=1.0 * _openmm_unit.nanometer,
+            constraints=_openmm_app.HBonds,
+        )
+
+        # Extract per-atom sigma values from NonbondedForce for LJ-rep
+        original_sigmas = []
+        nb_force_idx = -1
+        for i in range(system.getNumForces()):
+            f = system.getForce(i)
+            if isinstance(f, _openmm.NonbondedForce):
+                nb_force_idx = i
+                for p in range(f.getNumParticles()):
+                    _, sigma, _ = f.getParticleParameters(p)
+                    original_sigmas.append(sigma.value_in_unit(_openmm_unit.nanometer))
+                break
+
+        # ── Custom LJ-repulsive force (force group 2) ─────────────────────
+        lj_rep_force = None
+        k_lj_idx = -1
+        if original_sigmas:
+            lj_rep_force = _openmm.CustomNonbondedForce(
+                "k_rep_lj * (((sigma_particle1 + sigma_particle2) * 0.5 / r)^12)"
+            )
+            k_lj_idx = lj_rep_force.addGlobalParameter("k_rep_lj", 0.0)
+            lj_rep_force.addPerParticleParameter("sigma_particle")
+            for s in original_sigmas:
+                lj_rep_force.addParticle([s])
+            # Match the NonbondedMethod of the main force so all platforms accept the system
+            if nb_force_idx != -1:
+                nb_f = system.getForce(nb_force_idx)
+                nb_method = nb_f.getNonbondedMethod()
+                if nb_method == _openmm.NonbondedForce.NoCutoff:
+                    lj_rep_force.setNonbondedMethod(_openmm.CustomNonbondedForce.NoCutoff)
+                else:
+                    lj_rep_force.setNonbondedMethod(_openmm.CustomNonbondedForce.CutoffNonPeriodic)
+                    lj_rep_force.setCutoffDistance(nb_f.getCutoffDistance())
+                for ex_i in range(nb_f.getNumExceptions()):
+                    p1, p2, *_ = nb_f.getExceptionParameters(ex_i)
+                    lj_rep_force.addExclusion(p1, p2)
+            else:
+                lj_rep_force.setNonbondedMethod(_openmm.CustomNonbondedForce.NoCutoff)
+            lj_rep_force.setForceGroup(2)
+            system.addForce(lj_rep_force)
+
+        # ── Backbone harmonic restraint force (force group 1) ─────────────
+        restraint_force = None
+        k_r_idx = -1
+        if restraint_k > 0:
+            restraint_force = _openmm.CustomExternalForce(
+                "0.5 * k_restraint * ((x-x0)*(x-x0) + (y-y0)*(y-y0) + (z-z0)*(z-z0))"
+            )
+            k_r_idx = restraint_force.addGlobalParameter("k_restraint", _k_kj_per_nm2(restraint_k))
+            restraint_force.addPerParticleParameter("x0")
+            restraint_force.addPerParticleParameter("y0")
+            restraint_force.addPerParticleParameter("z0")
+            bb_atoms = {"N", "CA", "C", "O"}
+            for atom in fixer.topology.atoms():
+                if atom.name in bb_atoms:
+                    xyz = fixer.positions[atom.index].value_in_unit(_openmm_unit.nanometer)
+                    restraint_force.addParticle(atom.index, [xyz[0], xyz[1], xyz[2]])
+            restraint_force.setForceGroup(1)
+            system.addForce(restraint_force)
+
+        # ── Integrator and simulation ──────────────────────────────────────
+        if platform_name == "CPU":
+            plat_order = ["CPU"]
+        elif platform_name == "CUDA":
+            plat_order = ["CUDA", "OpenCL", "CPU"]
+        else:  # OpenCL or default
+            plat_order = ["OpenCL", "CUDA", "CPU"]
+
+        # A fresh integrator must be created for each attempt: once passed to a
+        # Simulation constructor that fails, the integrator is in an invalid state.
+        simulation = None
+        integrator = None
+        for p_name in plat_order:
+            try:
+                plat = _openmm_Platform.getPlatformByName(p_name)
+                props = {}
+                if p_name == "CUDA":
+                    props = {"CudaPrecision": "mixed"}
+                elif p_name == "OpenCL":
+                    props = {"OpenCLPrecision": "single"}
+                integrator = _openmm.LangevinMiddleIntegrator(
+                    300 * _openmm_unit.kelvin,
+                    1.0 / _openmm_unit.picosecond,
+                    0.002 * _openmm_unit.picoseconds,
+                )
+                simulation = _openmm_app.Simulation(fixer.topology, system, integrator, plat, props)
+                print(f"[OpenMM] Using platform: {p_name}")
+                break
+            except Exception as _plat_err:
+                print(f"[OpenMM] Platform {p_name} unavailable: {_plat_err}")
+                integrator = None
+                continue
+        if simulation is None:
+            raise _OpenMMException("No suitable OpenMM platform found")
+
+        simulation.context.setPositions(fixer.positions)
+
+        # Log initial energy
         try:
-            fixer = PDBFixer(filename=tmp_path)
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+            e0 = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            print(f"[OpenMM] Initial energy: {e0.value_in_unit(_openmm_unit.kilojoule_per_mole):.2f} kJ/mol")
+        except Exception:
+            pass
 
-    fixer.findMissingResidues()
-    fixer.findMissingAtoms()
-    fixer.addMissingAtoms()
-    fixer.addMissingHydrogens(7.0)
+        # ── Pre-ramp minimisation (full restraint, LJ-rep=0) ──────────────
+        if restraint_force is not None:
+            restraint_force.setGlobalParameterDefaultValue(k_r_idx, _k_kj_per_nm2(restraint_k))
+            restraint_force.updateParametersInContext(simulation.context)
+        if lj_rep_force is not None:
+            lj_rep_force.setGlobalParameterDefaultValue(k_lj_idx, 0.0)
+            lj_rep_force.updateParametersInContext(simulation.context)
+        print("[OpenMM] Pre-ramp minimisation (full restraint, LJ-rep=0)")
+        pre_tol = RAMP_TOL * _openmm_unit.kilojoule_per_mole / _openmm_unit.nanometer
+        simulation.minimizeEnergy(tolerance=pre_tol, maxIterations=max_iterations)
+        try:
+            e_pre = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            print(f"[OpenMM] Pre-ramp complete: {e_pre.value_in_unit(_openmm_unit.kilojoule_per_mole):.2f} kJ/mol")
+        except Exception:
+            pass
 
-    ff = omm["ForceField"]("amber14/protein.ff14SB.xml")
-    system = ff.createSystem(fixer.topology, nonbondedMethod=omm["NoCutoff"], constraints=omm["HBonds"])
+        # ── 3-stage ramp ──────────────────────────────────────────────────
+        best_energy = float('inf') * _openmm_unit.kilojoule_per_mole
+        best_positions = None
+        best_stage = None
+        ramp_pairs = list(zip_longest(RESTRAINT_RAMP, LJ_REP_RAMP, fillvalue=0.0))
+        num_stages = len(ramp_pairs)
+        print(f"[OpenMM] Starting {num_stages}-stage ramp "
+              f"(restraint factors={list(RESTRAINT_RAMP)}, LJ-rep factors={list(LJ_REP_RAMP)})")
+        print("[OpenMM] Accept-to-best compares physical energy only (groups 0+1, LJ-rep excluded)")
 
-    if restraint_k > 0:
-        restraint_k_kj_nm2 = restraint_k * 418.4  # kcal/mol/A^2 -> kJ/mol/nm^2
-        force = omm["CustomExternalForce"]("0.5*k*((x-x0)^2 + (y-y0)^2 + (z-z0)^2)")
-        force.addGlobalParameter("k", restraint_k_kj_nm2)
-        force.addPerParticleParameter("x0")
-        force.addPerParticleParameter("y0")
-        force.addPerParticleParameter("z0")
+        for i_stage, (k_factor_r, k_factor_lj) in enumerate(ramp_pairs):
+            stage_num = i_stage + 1
 
-        positions = fixer.positions
-        for idx, atom in enumerate(fixer.topology.atoms()):
-            if atom.name in {"N", "CA", "C", "O"}:
-                pos = positions[idx].value_in_unit(unit.nanometer)
-                force.addParticle(idx, [pos[0], pos[1], pos[2]])
+            # Reset to best positions before each stage after the first
+            if i_stage > 0 and best_positions is not None:
+                simulation.context.setPositions(best_positions)
 
-        system.addForce(force)
+            # Update force parameters for this stage
+            if restraint_force is not None:
+                restraint_force.setGlobalParameterDefaultValue(
+                    k_r_idx, _k_kj_per_nm2(restraint_k * k_factor_r)
+                )
+                restraint_force.updateParametersInContext(simulation.context)
+            if lj_rep_force is not None:
+                lj_rep_force.setGlobalParameterDefaultValue(k_lj_idx, LJ_REP_BASE * k_factor_lj)
+                lj_rep_force.updateParametersInContext(simulation.context)
 
-    integrator = omm["LangevinIntegrator"](0, 0.01, 0.0)
-    platform = omm["Platform"].getPlatformByName(platform_name)
-    simulation = omm["Simulation"](fixer.topology, system, integrator, platform)
-    simulation.context.setPositions(fixer.positions)
-    simulation.minimizeEnergy(maxIterations=max_iterations)
+            # Stage header log
+            try:
+                e_start = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+                e_start_str = f"{e_start.value_in_unit(_openmm_unit.kilojoule_per_mole):.2f}"
+            except Exception:
+                e_start_str = "N/A"
+            stage_tol = FINAL_TOL if i_stage == num_stages - 1 else RAMP_TOL
+            print(f"[OpenMM] Stage {stage_num}/{num_stages}: "
+                  f"restraint_k={restraint_k * k_factor_r:.3f} kcal/mol/A2, "
+                  f"LJ-rep_k={LJ_REP_BASE * k_factor_lj:.2f} kJ/mol, "
+                  f"tol={stage_tol} kJ/mol/nm  |  start_E={e_start_str} kJ/mol")
 
-    state = simulation.context.getState(getPositions=True)
-    out_buf = io.StringIO()
-    omm["PDBFile"].writeFile(fixer.topology, state.getPositions(), out_buf, keepIds=True)
-    return out_buf.getvalue()
+            # MD shake (stages 1 and 2 only)
+            if MD_STEPS > 0 and i_stage < 2:
+                simulation.context.setVelocitiesToTemperature(300 * _openmm_unit.kelvin)
+                simulation.step(MD_STEPS)
+                try:
+                    e_sh = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+                    print(f"[OpenMM] Stage {stage_num}: post-shake "
+                          f"E={e_sh.value_in_unit(_openmm_unit.kilojoule_per_mole):.2f} kJ/mol")
+                except Exception:
+                    pass
+
+            # Chunked L-BFGS minimisation with early-stop on negligible improvement
+            force_tol = stage_tol * _openmm_unit.kilojoule_per_mole / _openmm_unit.nanometer
+            per_chunk = min(200, max_iterations) if max_iterations > 0 else 200
+            remaining = max_iterations
+            streak = 0
+            last_e = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+            t_min = time.time()
+            while True:
+                simulation.minimizeEnergy(tolerance=force_tol, maxIterations=per_chunk)
+                cur_e = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+                try:
+                    streak = (streak + 1) if (last_e - cur_e) < (0.1 * _openmm_unit.kilojoule_per_mole) else 0
+                except Exception:
+                    streak = 3
+                last_e = cur_e
+                if max_iterations > 0:
+                    remaining -= per_chunk
+                    if remaining <= 0:
+                        break
+                if streak >= 3:
+                    break
+
+            # Accept-to-best: physical energy only (groups 0+1, excluding LJ-rep group 2)
+            try:
+                phys_state = simulation.context.getState(getEnergy=True, groups={0, 1})
+                phys_e = phys_state.getPotentialEnergy()
+                phys_val = phys_e.value_in_unit(_openmm_unit.kilojoule_per_mole)
+            except Exception:
+                phys_e = last_e
+                phys_val = last_e.value_in_unit(_openmm_unit.kilojoule_per_mole)
+
+            if phys_e < best_energy:
+                best_energy = phys_e
+                best_positions = simulation.context.getState(getPositions=True).getPositions(asNumpy=True)
+                best_stage = stage_num
+                print(f"[OpenMM] Stage {stage_num}/{num_stages}: ACCEPTED as new best  "
+                      f"E={phys_val:.2f} kJ/mol ({time.time() - t_min:.1f}s min)")
+            else:
+                prev_val = best_energy.value_in_unit(_openmm_unit.kilojoule_per_mole)
+                print(f"[OpenMM] Stage {stage_num}/{num_stages}: REJECTED "
+                      f"(E={phys_val:.2f} >= best={prev_val:.2f} kJ/mol); keeping stage {best_stage}")
+
+        # Restore best positions
+        if best_positions is not None:
+            simulation.context.setPositions(best_positions)
+            print(f"[OpenMM] All stages complete. Restoring from stage {best_stage} "
+                  f"(best E={best_energy.value_in_unit(_openmm_unit.kilojoule_per_mole):.2f} kJ/mol)")
+
+        # Write relaxed structure to in-memory buffer
+        positions = simulation.context.getState(getPositions=True).getPositions()
+        out_buf = io.StringIO()
+        _openmm_app.PDBFile.writeFile(simulation.topology, positions, out_buf, keepIds=True)
+        result = out_buf.getvalue()
+
+        # Restore original B-factors (AF2 pLDDT) — OpenMM writes zeros by default
+        result = _apply_residue_bfactors(result, _input_bfactors)
+
+        # Release OpenMM objects to avoid memory accumulation over many cycles
+        try:
+            del simulation, integrator, system, restraint_force, lj_rep_force, fixer
+        except Exception:
+            pass
+        gc.collect()
+
+        return result
+
+    except _OpenMMException:
+        raise  # platform / context failures must propagate — do not silently skip relaxation
+    except Exception as e:
+        print(f"[OpenMM] ERROR during relaxation: {e}; returning input unchanged")
+        return pdb_text
+    finally:
+        try:
+            os.remove(in_path)
+        except Exception:
+            pass
 
 
 def _kabsch_rmsd(P, Q):
@@ -191,8 +485,8 @@ parser.add_argument("-relax_seqs_per_cycle", type=int, default=1, help="Number o
 parser.add_argument("-relax_convergence_rmsd", type=float, default=0.2, help="Convergence criteria 1 of 2. Design is considered converged if the C-alpha RMSD (A) between cycles is <= this threshold (default: 0.2)")
 parser.add_argument("-relax_convergence_score", type=float, default=0.1, help="Convergence criteria 2 of 2. Design is considered converged if the improvement in score between cycles is <= this threshold (default: 0.1)")
 parser.add_argument("-relax_convergence_max_cycles", type=int, default=1, help="Design is considered converged if it meets both convergence criteria for n consecutive cycles (default: 1)")
-parser.add_argument("-relax_max_iterations", type=int, default=200, help="OpenMM minimization max iterations per relax cycle (default: 200)")
-parser.add_argument("-relax_restraint_k", type=float, default=2.0, help="Backbone harmonic restraint strength in kcal/mol/A^2 (default: 2.0)")
+parser.add_argument("-relax_max_iterations", type=int, default=1000, help="OpenMM minimization max iterations per relax cycle (default: 1000)")
+parser.add_argument("-relax_restraint_k", type=float, default=3.0, help="Backbone harmonic restraint strength in kcal/mol/A^2 (default: 3.0)")
 parser.add_argument("-relax_platform", type=str, default="CPU", choices=["CPU", "CUDA", "OpenCL"], help="OpenMM platform to use for minimization (default: CPU)")
 
 # ProteinMPNN-Specific Arguments
