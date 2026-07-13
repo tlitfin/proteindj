@@ -32,12 +32,6 @@ def parse_arguments():
     parser.add_argument('--pr-max-sap', type=float, help='Maximum mean residue SAP (solubility)')
     parser.add_argument('--pr-max-sap-complex', type=float, help='Maximum mean residue SAP in complex (solubility)')
     
-    # Sequence Analysis Metrics
-    parser.add_argument('--seq-min-ext-coef', type=float, help='Minimum extinction coefficient')
-    parser.add_argument('--seq-max-ext-coef', type=float, help='Maximum extinction coefficient')
-    parser.add_argument('--seq-min-pi', type=float, help='Minimum isoelectric point')
-    parser.add_argument('--seq-max-pi', type=float, help='Maximum isoelectric point')
-    
     # Input/Output
     parser.add_argument('--jsonl-file', required=True, help='Path to JSONL file containing analysis data')
     parser.add_argument('--pdb-directory', required=True, help='Directory containing PDB files')
@@ -135,9 +129,6 @@ def filter_data(data, args):
         ('pr_surfhphobics', None, args.pr_max_surfhphobics, float),
         ('pr_SAP', None, args.pr_max_sap, float),
         ('pr_SAP_complex', None, args.pr_max_sap_complex, float),
-        # Sequence metrics
-        ('seq_ext_coef', args.seq_min_ext_coef, args.seq_max_ext_coef, float),
-        ('seq_pI', args.seq_min_pi, args.seq_max_pi, float),
     ]
     
     for entry in data:
@@ -264,8 +255,7 @@ def main():
         args.pr_min_intface_packstat,
         args.pr_max_tem,
         args.pr_max_surfhphobics,
-        args.seq_min_ext_coef, args.seq_max_ext_coef,
-        args.seq_min_pi, args.seq_max_pi,
+        args.pr_max_sap, args.pr_max_sap_complex,
     ]
     
     any_filter_applied = any(f is not None for f in filter_args)

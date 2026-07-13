@@ -77,10 +77,12 @@ process FilterSeq {
     path ("filtered_output/*.pdb"), emit: pdbs, optional: true
     path ("filtered_output/*.json"), emit: jsons, optional: true
     path ("filter_seq_${task.index}.log"), emit: logs
+    path ("seq_metrics_${task.index}.jsonl"), topic: metadata_ch_fold_seq
 
     script:
     def maxScore = params.seq_method == 'mpnn' ? params.mpnn_max_score : params.fampnn_max_psce
     def maxScoreParam = maxScore != null ? "--max-score ${maxScore}" : ''
+    def seqParams = Utils.formatFilterParams(params, "seq", ["min_ext_coef", "max_ext_coef", "min_pi", "max_pi"])
 
     """    
     python /scripts/filter_seq.py \
@@ -88,6 +90,8 @@ process FilterSeq {
         --jsons ./ \
         --pdbs ./ \
         ${maxScoreParam} \
+        ${seqParams} \
+        --seq-metrics-jsonl seq_metrics_${task.index}.jsonl \
         --output-dir filtered_output \
         2>&1 | tee filter_seq_${task.index}.log
     """
