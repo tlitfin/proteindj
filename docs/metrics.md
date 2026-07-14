@@ -79,7 +79,9 @@ Metrics from AlphaFold2 Initial-Guess or Boltz-2 predictions evaluating structur
 | `boltz_plddt`            | Predicted LDDT score (Boltz-2) for the complex (0-1 scale; higher is better).                                      |
 | `boltz_plddt_interface`  | Interface pLDDT score for the complex (Boltz-2).                                                                   |
 | `boltz_ptm`              | Predicted template modeling score for Boltz-2 (0-1 scale; higher is better).                                       |
-| `boltz_ptm_interface`    | Interface predicted template modeling score for Boltz-2 (0-1 scale; higher is better).                             |
+| `boltz_ptm_binder`       | pTM score for the binder chain only  (0-1 scale; higher is better). |
+| `boltz_ptm_target`       | Mean pTM score across all target chains (0-1 scale; higher is better).      |
+| `boltz_ptm_interface`    | Mean binder→target interface pTM score across all target chains (0-1 scale; higher is better). |
 
 ---
 

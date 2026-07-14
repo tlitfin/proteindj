@@ -53,6 +53,24 @@ def get_chain_ca_atoms(structure, chain_id):
         raise ValueError(f"No CA atoms found in chain {chain_id}")
     return ca_atoms
 
+def get_target_ca_atoms(structure, binder_chain='A'):
+    """Collect CA atoms from all non-binder chains, in chain order.
+
+    Handles split multi-chain targets (B, C, D...) produced by Boltz-2 when
+    chain breaks are detected in prep_boltz_yaml.py, as well as the original
+    merged single-chain target in the design PDB.
+    """
+    ca_atoms = []
+    for model in structure:
+        for chain in model:
+            if chain.id != binder_chain:
+                for residue in chain:
+                    if 'CA' in residue:
+                        ca_atoms.append(residue['CA'])
+    if not ca_atoms:
+        raise ValueError(f"No CA atoms found in target chains (excluding '{binder_chain}')")
+    return ca_atoms
+
 def align_structures(args):
     """Align Boltz structure to Design template with chain-specific handling"""
     (design_path, boltz_path, out_pdb, src_json, dst_json, 
@@ -64,14 +82,14 @@ def align_structures(args):
         boltz_structure = parser.get_structure("boltz", boltz_path)
 
         if design_type == 'binder':
-            # 1. Align chain B (target) for final structure
-            ref_chainB = get_chain_ca_atoms(ref_structure, 'B')
-            boltz_chainB = get_chain_ca_atoms(boltz_structure, 'B')
-            
+            # 1. Align all target chains (B, C, D... if split) for final structure
+            ref_target = get_target_ca_atoms(ref_structure, binder_chain='A')
+            boltz_target = get_target_ca_atoms(boltz_structure, binder_chain='A')
+
             superimposer = Superimposer()
-            superimposer.set_atoms(ref_chainB, boltz_chainB)
+            superimposer.set_atoms(ref_target, boltz_target)
             superimposer.apply(boltz_structure.get_atoms())
-            rmsd_target = superimposer.rms 
+            rmsd_target = superimposer.rms
 
             # 2. Calculate overall RMSD (all CA atoms)
             ref_all_ca = get_all_ca_atoms(ref_structure)
@@ -117,6 +135,16 @@ def align_structures(args):
 
             # Build output dictionary
             if design_type == 'binder':
+                # Mean ptm across all non-binder chains (key "0" = binder)
+                chains_ptm = data.get("chains_ptm", {})
+                target_ptm_values = [v for k, v in chains_ptm.items() if k != "0"]
+                boltz_ptm_target = round(sum(target_ptm_values) / len(target_ptm_values), 3) if target_ptm_values else 0.0
+
+                # Mean iptm from binder (chain 0) toward all target chains
+                binder_iptm_row = data.get("pair_chains_iptm", {}).get("0", {})
+                binder_to_target_iptm = [v for k, v in binder_iptm_row.items() if k != "0"]
+                boltz_ptm_interface = round(sum(binder_to_target_iptm) / len(binder_to_target_iptm), 3) if binder_to_target_iptm else 0.0
+
                 out_json = {
                     "fold_id": fold_id,
                     "seq_id": seq_id,
@@ -130,9 +158,9 @@ def align_structures(args):
                     "boltz_pDockQ2_min": round(data.get("pDockQ2_min", 0), 3),
                     "boltz_pae_interaction": round(data.get("ipae", 0), 2),
                     "boltz_ptm": round(data.get("ptm", 0), 3),
-                    "boltz_ptm_binder": round(data.get("chains_ptm", {}).get("0", 0), 3),
-                    "boltz_ptm_target": round(data.get("chains_ptm", {}).get("1", 0), 3),
-                    "boltz_ptm_interface": round(data.get("iptm", 0), 3),
+                    "boltz_ptm_binder": round(chains_ptm.get("0", 0), 3),
+                    "boltz_ptm_target": boltz_ptm_target,
+                    "boltz_ptm_interface": boltz_ptm_interface,
                     "boltz_plddt": round(data.get("complex_plddt", 0), 3),
                     "boltz_plddt_interface": round(data.get("complex_iplddt", 0), 3),
                     "boltz_pde": round(data.get("complex_pde", 0), 2),

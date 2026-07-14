@@ -1,7 +1,12 @@
 import os
 import argparse
-from Bio import SeqIO
-from Bio.PDB import PDBParser, PDBIO, Select
+import string
+import io
+from copy import deepcopy
+from Bio.PDB import PDBParser, PDBIO, Select, PPBuilder
+from Bio.PDB.Chain import Chain as PDBChain
+from Bio.PDB.Model import Model as PDBModel
+from Bio.PDB.Structure import Structure as PDBStructure
 import yaml
 
 
@@ -11,88 +16,154 @@ class ChainSelect(Select):
         return 1
 
 
-def add_seqres_to_pdb(input_pdb, output_pdb):
+def get_available_chain_ids(used_ids):
+    """Return uppercase letters not currently used as chain IDs, in alphabetical order."""
+    return [c for c in string.ascii_uppercase if c not in used_ids]
+
+
+def split_structure_chains(structure, max_break_distance=3.0):
     """
-    Add SEQRES records to a PDB file using BioPython.
-    
+    Detect chain breaks (C→N > max_break_distance Å) and split chains accordingly.
+
+    Returns a tuple of:
+        new_structure: BioPython Structure with split chains assigned new chain IDs
+        chain_id_map: dict mapping original chain ID → [list of new chain IDs]
+    """
+    pp_builder = PPBuilder(radius=max_break_distance)
+    used_ids = set(chain.id for model in structure for chain in model)
+    available = iter(get_available_chain_ids(used_ids))
+
+    new_structure = PDBStructure('structure')
+    new_model = PDBModel(0)
+    new_structure.add(new_model)
+
+    chain_id_map = {}
+
+    for model in structure:
+        for chain in model:
+            peptides = pp_builder.build_peptides(chain)
+
+            if len(peptides) <= 1:
+                # No breaks: copy chain unchanged
+                new_chain = deepcopy(chain)
+                new_model.add(new_chain)
+                chain_id_map[chain.id] = [chain.id]
+            else:
+                # Chain has breaks: assign new IDs to each sub-chain
+                new_ids = [chain.id] + [next(available) for _ in range(len(peptides) - 1)]
+                chain_id_map[chain.id] = new_ids
+
+                for peptide, new_id in zip(peptides, new_ids):
+                    new_chain = PDBChain(new_id)
+                    for residue in peptide:
+                        new_chain.add(deepcopy(residue))
+                    new_model.add(new_chain)
+        break  # Only process first model
+
+    return new_structure, chain_id_map
+
+
+def add_seqres_to_pdb(input_pdb, output_pdb, max_break_distance=3.0):
+    """
+    Add SEQRES records to a PDB file. Chains with peptide bond breaks
+    (C→N > max_break_distance Å) are split into separate chains before writing.
+
     Args:
         input_pdb: Path to input PDB file
         output_pdb: Path to output PDB file with SEQRES records
+        max_break_distance: Maximum C→N distance (Å) to consider a chain break
     """
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure('structure', input_pdb)
-    
-    # Extract sequences for each chain (keep 3-letter codes)
+
+    new_structure, _ = split_structure_chains(structure, max_break_distance)
+
+    # Build chain sequences (3-letter codes) from the new split structure
     chain_sequences = {}
-    for model in structure:
+    for model in new_structure:
         for chain in model:
-            sequence = []
-            for residue in chain:
-                if residue.id[0] == ' ':  # Standard residue
-                    resname = residue.resname
-                    sequence.append(resname)
-            if sequence:
-                chain_sequences[chain.id] = sequence
-    
-    # Write PDB with SEQRES records
+            seq = [r.resname for r in chain if r.id[0] == ' ']
+            if seq:
+                chain_sequences[chain.id] = seq
+        break
+
     with open(output_pdb, 'w') as out_file:
         # Write SEQRES records
         for chain_id, sequence in chain_sequences.items():
-            # SEQRES records have max 13 residues per line
             num_residues = len(sequence)
             for line_num, i in enumerate(range(0, num_residues, 13), start=1):
-                seq_chunk = sequence[i:i+13]
-                # Format: SEQRES serNum chainID numRes resName1 resName2 ...
-                residues = ' '.join(seq_chunk)
-                out_file.write(f"SEQRES {line_num:>3} {chain_id} {num_residues:>4}  {residues}\n")
-        
-        # Write the structure using BioPython (this includes ATOM records)
+                seq_chunk = sequence[i:i + 13]
+                residues_str = ' '.join(seq_chunk)
+                out_file.write(f"SEQRES {line_num:>3} {chain_id} {num_residues:>4}  {residues_str}\n")
+
+        # Write ATOM records via PDBIO
         pdb_io = PDBIO()
-        pdb_io.set_structure(structure)
-        
-        # Save to a temporary string buffer
-        import io
+        pdb_io.set_structure(new_structure)
         buffer = io.StringIO()
         pdb_io.save(buffer, ChainSelect())
-        
-        # Get the content and write it (skip the END record from BioPython)
         buffer.seek(0)
         for line in buffer:
             if not line.startswith('END'):
                 out_file.write(line)
-        
-        # Write final END record
+
         out_file.write('END\n')
 
 
-def extract_sequences(pdb_path, msa_file=None, msa_chain=None):
+def extract_sequences(pdb_path, msa_file=None, msa_chain=None, max_break_distance=3.0):
     """
-    Extract sequences from PDB file, returns list of {id, sequence, msa} dicts.
-    
+    Extract sequences from a PDB file, splitting chains at peptide bond breaks
+    (C→N > max_break_distance Å).
+
     Args:
         pdb_path: Path to PDB file
         msa_file: Optional path to .a3m MSA file
         msa_chain: Chain ID to apply MSA to (default None applies to all)
+        max_break_distance: Maximum C→N distance (Å) to consider a chain break
+
+    Returns:
+        sequences: list of dicts with keys id, sequence, msa — one entry per (sub-)chain.
+                   Sub-chains from a split always receive msa: empty.
+        chain_id_map: dict mapping original chain ID → [list of new chain IDs]
     """
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure('structure', pdb_path)
+
+    pp_builder = PPBuilder(radius=max_break_distance)
+    used_ids = set(chain.id for model in structure for chain in model)
+    available = iter(get_available_chain_ids(used_ids))
+
     sequences = []
-    
-    for record in SeqIO.parse(pdb_path, 'pdb-atom'):
-        chain_id = record.annotations.get('chain', '')
-        sequence = str(record.seq)
-        
-        # Determine MSA value for this chain
-        if msa_file and (msa_chain is None or chain_id == msa_chain):
-            msa_value = os.path.basename(msa_file)
-        else:
-            msa_value = 'empty'
-        
-        sequences.append({
-            'id': chain_id,
-            'sequence': sequence,
-            'msa': msa_value
-        })
-    
-    return sequences
+    chain_id_map = {}
+
+    for model in structure:
+        for chain in model:
+            peptides = pp_builder.build_peptides(chain)
+
+            if not peptides:
+                chain_id_map[chain.id] = [chain.id]
+                continue
+
+            if len(peptides) == 1:
+                # No breaks: original behaviour, MSA applies if chain matches
+                seq = str(peptides[0].get_sequence())
+                if msa_file and (msa_chain is None or chain.id == msa_chain):
+                    msa_value = os.path.basename(msa_file)
+                else:
+                    msa_value = 'empty'
+                sequences.append({'id': chain.id, 'sequence': seq, 'msa': msa_value})
+                chain_id_map[chain.id] = [chain.id]
+            else:
+                # Has breaks: split into sub-chains, all receive msa: empty
+                new_ids = [chain.id] + [next(available) for _ in range(len(peptides) - 1)]
+                chain_id_map[chain.id] = new_ids
+                print(f'  Chain {chain.id}: detected {len(peptides) - 1} break(s) '
+                      f'→ sub-chains: {", ".join(new_ids)}')
+                for peptide, new_id in zip(peptides, new_ids):
+                    seq = str(peptide.get_sequence())
+                    sequences.append({'id': new_id, 'sequence': seq, 'msa': 'empty'})
+        break  # Only process first model
+
+    return sequences, chain_id_map
 
 
 def get_chain_ids(sequences):
@@ -103,16 +174,16 @@ def get_chain_ids(sequences):
     return chain_ids
 
 
-def generate_yaml_config(sequences, use_template=False, pdb_filename=None, 
-                        template_chain='B', template_force=False, template_threshold=None):
+def generate_yaml_config(sequences, use_template=False, pdb_filename=None,
+                         template_chains=None, template_force=False, template_threshold=None):
     """
     Create YAML structure with individual chain sequences.
-    
+
     Args:
         sequences: List of sequence dicts with id, sequence, and msa
         use_template: Whether to include template information
         pdb_filename: Name of the PDB template file
-        template_chain: Chain ID to use as template (default 'B' for target in binder mode)
+        template_chains: List of chain IDs to include as templates (one entry each)
         template_force: Whether to enforce template with potential
         template_threshold: Distance threshold in Angstroms for template deviation
     """
@@ -122,95 +193,96 @@ def generate_yaml_config(sequences, use_template=False, pdb_filename=None,
             for seq in sequences
         ]
     }
-    
-    # Add template configuration if requested
-    if use_template and pdb_filename:
-        template_config = {
-            'pdb': f'templates/{pdb_filename}',
-            'chain_id': template_chain
-        }
-        
-        # Add optional template parameters if specified
-        if template_force:
-            template_config['force'] = True
-        if template_threshold is not None:
-            template_config['threshold'] = float(template_threshold)
-        
-        config['templates'] = [template_config]
-    
+
+    if use_template and pdb_filename and template_chains:
+        template_list = []
+        for tc in template_chains:
+            template_config = {
+                'pdb': f'templates/{pdb_filename}',
+                'chain_id': tc
+            }
+            if template_force:
+                template_config['force'] = True
+            if template_threshold is not None:
+                template_config['threshold'] = float(template_threshold)
+            template_list.append(template_config)
+        config['templates'] = template_list
+
     return config
 
 
 def process_pdb_files(input_dir, output_dir, use_template=False, template_chain='B',
-                      template_force=False, template_threshold=None, msa_file=None, msa_chain=None):
+                      template_force=False, template_threshold=None, msa_file=None,
+                      msa_chain=None, max_break_distance=3.0):
     """
     Process PDB files and generate YAML configs with optional PDB templates and MSA.
-    
+
     Args:
         input_dir: Input directory containing PDB files
         output_dir: Output directory for YAML files
         use_template: Whether to create template directory and include in YAML
-        template_chain: Chain ID to use as template (default 'B' for target in binder mode)
+        template_chain: Original chain ID to use as template (default 'B' for target in binder mode)
         template_force: Whether to enforce template with potential
         template_threshold: Distance threshold in Angstroms for template deviation
         msa_file: Path to MSA file (.a3m format) to use for specified chain
         msa_chain: Chain ID to apply MSA to (default None)
+        max_break_distance: Maximum C→N distance (Å) to consider a chain break
     """
-    # Create output directory for YAMLs
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Create templates subdirectory if using templates
+
     templates_dir = None
     if use_template:
         templates_dir = os.path.join(output_dir, 'templates')
         os.makedirs(templates_dir, exist_ok=True)
-    
-    # Copy MSA file to output directory if provided
+
     if msa_file:
         import shutil
         msa_dest = os.path.join(output_dir, os.path.basename(msa_file))
         shutil.copy2(msa_file, msa_dest)
         print(f'Copied MSA file: {msa_file} -> {os.path.basename(msa_file)}\n')
-    
+
     for filename in os.listdir(input_dir):
         if filename.startswith('fold_') and filename.endswith('.pdb'):
             pdb_path = os.path.join(input_dir, filename)
-            
-            # Extract sequences from PDB
-            sequences = extract_sequences(pdb_path, msa_file=msa_file, msa_chain=msa_chain)
-            
-            # Check if template chain exists when using templates
+
+            # Extract sequences with chain-break detection
+            sequences, chain_id_map = extract_sequences(
+                pdb_path, msa_file=msa_file, msa_chain=msa_chain,
+                max_break_distance=max_break_distance
+            )
+
             if use_template:
-                chain_ids = get_chain_ids(sequences)
-                if template_chain not in chain_ids:
+                if template_chain not in chain_id_map:
+                    all_seq_ids = [seq['id'] for seq in sequences]
                     print(f'ERROR: Template chain "{template_chain}" not found in {filename}')
-                    print(f'       Available chains: {", ".join(chain_ids)}')
+                    print(f'       Available chains: {", ".join(all_seq_ids)}')
                     print(f'       Skipping this file...\n')
                     continue
-                
-                # Add SEQRES records and copy to templates directory
+
+                template_chains = chain_id_map[template_chain]
+
+                # Write template PDB with SEQRES records and split chains
                 template_path = os.path.join(templates_dir, filename)
-                add_seqres_to_pdb(pdb_path, template_path)
+                add_seqres_to_pdb(pdb_path, template_path, max_break_distance=max_break_distance)
                 print(f'Copied template with SEQRES: {filename} -> templates/{filename}')
-            
-            # Generate YAML config
+            else:
+                template_chains = chain_id_map.get(template_chain, [template_chain])
+
             yaml_config = generate_yaml_config(
                 sequences,
                 use_template=use_template,
                 pdb_filename=filename if use_template else None,
-                template_chain=template_chain,
+                template_chains=template_chains,
                 template_force=template_force,
                 template_threshold=template_threshold
             )
-            
-            # Create output path for YAML
+
             yaml_filename = filename.replace('.pdb', '.yaml')
             yaml_path = os.path.join(output_dir, yaml_filename)
-            
-            # Write YAML file
+
             with open(yaml_path, 'w') as yaml_file:
                 yaml.dump(yaml_config, yaml_file, sort_keys=False)
-            
+
             print(f'Generated YAML: {yaml_filename}\n')
 
 
@@ -236,22 +308,24 @@ def main():
                         help='Path to MSA file (.a3m format) to use for specified chain')
     parser.add_argument('--msa-chain', default=None,
                         help='Chain ID to apply MSA to (default: same as template-chain)')
-    
+    parser.add_argument('--max-break-distance', type=float, default=3.0,
+                        help='Maximum C→N distance (Å) to consider a chain break (default: 3.0)')
+
     args = parser.parse_args()
     output_dir = args.output if args.output else args.input
-    
-    # If MSA chain not specified but MSA file provided, use template chain
+
     msa_chain = args.msa_chain if args.msa_chain else args.template_chain
-    
+
     process_pdb_files(
-        args.input, 
+        args.input,
         output_dir,
         use_template=args.use_template,
         template_chain=args.template_chain,
         template_force=args.template_force,
         template_threshold=args.template_threshold,
         msa_file=args.msa_file,
-        msa_chain=msa_chain if args.msa_file else None
+        msa_chain=msa_chain if args.msa_file else None,
+        max_break_distance=args.max_break_distance
     )
 
 
