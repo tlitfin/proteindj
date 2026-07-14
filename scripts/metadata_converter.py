@@ -86,7 +86,7 @@ class MetadataConverter:
             'pr_intface_packstat','pr_SAP','pr_SAP_complex','pr_surfhphobics','pr_TEM',
             'seq_ext_coef','seq_length','seq_MW','seq_pI',
             # Sequence at the end for readability, followed by time stats
-            'sequence','rfd_time','bc_time','af2_time'
+            'sequence','rfd_time','bc_time','mpnn_time','af2_time'
         ]
 
         try:
@@ -457,7 +457,8 @@ class MPNNMetadataConverter(MetadataConverter):
                 "fold_id": fold_id,
                 "seq_id": seq_id,
                 "sequence": sequence,
-                "mpnn_score": float(score)
+                "mpnn_score": float(score),
+                "mpnn_time": int(data['mpnn_time']) if 'mpnn_time' in data else None
             }
 
 class RFDMetadataConverter(MetadataConverter):

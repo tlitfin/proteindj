@@ -768,7 +768,7 @@ class ProteinMPNN_runner:
 
         print(f"ProteinMPNN generated {len(sequences)} sequences in {int(time.time() - mpnn_t0)} seconds")
         for i, (seq, score) in enumerate(sequences):
-            print(f"Seq {i + 1}: {seq} (Score: {score:.2f})")
+            print(f"Seq {i}: {seq} (Score: {score:.2f})")
 
         return sequences
 
@@ -776,11 +776,15 @@ class ProteinMPNN_runner:
         """
         Run ProteinMPNN sequence optimization only (no relaxation cycles).
         """
+        t0 = time.time()
         seqs_scores = self.sequence_optimize(sample_feats)
+        mpnn_shared_time = time.time() - t0
+        num_seqs = len(seqs_scores)
         prefix = f"{sample_feats.tag}_seq"
         base_sample = sample_feats.clone()
 
         for idx, (seq, score) in enumerate(seqs_scores):
+            iter_t0 = time.time()
             working = base_sample.clone()
             working.thread_mpnn_seq(seq)
             self.rebuild_sidechains(working)
@@ -791,16 +795,21 @@ class ProteinMPNN_runner:
 
             print(f"Final Sequence {idx} for {sample_feats.tag}: {seq} (Score: {score:.2f})")
             outtag = f"{prefix}_{idx}"
-            self.struct_manager.dump_pose(working.pdb_lines, outtag, seq, score)
+            seq_time = int(mpnn_shared_time / num_seqs + (time.time() - iter_t0))
+            self.struct_manager.dump_pose(working.pdb_lines, outtag, seq, score, seq_time)
 
     def proteinmpnn_fastrelax(self, sample_feats):
         """
         Run ProteinMPNN plus OpenMM relaxation on the structure being designed.
         """
         base_sample = sample_feats.clone()
+        t0 = time.time()
         seqs_scores = self.sequence_optimize(sample_feats)
+        initial_mpnn_time = time.time() - t0
+        num_seqs = len(seqs_scores)
 
         for seq_idx, (initial_seq, initial_score) in enumerate(seqs_scores):
+            seq_t0 = time.time()
             print(f"Performing optimisation of Seq {seq_idx}: {initial_seq} (Score: {initial_score:.2f})")
 
             working = base_sample.clone()
@@ -860,7 +869,8 @@ class ProteinMPNN_runner:
 
             print(f"Final Sequence {seq_idx} for {sample_feats.tag}: {last_best_seq} (Score: {best_score:.2f})")
             final_tag = f"{sample_feats.tag}_seq_{seq_idx}"
-            self.struct_manager.dump_pose(working.pdb_lines, final_tag, last_best_seq, best_score)
+            seq_time = int(initial_mpnn_time / num_seqs + (time.time() - seq_t0))
+            self.struct_manager.dump_pose(working.pdb_lines, final_tag, last_best_seq, best_score, seq_time)
 
     def run_model(self, tag, args):
         t0 = time.time()
@@ -926,7 +936,7 @@ class StructManager:
                 continue
             yield struct
 
-    def dump_pose(self, pdb_lines, tag, sequence=None, score=None):
+    def dump_pose(self, pdb_lines, tag, sequence=None, score=None, mpnn_time=None):
         json_data = None
         if sequence is not None and score is not None:
             json_data = {
@@ -934,6 +944,8 @@ class StructManager:
                 "sequence": sequence,
                 "score": f"{score:.2f}",
             }
+            if mpnn_time is not None:
+                json_data["mpnn_time"] = mpnn_time
 
         if not os.path.exists(self.outpdbdir):
             os.makedirs(self.outpdbdir)
