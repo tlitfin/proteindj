@@ -46,8 +46,9 @@ From: nvidia/cuda:12.8.0-base-ubuntu24.04
     pip install freesasa
 
     # Clone FreeBindCraft repository
-    git clone https://github.com/cytokineking/FreeBindCraft /opt/BindCraft
-    cd /opt/BindCraft && git checkout d12747d
+    #git clone https://github.com/cytokineking/FreeBindCraft /opt/BindCraft
+    git clone https://github.com/tlitfin/FreeBindCraft /opt/BindCraft
+    cd /opt/BindCraft && git checkout proteindj-relax #TODO: fix
     
     # Make executables executable
     chmod +x /opt/BindCraft/functions/dssp

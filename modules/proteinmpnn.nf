@@ -42,11 +42,11 @@ process RunMPNN {
     script:
     """
     mkdir results  
-    python3 /dl_binder_design/dl_interface_design_multi.py \
+    python3 /dl_binder_design/mpnn_fr/dl_interface_design_multi.py \
         -pdbdir "./" \
         -outpdbdir "./results" \
         -augment_eps ${params.mpnn_backbone_noise} \
-        -checkpoint_path "/dl_binder_design/ProteinMPNN/${params.mpnn_checkpoint_type}_model_weights/${params.mpnn_checkpoint_model}.pt" \
+        -checkpoint_path "/ProteinMPNN/${params.mpnn_checkpoint_type}_model_weights/${params.mpnn_checkpoint_model}.pt" \
         -omit_AAs ${params.mpnn_omitAAs} \
         -relax_max_cycles ${params.mpnn_relax_max_cycles} \
         ${params.mpnn_relax_output ? '-relax_output' : ''} \
