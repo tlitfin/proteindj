@@ -1,21 +1,63 @@
 import argparse
+import io
 import os
 import subprocess
 import tempfile
-from copy import deepcopy
 from pathlib import Path
 import pyfaspr
 import numpy as np
 import pdbutil
+from Bio.PDB import PDBParser
+from pdbfixer import PDBFixer
+from openmm.app import PDBFile
+
+def restore_backbone_atoms(pdb_text: str) -> str:
+    """Use PDBFixer to restore any missing backbone (and other standard heavy) atoms before side-chain packing."""
+
+    fixer = PDBFixer(pdbfile=io.StringIO(pdb_text))
+    fixer.findMissingResidues()
+    fixer.findMissingAtoms()
+    fixer.addMissingAtoms()
+
+    out_buf = io.StringIO()
+    PDBFile.writeFile(fixer.topology, fixer.positions, out_buf, keepIds=True)
+    return out_buf.getvalue()
+
+def get_residue_metadata(pdb_text: str) -> dict:
+    """Map (chain_id, resnum) -> (bfactor, occupancy) using each residue's CA atom.
+
+    Unlike pdbutil.read_pdb, this does not drop residues that are missing other
+    backbone atoms, so metadata can still be recovered for residues that
+    restore_backbone_atoms() repairs later on.
+    """
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure('protein', io.StringIO(pdb_text))
+    metadata = {}
+    for chain in structure[0]:
+        for residue in chain:
+            for atom in residue:
+                if atom.name == 'CA':
+                    _, resnum, _ins = residue.get_id()
+                    metadata[(chain.get_id(), int(resnum))] = (atom.get_bfactor(), atom.get_occupancy())
+                    break
+    return metadata
 
 def restore_sidechains(pdb_fn: str, faspr_bin: str) -> str:
-    """Use FASPR to add/rebuild side-chains from a backbone PDB file, returning PDB text."""
+    """Use PDBFixer to restore missing backbone atoms, then FASPR to add/rebuild side-chains, returning PDB text."""
 
     pdb_text = Path(pdb_fn).read_text()
 
+    # Capture the original per-residue metadata (bfactor, occupancy) keyed by (chain, resnum)
+    # before PDBFixer/FASPR touch the structure. pdbutil.read_pdb can't be used for this since
+    # it silently drops residues with missing backbone atoms (exactly what we're about to fix).
+    orig_metadata = get_residue_metadata(pdb_text)
+
+    # Restore any missing backbone atoms (e.g. dropped carbonyl O) prior to side-chain packing
+    pdb_text = restore_backbone_atoms(pdb_text)
+
     # Renumber residues sequentially (required by FASPR)
     data_org = pdbutil.read_pdb(pdb_text)
-    data = deepcopy(data_org)
+    data = data_org.copy()
     data['resnum'] = np.arange(1, len(data['resnum']) + 1)
     pdb_text_in = pdbutil.write_pdb(**data)
 
@@ -36,12 +78,16 @@ def restore_sidechains(pdb_fn: str, faspr_bin: str) -> str:
         
         pdb_text_out = Path(output_pdb).read_text()
 
-    # Restore original residue numbering, b-factors, and occupancies
+    # Restore original residue numbering, b-factors, and occupancies.
+    # Looked up by (chain, resnum) identity rather than array position/order, since PDBFixer
+    # may have added atoms/residues not present in the original file.
     data_out = pdbutil.read_pdb(pdb_text_out)
     data_out['resnum'] = data_org['resnum']
-    data_out['bfactor'] = data_org['bfactor']
-    data_out['occupancy'] = data_org['occupancy']
+    lookup = [orig_metadata.get((c, r), (0.0, 1.0)) for c, r in zip(data_org['chain'], data_org['resnum'])]
+    data_out['bfactor'] = np.array([bfac for bfac, _ in lookup])
+    data_out['occupancy'] = np.array([occu for _, occu in lookup])
     return pdbutil.write_pdb(**data_out)
+
 
 def main():
     parser = argparse.ArgumentParser(description='Restores side-chains to PDB files after RFdiffusion processing')
