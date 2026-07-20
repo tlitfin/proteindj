@@ -51,6 +51,7 @@ From: nvidia/cuda:12.8.0-base-ubuntu24.04
     cd /opt/BindCraft
     
     # Make executables executable
+    chmod +x /opt/BindCraft/functions/DAlphaBall.gcc
     chmod +x /opt/BindCraft/functions/dssp
     chmod +x /opt/BindCraft/functions/FASPR
     chmod +x /opt/BindCraft/functions/sc
