@@ -1,5 +1,5 @@
 process PrepFAMPNN {
-    label 'pyrosetta_tools' //TODO: Replace with PDBFixer in python_tools container
+    label 'python_tools'
 
     input:
     tuple path(pdb_files), path(json_files)
@@ -10,9 +10,6 @@ process PrepFAMPNN {
 
     script:
     """
-    eval "\$(micromamba shell hook --shell bash)"
-    micromamba activate pyrosetta
-
     # Restore missing side-chains required by FAMPNN    
     python /scripts/prep_fampnn_designs.py \
         --input_dir "./" \
