@@ -145,9 +145,9 @@ process RunBC {
     script:
     """
     # We specify a tmp directory as some python packages try to write to the user home directory outside the container
-    mkdir tmp
-    export XDG_CACHE_HOME="tmp"
-    export MPLCONFIGDIR="tmp"
+    mkdir -p "\$PWD/tmp"
+    export XDG_CACHE_HOME="\$PWD/tmp"
+    export MPLCONFIGDIR="\$PWD/tmp"
     
     python /opt/BindCraft/bindcraft.py \
         --no-pyrosetta \

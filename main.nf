@@ -3,8 +3,8 @@ nextflow.enable.dsl = 2
 
 include { GenerateRFDContigs; GenerateRFDFoldCond; FilterFold ; RunRFD } from './modules/rfdiffusion.nf'
 include { AnalyseBC; PrepBC; RunBC } from './modules/bindcraft.nf'
-include { PrepFAMPNN ; FilterFAMPNN; RunFAMPNN } from './modules/fampnn.nf'
-include { FilterMPNN; PrepMPNN ; RunMPNN } from './modules/proteinmpnn.nf'
+include { PrepFAMPNN ; RunFAMPNN } from './modules/fampnn.nf'
+include { FilterSeq; PrepMPNN ; RunMPNN } from './modules/proteinmpnn.nf'
 include { AlignAF2; FilterAF2; RunAF2 } from './modules/af2.nf'
 include { AnalysePredictions; FilterAnalysis } from './modules/analysis.nf'
 include { PublishResults } from './modules/publish.nf'
@@ -79,7 +79,8 @@ workflow {
     println("██║     ██║  ██║╚██████╔╝   ██║   ███████╗██║██║ ╚████║██████╔╝╚█████╔╝")
     println("╚═╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝╚═╝  ╚═══╝╚═════╝  ╚════╝ ")
     println("                   ProteinDJ Protein Design Pipeline                   ")
-    println("          Developers: Dylan Silke, Josh Hardy, Julie Iskander          ")
+    println("         Developers: Dylan Silke, Josh Hardy, Julie Iskander,          ")
+    println("                       Thomas Litfin, David Ladd                       ")
     println("***********************************************************************")
     println("* Pipeline Mode: ${params.design_mode}")
     println("* Number of designs: ${num_designs}")
@@ -331,25 +332,10 @@ workflow {
             // Add FIXED labels to PDBs for target residues so the sequence does not change
             PrepMPNN(filt_fold_pdbs_jsons)
             
-            // Method specific batching
-            if (params.mpnn_relax_max_cycles > 0) {
-                // use smaller batches for fast relax (slow) - 1 PDB per batch
-                PrepMPNN.out.pdbs
-                    .flatten()
-                    .collate(1)
-                    .toList()
-                    .flatMap { list -> list.withIndex().collect { item, idx -> [idx, item] } }
-                    .set { seq_input_pdbs }
-            }
-            else {
-                // use larger batches without fast relax
-                PrepMPNN.out.pdbs
-                    .flatten()
-                    .collate(10)
-                    .toList()
-                    .flatMap { list -> list.withIndex().collect { item, idx -> [idx, item] } }
-                    .set { seq_input_pdbs }
-            }
+            // GPU-aware batching for RunMPNN
+            Utils
+                .rebatchGPU(PrepMPNN.out.pdbs, params.gpus)
+                .set { seq_input_pdbs }
 
             // Launch ProteinMPNN
             RunMPNN(seq_input_pdbs)
@@ -361,13 +347,6 @@ workflow {
             Utils
                 .rebatchTuples(RunMPNN.out.pdbs_jsons, 200)
                 .set { seq_tuple }
-
-            // Filter designs by sequence score
-            FilterMPNN(seq_tuple)
-            FilterMPNN.out.pdbs
-                .flatten()
-                .collect()
-                .set { filt_seq_pdbs }
         }
         else if (params.seq_method == "fampnn") {
             // FAMPNN path
@@ -408,17 +387,17 @@ workflow {
             Utils
                 .rebatchTuples(RunFAMPNN.out.pdbs_jsons, 200)
                 .set { seq_tuple }
-
-            // Filter designs by sequence score
-            FilterFAMPNN(seq_tuple)
-            FilterFAMPNN.out.pdbs
-                .flatten()
-                .collect()
-                .set { filt_seq_pdbs }
         }
         else {
             error("Not a valid sequence assignment method")
         }
+
+        // Filter designs by sequence score
+        FilterSeq(seq_tuple)
+        FilterSeq.out.pdbs
+            .flatten()
+            .collect()
+            .set { filt_seq_pdbs }
     }
     else if (!params.skip_fold_seq_pred & !params.run_fold_only) {
         // Skip sequence design and run prediction using existing PDBs from specified directory

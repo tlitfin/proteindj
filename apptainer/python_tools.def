@@ -23,8 +23,20 @@ From: ubuntu:24.04
 
     # install python tools
     export PIP_NO_CACHE_DIR=1
-    pip install biopython biotite matplotlib pandas pdbfixer pyyaml 
-    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    pip install uv
+    export UV_NO_CACHE=1
+    export UV_LINK_MODE=copy
+    uv pip install \
+        biopython \
+        biotite \
+        matplotlib \
+        pandas \
+        pdbfixer \
+        pyfaspr \
+        pyyaml
+    uv pip install \
+        torch \
+        torchvision --index-url https://download.pytorch.org/whl/cpu
     
     # cleanup build dependencies
     apt-get autoremove -y

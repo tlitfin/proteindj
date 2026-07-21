@@ -85,7 +85,7 @@ verify_file() {
 }
 
 print_status "Starting model downloads..."
-print_status "Total expected download size: ~15.0 GB. Final size: ~6.8 GB"
+print_status "Total expected download size: ~15.2 GB. Final size: ~7.0 GB"
 print_status "This may take a while depending on your internet connection."
 
 # ============================================================================
@@ -176,7 +176,7 @@ if [ -d "mols" ]; then
     print_success "Boltz-2 mols directory already extracted, skipping..."
 else
     print_status "Extracting Boltz-2 molecular data... (only amino acids are needed for protein design)"
-    tar -tf mols.tar | grep -E 'mols/(ALA|ARG|ASN|ASP|CYS|GLU|GLN|GLY|HIS|ILE|LEU|LYS|MET|PHE|PRO|SER|THR|TRP|TYR|VAL|UNK)\.pkl$' | xargs -d '\n' -I {} tar -xvf mols.tar "{}" || exit 1
+    tar -tf mols.tar | grep -E 'mols/(ALA|ARG|ASN|ASP|CYS|GLU|GLN|GLY|HIS|ILE|LEU|LYS|MET|PHE|PRO|SER|THR|TRP|TYR|VAL|UNK)\.pkl$' | tr '\n' '\0' | xargs -0 -I {} tar -xvf mols.tar "{}" || exit 1
     rm -f mols.tar
     print_success "Boltz-2 molecular data extracted!"
 fi
@@ -186,6 +186,55 @@ touch boltz2_aff.ckpt
 
 cd ../..
 print_success "Boltz-2 models download completed!"
+
+# ============================================================================
+# ProteinMPNN Model Weights (~0.2 GB)
+# ============================================================================
+
+print_status "Downloading ProteinMPNN model weights (~0.2 GB)..."
+
+# Vanilla ProteinMPNN weights
+mkdir -p models/mpnn/vanilla_model_weights && cd models/mpnn/vanilla_model_weights
+declare -a vanilla_weights=("v_48_002.pt" "v_48_010.pt" "v_48_020.pt" "v_48_030.pt")
+for w in "${vanilla_weights[@]}"; do
+    if [ -f "$w" ]; then
+        print_success "$w already exists, skipping..."
+    else
+        download_with_retry "https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/$w" "$w" || exit 1
+    fi
+done
+cd ../../..
+
+# Soluble ProteinMPNN weights
+mkdir -p models/mpnn/soluble_model_weights && cd models/mpnn/soluble_model_weights
+declare -a soluble_weights=("v_48_002.pt" "v_48_010.pt" "v_48_020.pt" "v_48_030.pt")
+for w in "${soluble_weights[@]}"; do
+    if [ -f "$w" ]; then
+        print_success "$w already exists, skipping..."
+    else
+        download_with_retry "https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/$w" "$w" || exit 1
+    fi
+done
+cd ../../..
+
+# HyperMPNN weights
+mkdir -p models/mpnn/hyper_model_weights && cd models/mpnn/hyper_model_weights
+declare -A hyper_weights=(
+    ["v_48_002.pt"]="https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_002_epoch240_hyper.pt"
+    ["v_48_010.pt"]="https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_010_epoch300_hyper.pt"
+    ["v_48_020.pt"]="https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_020_epoch300_hyper.pt"
+    ["v_48_030.pt"]="https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_030_epoch300_hyper.pt"
+)
+for w in "${!hyper_weights[@]}"; do
+    if [ -f "$w" ]; then
+        print_success "$w already exists, skipping..."
+    else
+        download_with_retry "${hyper_weights[$w]}" "$w" || exit 1
+    fi
+done
+cd ../../..
+
+print_success "ProteinMPNN model weights download completed!"
 
 # ============================================================================
 # Verification
@@ -220,15 +269,28 @@ else
     print_error "Boltz-2: Missing required files (.ckpt files or mols directory)"
 fi
 
+# Check ProteinMPNN weights
+print_status "Checking ProteinMPNN weights..."
+vanilla_count=$(ls -1 models/mpnn/vanilla_model_weights/*.pt 2>/dev/null | wc -l)
+soluble_count=$(ls -1 models/mpnn/soluble_model_weights/*.pt 2>/dev/null | wc -l)
+hyper_count=$(ls -1 models/mpnn/hyper_model_weights/*.pt 2>/dev/null | wc -l)
+if [ "$vanilla_count" -eq 4 ] && [ "$soluble_count" -eq 4 ] && [ "$hyper_count" -eq 4 ]; then
+    print_success "ProteinMPNN: Found all 12 required weight files (vanilla/soluble/hyper)"
+else
+    print_error "ProteinMPNN: Expected 4+4+4 weight files, found vanilla=$vanilla_count soluble=$soluble_count hyper=$hyper_count"
+fi
+
 # Final summary
 print_status "Download Summary:"
 echo "  - RFdiffusion models: $(du -sh models/rfd 2>/dev/null | cut -f1 || echo 'N/A')"
 echo "  - AlphaFold2 models:  $(du -sh models/af2 2>/dev/null | cut -f1 || echo 'N/A')"
 echo "  - Boltz-2 models:     $(du -sh models/boltz 2>/dev/null | cut -f1 || echo 'N/A')"
+echo "  - ProteinMPNN models: $(du -sh models/mpnn 2>/dev/null | cut -f1 || echo 'N/A')"
 echo "  - Total size:         $(du -sh models/ 2>/dev/null | tail -1 | cut -f1 || echo 'N/A')"
 
 print_success "Model download script completed!"
 print_status "Remember to update your nextflow.config file with the model paths:"
 echo "  - models/rfd = './models/rfd'"
+echo "  - models/mpnn = './models/mpnn'"
 echo "  - models/af2 = './models/af2'"
 echo "  - models/boltz = './models/boltz'"

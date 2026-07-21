@@ -7,7 +7,7 @@
 ProteinDJ is a Nextflow pipeline for protein design that installs and utilises multiple external software packages, including:
 
 - AlphaFold2 Initial Guess (from https://github.com/nrbennet/dl_binder_design)
-- BindCraft (from https://github.com/martinpacesa/BindCraft)
+- BindCraft (from https://github.com/martinpacesa/BindCraft) and FreeBindCraft (https://github.com/cytokineking/FreeBindCraft)
 - BioPython (from https://biopython.org/)
 - Boltz-2 (from https://github.com/jwohlwend/boltz)
 - Full-Atom MPNN (from https://github.com/richardshuai/fampnn)
@@ -41,7 +41,7 @@ If you find ProteinDJ or BindSweeper useful in your research, please [cite us](h
 
 ## Installation <a name="install"></a>
 
-ProteinDJ requires that [Apptainer](https://apptainer.org/docs/admin/main/installation.html) and [Nextflow](https://www.nextflow.io/docs/latest/install.html) (≥ v24.04) are installed and accessible to the path. 
+ProteinDJ requires that [Apptainer](https://apptainer.org/docs/admin/main/installation.html) and [Nextflow](https://www.nextflow.io/docs/latest/install.html) (≥ v24.04) are installed and accessible to your environment. For v26 of Nextflow onwards, you will need to export NXF_SYNTAX_PARSER=v1 to your shell environment, as ProteinDJ does not yet follow the strict syntax enforced in recent Nextflow versions.
 
 First, clone the repo for ProteinDJ:
 
@@ -50,7 +50,7 @@ git clone https://github.com/PapenfussLab/proteindj
 cd proteindj
 ```
 
-Next, download the models for AF2, Boltz, and RFdiffusion (~11 GB) using the download script . This may take a while depending on your internet connection. Note that this only needs to be done once on a cluster as long as the files and containers are in a location that can be accessed by all users (see [Installation Guide](docs/installation.md) for more details):
+Next, download the models for AF2, Boltz, ProteinMPNN and RFdiffusion (~11 GB) using the download script . This may take a while depending on your internet connection. Note that this only needs to be done once on a cluster as long as the files and containers are in a location that can be accessed by all users (see [Installation Guide](docs/installation.md) for more details):
 
 ```
 bash scripts/download_models.sh

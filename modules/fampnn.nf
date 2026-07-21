@@ -1,5 +1,5 @@
 process PrepFAMPNN {
-    label 'pyrosetta_tools' //TODO: Replace with PDBFixer in python_tools container
+    label 'python_tools'
 
     input:
     tuple path(pdb_files), path(json_files)
@@ -10,9 +10,6 @@ process PrepFAMPNN {
 
     script:
     """
-    eval "\$(micromamba shell hook --shell bash)"
-    micromamba activate pyrosetta
-
     # Restore missing side-chains required by FAMPNN    
     python /scripts/prep_fampnn_designs.py \
         --input_dir "./" \
@@ -77,31 +74,5 @@ process RunFAMPNN {
     python /scripts/metadata_converter.py --input_dir results --input_ext ".json" \
         --converter fampnn --output_file "fampnn_metadata_${batch_id}.jsonl"
     
-    """
-}
-process FilterFAMPNN {
-    label 'python_tools'
-
-    publishDir "${params.out_dir}/run/filter_fampnn", mode: 'copy', pattern: '*.log'
-
-    input:
-    tuple path(pdb_files), path(json_files)
-
-    output:
-    path ("filtered_output/*.pdb"), emit: pdbs, optional: true
-    path ("filtered_output/*.json"), emit: jsons, optional: true
-    path ("filter_fampnn_${task.index}.log"), emit: logs
-
-    script:
-    // Only pass parameters if filter values are provided
-    def fampnnParam = Utils.formatFilterParams(params, "fampnn", ["max_psce"])
-
-    """    
-    python /scripts/filter_fampnn.py \
-        --jsons ./ \
-        --pdbs ./ \
-        ${fampnnParam} \
-        --output-dir filtered_output \
-        2>&1 | tee filter_fampnn_${task.index}.log
     """
 }
