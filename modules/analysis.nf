@@ -61,15 +61,6 @@ process FilterAnalysis {
             "max_sap",
             "max_sap_complex"
         ],
-    ) + " " + Utils.formatFilterParams(
-        params,
-        "seq",
-        [
-            "min_ext_coef",
-            "max_ext_coef",
-            "min_pi",
-            "max_pi"
-        ],
     )
 
     """    
