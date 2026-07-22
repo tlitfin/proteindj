@@ -206,14 +206,14 @@ def apply_binding_types(file_entity, hotspot_residues, bg_not_binding_residues, 
 
 
 def apply_structure_groups(file_entity, bg_flexible_residues, context_chains, rank_map):
-    """Parse bg_flexible_residues and attach a `structure_groups` block to file_entity if set."""
+    """Parse bg_flexible_residues and attach/extend the `structure_groups` block on file_entity if set."""
     if not bg_flexible_residues:
         return
     flexible_by_chain = parse_flexible_spec(bg_flexible_residues, rank_map)
     invalid_chains = set(flexible_by_chain) - set(context_chains)
     if invalid_chains:
         raise ValueError(f"bg_flexible_residues references chain(s) not in target: {sorted(invalid_chains)}")
-    file_entity['structure_groups'] = build_structure_groups(flexible_by_chain)
+    file_entity.setdefault('structure_groups', []).extend(build_structure_groups(flexible_by_chain))
 
 
 def build_denovo_spec(args, target_chains, rank_map):
@@ -262,6 +262,10 @@ def build_redesign_spec(args, all_chains, rank_map):
         'path': Path(args.input_pdb).name,
         'include': [{'chain': {'id': chain}} for chain in all_chains],
         'design': [{'chain': {'id': 'A', 'res_index': redesign_res_index}}],
+        # Hide the redesigned residues' existing coordinates from template attention
+        # (visibility=0), otherwise BoltzGen conditions on chain A's input structure as
+        # a template and only resamples its sequence, leaving the backbone unchanged.
+        'structure_groups': build_structure_groups({'A': redesign_res_index}),
     }
 
     # hotspot_residues/bg_not_binding_residues/bg_flexible_residues apply to the fixed
