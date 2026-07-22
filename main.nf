@@ -3,6 +3,7 @@ nextflow.enable.dsl = 2
 
 include { GenerateRFDContigs; GenerateRFDFoldCond; FilterFold ; RunRFD } from './modules/rfdiffusion.nf'
 include { AnalyseBC; PrepBC; RunBC } from './modules/bindcraft.nf'
+include { AnalyseBG; PrepBG; RunBG } from './modules/boltzgen.nf'
 include { PrepFAMPNN ; RunFAMPNN } from './modules/fampnn.nf'
 include { FilterSeq; PrepMPNN ; RunMPNN } from './modules/proteinmpnn.nf'
 include { AlignAF2; FilterAF2; RunAF2 } from './modules/af2.nf'
@@ -16,6 +17,7 @@ include { Compress as CompressFAMPNN } from './modules/compress'
 include { Compress as CompressAF2 } from './modules/compress'
 include { Compress as CompressBoltz } from './modules/compress'
 include { Compress as CompressBC } from './modules/compress'
+include { Compress as CompressBG } from './modules/compress'
 include { MergeUncroppedTarget } from './modules/merge_uncropped_target.nf'
 
 workflow {
@@ -38,7 +40,7 @@ workflow {
 
     def outputDirectory = params.out_dir
 
-    VALID_MODES = ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'monomer_denovo', 'monomer_foldcond', 'monomer_motifscaff', 'monomer_partialdiff']
+    VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'monomer_denovo', 'monomer_foldcond', 'monomer_motifscaff', 'monomer_partialdiff']
     if (!(params.design_mode in VALID_MODES)) {
         throw new IllegalArgumentException("Invalid design mode: ${params.design_mode}. Must be one of: ${VALID_MODES.join(', ')}")
     }
@@ -116,7 +118,7 @@ workflow {
             error("Please provide the number of designs to generate")
         }
         // Validate input PDB file
-        if (params.design_mode in ['bindcraft_denovo','binder_denovo', 'binder_motifscaff', 'binder_partialdiff', 'binder_foldcond', 'monomer_motifscaff', 'monomer_partialdiff']) {
+        if (params.design_mode in ['bindcraft_denovo','boltzgen_denovo','boltzgen_redesign','binder_denovo', 'binder_motifscaff', 'binder_partialdiff', 'binder_foldcond', 'monomer_motifscaff', 'monomer_partialdiff']) {
             if (!params.input_pdb) {
                 throw new IllegalArgumentException("Please provide input PDB file path required by $params.design_mode mode")
             }
@@ -127,7 +129,7 @@ workflow {
         }
         // Validate design length
         // For binder_denovo and monomer_denovo, skip validation when rfd_contigs is provided as it contains the design length
-        if (params.design_mode == 'bindcraft_denovo'){
+        if (params.design_mode in ['bindcraft_denovo','boltzgen_denovo']){
             validateDesignLength(params.design_length)
         } else if (params.design_mode in ['binder_denovo', 'monomer_denovo'] && !params.rfd_contigs){
             validateDesignLength(params.design_length)
@@ -192,6 +194,65 @@ workflow {
             // Batch PDBs and JSONS for CPU tasks
             Utils
                 .rebatchTuples(bc_pdbs_jsons, 200)
+                .set { fold_tuples }
+
+        } else if (params.design_mode in ['boltzgen_denovo','boltzgen_redesign']) {
+            // Use BoltzGen for fold design
+            validateBoltzGenParams(
+                params.design_mode,
+                params.hotspot_residues,
+                params.bg_not_binding_residues,
+                params.bg_redesign_residues,
+                params.bg_flexible_residues,
+                params.design_length,
+                params.input_pdb)
+
+            if (params.design_mode == 'boltzgen_denovo') {
+                log.info("Using BoltzGen to diffuse binders with the following design parameters:")
+                log.info("* Design length = ${params.design_length}")
+            } else {
+                log.info("Using BoltzGen to redesign an existing binder with the following design parameters:")
+            }
+            if (params.hotspot_residues){
+                log.info("* Target hotspots = ${params.hotspot_residues}")
+            }
+            if (params.bg_not_binding_residues){
+                log.info("* Target anti-hotspots = ${params.bg_not_binding_residues}")
+            }
+            if (params.design_mode == 'boltzgen_redesign' && params.bg_redesign_residues){
+                log.info("* Redesign residues = ${params.bg_redesign_residues}")
+            }
+            if (params.bg_flexible_residues){
+                log.info("* Flexible target residues = ${params.bg_flexible_residues}")
+            }
+
+            // Collect input files
+            def inputFiles = collectInputFiles(params)
+
+            // Copy input files to output directory
+            inputFiles.each { inputFile ->
+                "rsync -r ${inputFile} ${inputsDir}/.".execute()
+            }
+
+            // Create channel with items for requested designs
+            bg_ch = Channel
+                .fromList((0..<num_batches))
+
+            PrepBG(bg_ch, file(params.input_pdb), params.design_mode)
+
+            // Run BoltzGen for each batch (PrepBG emits a cleaned copy of input_pdb alongside the design spec)
+            RunBG(PrepBG.out, batch_size)
+
+            // Collect batches and run analysis and conversion of BoltzGen outputs
+            AnalyseBG(RunBG.out.cifs_npzs.flatten().collect(), params.design_mode)
+            AnalyseBG.out.pdbs_jsons.set { bg_pdbs_jsons }
+
+            // Compress output files
+            CompressBG("bg", bg_pdbs_jsons.flatten().collect())
+
+            // Batch PDBs and JSONS for CPU tasks
+            Utils
+                .rebatchTuples(bg_pdbs_jsons, 200)
                 .set { fold_tuples }
 
         } else { // Use RFdiffusion for fold design
@@ -371,7 +432,7 @@ workflow {
                 .combine(mega_csv)
                 .set { fampnn_input }
 
-            if (params.design_mode in ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
                 // Perform design and scoring on binder (chain A)
                 RunFAMPNN(fampnn_input, 'A')
             }
@@ -439,7 +500,7 @@ workflow {
     // Run Structure Prediction if not skipped
     if (!params.skip_fold_seq_pred & !params.run_fold_only) {
         // Optional uncropped target PDB merge for binder design
-        if (params.design_mode in ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff' , 'bindcraft_denovo']) {
+        if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
             // if uncropped target PDB file is provided, merge with designs
             if (params.uncropped_target_pdb) {
                 def uncroppedPDBfile = file(params.uncropped_target_pdb)
@@ -476,7 +537,7 @@ workflow {
             // Filtering of AF2 results
             FilterAF2(pred_tuple)
 
-            if (params.design_mode in ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
                 // Alignment of PDBs to target chain(s). Only need one reference file
                 AlignAF2(FilterAF2.out.pdbs.flatten().collect(), pred_input_pdbs.flatten().last())
                 AlignAF2.out.pdbs
@@ -533,7 +594,7 @@ workflow {
             pred_input_pdbs.collect().set { designs_for_alignment }
 
             // Calculate Boltz-2 interface scores for binders only
-            if (params.design_mode in ['binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff' , 'bindcraft_denovo' ]) {
+            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
                 AnalyseBoltz(pred_tuple, npz_files_for_analysis)
                 AnalyseBoltz.out.pdbs_jsons
                     .set { boltz_with_metrics }
@@ -542,7 +603,7 @@ workflow {
             }
 
             // Align Boltz Predictions to FAMPNN output and calculate RMSD
-            if (params.design_mode in ['bindcraft_denovo','binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
                 AlignBoltz(boltz_with_metrics, designs_for_alignment, 'binder')
             }
             else {
@@ -794,6 +855,8 @@ def collectInputFiles(params) {
     // Add required input files
     if (params.design_mode in [
         'bindcraft_denovo',
+        'boltzgen_denovo',
+        'boltzgen_redesign',
         'binder_denovo',
         'binder_foldcond',
         'binder_motifscaff',
@@ -893,6 +956,32 @@ def validateBindCraftParams(bc_chains,hotspot_residues,design_length,num_designs
     if (!advancedFile.exists()) {
         throw new FileNotFoundException("Advanced settings JSON file not found at path: ${bc_advanced_json}. Please ensure the file exists and the path is correct.")
     }
+    }
+}
+
+def validateBoltzGenParams(design_mode, hotspot_residues, bg_not_binding_residues, bg_redesign_residues, bg_flexible_residues, design_length, input_pdb) {
+
+    // Shared residue-spec grammar for hotspot_residues/bg_not_binding_residues/bg_flexible_residues:
+    // comma-separated tokens, each a chain-qualified single residue ('A56'), a chain-qualified
+    // range ('A115-120'), or a bare chain ID meaning the whole chain ('B').
+    def residueSpecRegex = /^([A-Za-z]+(\d+(-\d+)?)?)(,[A-Za-z]+(\d+(-\d+)?)?)*$/
+
+    if (hotspot_residues && !hotspot_residues.matches(residueSpecRegex)) {
+        throw new IllegalArgumentException("hotspot_residues format invalid. Acceptable: 'A56,A115-120,B' (chain identifier is required for BoltzGen modes).")
+    }
+    if (bg_not_binding_residues && !bg_not_binding_residues.matches(residueSpecRegex)) {
+        throw new IllegalArgumentException("bg_not_binding_residues format invalid. Acceptable: 'A200,A210-215,B'.")
+    }
+    if (bg_flexible_residues && !bg_flexible_residues.matches(residueSpecRegex)) {
+        throw new IllegalArgumentException("bg_flexible_residues format invalid. Acceptable: 'A10-13,A16,B'.")
+    }
+    if (bg_redesign_residues) {
+        if (design_mode == 'boltzgen_denovo') {
+            throw new IllegalArgumentException("bg_redesign_residues only applies to boltzgen_redesign mode.")
+        }
+        if (!bg_redesign_residues.matches(/^(A(\d+(-\d+)?)?)(,A(\d+(-\d+)?)?)*$/)) {
+            throw new IllegalArgumentException("bg_redesign_residues format invalid. Must reference chain A only, e.g. 'A10-50,A60'.")
+        }
     }
 }
 

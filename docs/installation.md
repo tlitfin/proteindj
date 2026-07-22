@@ -9,7 +9,7 @@ This guide will walk you through installing ProteinDJ and all its dependencies a
 Before starting, ensure you have:
 
 - **Linux/Unix system** with internet access
-- **Sufficient storage space**: ~11 GB for downloading models and ~50 GB for containers
+- **Sufficient storage space**: ~16 GB for downloading models and ~50 GB for containers
 - **Administrative access** or ability to install software
 - **SLURM cluster** (if using HPC environment)
 
@@ -83,7 +83,7 @@ nextflow -version
 
 ## Step 3: Download Required Models
 
-> **💡 Tip:** This step downloads ~11.2 GB of model files. Consider doing this in a shared location so that other users can access the files.
+> **💡 Tip:** This step downloads ~16 GB of model files. Consider doing this in a shared location so that other users can access the files.
 
 ### RFdiffusion Models (~3.7 GB)
 
@@ -120,9 +120,9 @@ rm -f alphafold_params_2022-12-06.tar
 cd ../..
 ```
 
-### Boltz-2 Models (~2.2 GB)
+### Boltz-2 Models (~2.5 GB)
 
-To perform Boltz-2 predictions, you will need to download the models (download ~3.8 GB, final size ~2.2 GB). If you have not already downloaded the models, use the commands below, and update the `boltz_models` variable in `nextflow.config` to the location of the model directory (e.g. './boltz_models'):
+To perform Boltz-2 predictions, you will need to download the models (download ~3.8 GB, final size ~2.5 GB). If you have not already downloaded the models, use the commands below, and update the `boltz_models` variable in `nextflow.config` to the location of the model directory (e.g. './boltz_models'):
 
 ```bash
 mkdir -p models/boltz && cd models/boltz
@@ -139,7 +139,22 @@ touch boltz2_aff.ckpt
 cd ../..
 ```
 
-### ProteinMPNN Model Weights (~0.2 GB)
+### BoltzGen Models (~4 GB)
+
+ProteinDJ only runs BoltzGen's design step (sequences are re-designed downstream via MPNN/FAMPNN), so only the diffusion checkpoints and the molecule/CCD dataset need to be downloaded — not the inverse-folding, folding, or affinity checkpoints that `boltzgen run` would otherwise also fetch. Update the `boltzgen_models` variable in `nextflow.config` to the location of the model directory (e.g. `'./models/boltzgen'`):
+
+```bash
+mkdir -p models/boltzgen
+
+# These files are served from Hugging Face Hub's Xet storage backend. Plain wget/curl only
+# reach a slow single-connection compatibility bridge for Xet-backed files, so use the `hf`
+# CLI instead (fetches chunks in parallel, dramatically faster):
+pip install -U "huggingface_hub[hf_xet]"
+hf download boltzgen/boltzgen-1 boltzgen1_diverse.ckpt boltzgen1_adherence.ckpt --local-dir models/boltzgen
+hf download boltzgen/inference-data mols.zip --repo-type dataset --local-dir models/boltzgen
+```
+
+### ProteinMPNN Model Weights (~0.1 GB)
 
 ProteinMPNN weights are required for binder sequence design. Three sets of weights are provided: vanilla (standard), soluble (optimised for solubility), and HyperMPNN (improved accuracy). Update the `mpnn_models` variable in `nextflow.config` to the location of the model directory (e.g. `'./models/mpnn'`):
 
@@ -178,6 +193,7 @@ cd ../../../
 ls -la models/rfd/                         # Should contain 8 .pt files
 ls -la models/af2/                         # Should contain params directory
 ls -la models/boltz/                       # Should contain .ckpt files and mols directory
+ls -la models/boltzgen/                    # Should contain boltzgen1_diverse.ckpt, boltzgen1_adherence.ckpt and mols.zip
 ls -la models/mpnn/vanilla_model_weights/  # Should contain 4 .pt files
 ls -la models/mpnn/soluble_model_weights/  # Should contain 4 .pt files
 ls -la models/mpnn/hyper_model_weights/    # Should contain 4 .pt files

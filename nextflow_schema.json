@@ -225,6 +225,32 @@
                 }
             }
         },
+        "boltzgen_advanced_parameters": {
+            "title": "BoltzGen Advanced Parameters",
+            "type": "object",
+            "description": "Advanced parameters to control the behaviour of BoltzGen.",
+            "default": "",
+            "properties": {
+                "bg_not_binding_residues": {
+                    "type": "string",
+                    "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
+                    "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
+                    "hidden": true
+                },
+                "bg_redesign_residues": {
+                    "type": "string",
+                    "description": "Chain A (binder) residues to redesign/rediffuse for boltzgen_redesign, comma-separated e.g. 'A10-50,A60'. Must only reference chain A. If null, the entire chain A binder is redesigned.",
+                    "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$",
+                    "hidden": true
+                },
+                "bg_flexible_residues": {
+                    "type": "string",
+                    "description": "Target residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible target regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible.",
+                    "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
+                    "hidden": true
+                }
+            }
+        },
         "rfdiffusion_advanced_parameters": {
             "title": "RFdiffusion Advanced Parameters",
             "type": "object",
@@ -857,6 +883,9 @@
         },
         {
             "$ref": "#/definitions/bindcraft_advanced_parameters"
+        },
+        {
+            "$ref": "#/definitions/boltzgen_advanced_parameters"
         },
         {
             "$ref": "#/definitions/rfdiffusion_advanced_parameters"

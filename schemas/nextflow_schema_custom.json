@@ -23,7 +23,9 @@
             "monomer_denovo",
             "monomer_foldcond",
             "monomer_motifscaff",
-            "monomer_partialdiff"
+            "monomer_partialdiff",
+            "boltzgen_denovo",
+            "boltzgen_redesign"
           ]
         },
         "num_designs": {
@@ -251,6 +253,35 @@
           "hidden": true,
           "format": "file-path",
           "pattern": "\\.json$",
+          "default": null
+        }
+      }
+    },
+    "boltzgen_advanced_parameters": {
+      "title": "BoltzGen Advanced Parameters",
+      "type": "object",
+      "description": "Advanced parameters to control the behaviour of BoltzGen.",
+      "default": "",
+      "properties": {
+        "bg_not_binding_residues": {
+          "type": "string",
+          "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
+          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
+          "hidden": true,
+          "default": null
+        },
+        "bg_redesign_residues": {
+          "type": "string",
+          "description": "Chain A (binder) residues to redesign/rediffuse for boltzgen_redesign, comma-separated e.g. 'A10-50,A60'. Must only reference chain A. If null, the entire chain A binder is redesigned.",
+          "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$",
+          "hidden": true,
+          "default": null
+        },
+        "bg_flexible_residues": {
+          "type": "string",
+          "description": "Target residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible target regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible.",
+          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
+          "hidden": true,
           "default": null
         }
       }
@@ -876,23 +907,26 @@
           "type": "string",
           "format": "directory-path",
           "description": "Path to the RFdiffusion model checkpoints.",
-          "hidden": true
+          "hidden": true,
+          "default": null
         },
         "af2_models": {
           "type": "string",
           "format": "directory-path",
           "description": "Path to the AlphaFold2 databases.",
-          "hidden": true
+          "hidden": true,
+          "default": null
         },
         "boltz_models": {
           "type": "string",
           "format": "directory-path",
           "description": "Path to the Boltz-2 models.",
-          "hidden": true
+          "hidden": true,
+          "default": null
         },
         "gpu_model": {
           "type": "string",
-          "default": "A30",
+          "default": null,
           "description": "GPU model to request, e.g., 'A30'.",
           "hidden": true
         },
@@ -916,13 +950,13 @@
         },
         "cpus_per_gpu": {
           "type": "integer",
-          "default": 8,
+          "default": "null",
           "description": "Number of CPUs requested per GPU",
           "hidden": true
         },
         "memory_gpu": {
           "type": "string",
-          "default": "24GB",
+          "default": null,
           "description": "Memory requested for GPU jobs",
           "hidden": true
         },
@@ -947,6 +981,9 @@
     },
     {
       "$ref": "#/definitions/bindcraft_advanced_parameters"
+    },
+    {
+      "$ref": "#/definitions/boltzgen_advanced_parameters"
     },
     {
       "$ref": "#/definitions/rfdiffusion_advanced_parameters"
