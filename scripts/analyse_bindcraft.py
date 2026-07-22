@@ -203,7 +203,7 @@ def generate_inpaint_seq(chain_a_length, chain_b_length, interface_res_str=None,
         fix_interface: If True, set interface residues to True
     
     Returns:
-        list: Boolean array for rfd_inpaint_seq
+        list: Boolean array for bc_inpaint_seq
     """
     # Initialize array: False for chain A, True for chain B
     inpaint_seq = [False] * chain_a_length + [True] * chain_b_length
@@ -278,7 +278,7 @@ def create_metadata_from_row(row, fold_id, chain_a_length, chain_b_length,
     bc_intface_res = transform_interface_residues(row['InterfaceResidues'])
     
     # Generate inpaint_seq mask
-    rfd_inpaint_seq = generate_inpaint_seq(
+    bc_inpaint_seq = generate_inpaint_seq(
         chain_a_length, 
         chain_b_length, 
         bc_intface_res,
@@ -293,7 +293,7 @@ def create_metadata_from_row(row, fold_id, chain_a_length, chain_b_length,
         'bc_rmsd_target': float(row['Target_RMSD']),
         'bc_intface_res': bc_intface_res,
         'bc_time': parse_trajectory_time(row['TrajectoryTime']),
-        'rfd_inpaint_seq': rfd_inpaint_seq
+        'bc_inpaint_seq': bc_inpaint_seq
     }
     
     return metadata
@@ -385,7 +385,7 @@ def main():
         '--fix_interface_residues',
         action='store_true',
         default=False,
-        help='If set, interface residues in chain A will be marked as True in rfd_inpaint_seq'
+        help='If set, interface residues in chain A will be marked as True in bc_inpaint_seq'
     )
     
     args = parser.parse_args()
