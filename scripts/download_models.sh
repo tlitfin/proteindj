@@ -126,6 +126,9 @@ print_success "RFdiffusion models download completed!"
 print_status "Downloading AlphaFold2 models (~5.2 GB)..."
 mkdir -p models/af2 && cd models/af2
 
+#Optional Jax cache directory for AlphaFold2
+mkdir -p models/af2_jax_cache
+
 AF2_URL="https://storage.googleapis.com/alphafold/alphafold_params_2022-12-06.tar"
 AF2_FILE="alphafold_params_2022-12-06.tar"
 
