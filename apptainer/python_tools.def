@@ -15,7 +15,9 @@ From: ubuntu:24.04
         grep \
         pigz \
         sed \
-        dssp
+        dssp \
+        curl \
+        build-essential
 
     # create and activate virtual environment
     python3 -m venv /opt/venv
@@ -33,11 +35,18 @@ From: ubuntu:24.04
         pandas \
         pdbfixer \
         pyfaspr \
+        prodigy-prot \
         pyyaml
     uv pip install \
         torch \
         torchvision --index-url https://download.pytorch.org/whl/cpu
-    
+
+    # Install sc-rs (shape complementarity binary) via rustup
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    . "$HOME/.cargo/env"
+    cargo install --git https://github.com/cytokineking/sc-rs --tag v1.0.0 --root /usr/local
+    rustup self uninstall -y
+
     # cleanup build dependencies
     apt-get autoremove -y
     apt-get clean
