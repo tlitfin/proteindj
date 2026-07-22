@@ -4,6 +4,8 @@ import copy
 import json
 import os
 import re
+import shutil
+import subprocess
 import traceback
 import logging
 import numpy as np
@@ -212,23 +214,160 @@ def calculate_sap_scores(num_chains, chain_id='A'):
 
 
 # ---------------------------------------------------------------------------
-# Interface metrics (stub -- replaced in next commit)
+# Interface metrics
 # ---------------------------------------------------------------------------
+
+def chain_total_sasa(chain):
+    """Sum SASA over all atoms in a chain."""
+    return sum(getattr(atom, "sasa", 0.0) for atom in chain.get_atoms())
+
+
+def resolve_sc_binary():
+    """Find the sc-rs shape complementarity binary.
+
+    Resolution order (matches FreeBindCraft):
+    1. Environment variables SC_RS_BIN, SC_BIN
+    2. PATH lookup for sc, sc-rs, shape-complementarity, sc_rs
+    """
+    env_candidates = [os.environ.get('SC_RS_BIN'), os.environ.get('SC_BIN')]
+    path_candidates = [
+        shutil.which('sc'),
+        shutil.which('sc-rs'),
+        shutil.which('shape-complementarity'),
+        shutil.which('sc_rs'),
+    ]
+
+    for candidate in env_candidates + path_candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
+def calculate_shape_complementarity(pdb_path, chain1, chain2):
+    """Calculate shape complementarity using sc-rs CLI.
+
+    Adapted from FreeBindCraft _calculate_shape_complementarity().
+    Falls back to 0.70 if binary not found or fails.
+    """
+    sc_bin = resolve_sc_binary()
+    if sc_bin is None:
+        logger.warning("sc-rs binary not found; using placeholder 0.70")
+        return 0.70
+
+    try:
+        cmd = [sc_bin, str(pdb_path), str(chain1), str(chain2), '--json']
+        proc = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
+        stdout = (proc.stdout or '').strip()
+        if not stdout:
+            return 0.70
+
+        try:
+            payload = json.loads(stdout)
+        except Exception:
+            payload = None
+            # Try extracting JSON from mixed output
+            s_idx = stdout.rfind('{')
+            e_idx = stdout.rfind('}')
+            if s_idx != -1 and e_idx > s_idx:
+                try:
+                    payload = json.loads(stdout[s_idx:e_idx + 1])
+                except Exception:
+                    pass
+
+        if isinstance(payload, dict):
+            sc_key = 'sc' if 'sc' in payload else ('sc_value' if 'sc_value' in payload else None)
+            if sc_key is not None:
+                sc_val = float(payload[sc_key])
+                if 0.0 <= sc_val <= 1.0:
+                    return sc_val
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"sc-rs timed out for {pdb_path}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"sc-rs failed for {pdb_path}: {e}")
+    except Exception as e:
+        logger.warning(f"sc-rs error for {pdb_path}: {e}")
+
+    return 0.70
+
+
+def compute_interface_bsa(model, chain1, chain2):
+    """Compute buried surface area at the interface using BioPython ShrakeRupley.
+
+    Adapted from FreeBindCraft _compute_sasa_metrics().
+    Returns dSASA / 2 (to match PyRosetta InterfaceAnalyzerMover convention).
+    """
+    # SASA of chains within the full complex
+    compute_sasa(model)
+    chain1_sasa_complex = chain_total_sasa(model[chain1])
+    chain2_sasa_complex = chain_total_sasa(model[chain2])
+
+    # SASA of chain1 as isolated monomer
+    _, iso_model1, iso_chain1 = isolate_chain(model, chain1)
+    compute_sasa(iso_model1)
+    chain1_sasa_mono = chain_total_sasa(iso_chain1)
+
+    # SASA of chain2 as isolated monomer
+    _, iso_model2, iso_chain2 = isolate_chain(model, chain2)
+    compute_sasa(iso_model2)
+    chain2_sasa_mono = chain_total_sasa(iso_chain2)
+
+    # dSASA = buried area upon complex formation
+    dsasa = max(chain1_sasa_mono - chain1_sasa_complex, 0.0) + \
+            max(chain2_sasa_mono - chain2_sasa_complex, 0.0)
+
+    return round(dsasa / 2)
+
+
+def compute_prodigy_scores(pdb_path, chain1, chain2):
+    """Predict binding affinity using Prodigy (IC-NIS model).
+
+    Returns dict with deltaG (kcal/mol) and Kd (M).
+    Falls back to neutral placeholders (dG=0.0) on failure.
+    """
+    try:
+        from prodigy_prot.modules.parsers import parse_structure as prodigy_parse
+        from prodigy_prot.modules.prodigy import Prodigy as ProdigyPredictor
+
+        models, _, _ = prodigy_parse(str(pdb_path))
+        prodigy = ProdigyPredictor(model=models[0], selection=[chain1, chain2])
+        prodigy.predict()
+        return {
+            'dg': prodigy.ba_val,
+            'kd': prodigy.kd_val,
+        }
+    except Exception as e:
+        logger.warning(f"Prodigy scoring failed for {pdb_path}: {e}. Using placeholders.")
+        return {
+            'dg': 0.0, 'kd': 0.0,
+        }
+
 
 def calculate_interface_metrics(model, pdb_path, chain1='A', chain2='B'):
     """Calculate interface metrics between specified chains.
-    Stub returning placeholder values -- replaced in next commit.
+
+    Computes BSA, shape complementarity (sc-rs), binding deltaG (Prodigy).
+    PackStat and H-bond metrics have no open-source equivalent and use placeholders.
     """
+    # Add suffix for metrics if not the default A_B interface
     suffix = '' if (chain1 == 'A' and chain2 == 'B') else f'_{chain1}_{chain2}'
 
+    # Geometry metrics
+    bsa = compute_interface_bsa(model, chain1, chain2)
+    sc = round(calculate_shape_complementarity(pdb_path, chain1, chain2), 3)
+
+    # Binding affinity (Prodigy IC-NIS model)
+    pg = compute_prodigy_scores(pdb_path, chain1, chain2)
+    dg_to_bsa = round(pg['dg'] / bsa, 4) if bsa > 0 else 0.0
+
     return {
-        f'pr_intface_BSA{suffix}': 0,
-        f'pr_intface_shpcomp{suffix}': 0.0,
-        f'pr_intface_deltaG{suffix}': 0.0,
-        f'pr_intface_deltaGtoBSA{suffix}': 0.0,
+        f'pr_intface_BSA{suffix}': bsa,
+        f'pr_intface_shpcomp{suffix}': sc,
+        f'pr_intface_deltaG{suffix}': round(pg['dg'], 2),
+        f'pr_intface_deltaGtoBSA{suffix}': dg_to_bsa,
         f'pr_intface_hbonds{suffix}': 0,
         f'pr_intface_unsat_hbonds{suffix}': 0,
-        f'pr_intface_packstat{suffix}': 0.0,
+        f'pr_intface_packstat{suffix}': 0.65,  # no non-Rosetta equivalent
     }
 
 
