@@ -15,6 +15,7 @@ from pathlib import Path
 
 from Bio import PDB
 from Bio.PDB import PDBParser, DSSP, Polypeptide
+from Bio.PDB.NeighborSearch import NeighborSearch
 from Bio.PDB.SASA import ShrakeRupley
 from Bio.PDB.Structure import Structure
 from Bio.PDB.Model import Model
@@ -343,11 +344,163 @@ def compute_prodigy_scores(pdb_path, chain1, chain2):
         }
 
 
+# ---------------------------------------------------------------------------
+# H-bond metrics
+# Distance-based approximation using heavy-atom D-A < 3.5 A cutoff.
+# Overcounts relative to PyRosetta's angle-dependent method.
+# ---------------------------------------------------------------------------
+
+# H-bond donor/acceptor atom names by residue type (heavy atoms only).
+# Backbone N is donor, backbone O is acceptor for all residues.
+SIDECHAIN_DONORS = {
+    'ARG': ('NE', 'NH1', 'NH2'), 'ASN': ('ND2',), 'GLN': ('NE2',),
+    'HIS': ('ND1', 'NE2'), 'LYS': ('NZ',), 'SER': ('OG',),
+    'THR': ('OG1',), 'TRP': ('NE1',), 'TYR': ('OH',),
+}
+SIDECHAIN_ACCEPTORS = {
+    'ASN': ('OD1',), 'ASP': ('OD1', 'OD2'), 'GLN': ('OE1',),
+    'GLU': ('OE1', 'OE2'), 'HIS': ('ND1', 'NE2'), 'SER': ('OG',),
+    'THR': ('OG1',), 'TYR': ('OH',),
+}
+
+
+def get_interface_polar_atoms(model, chain1, chain2, contact_dist=4.0):
+    """Identify polar atoms at the interface between two chains.
+
+    Returns (donors_c1, acceptors_c1, donors_c2, acceptors_c2) where each
+    is a list of Atom objects from the respective chain that are within
+    contact_dist of any atom on the other chain.
+    """
+    atoms_c1 = list(model[chain1].get_atoms())
+    atoms_c2 = list(model[chain2].get_atoms())
+
+    # Build neighbor search on each chain to find interface atoms
+    ns_c2 = NeighborSearch(atoms_c2)
+    ns_c1 = NeighborSearch(atoms_c1)
+
+    def is_interface_atom(atom, ns_other, dist):
+        """Check if atom is within dist of any atom in the other chain."""
+        return len(ns_other.search(atom.get_vector().get_array(), dist, 'A')) > 0
+
+    def collect_polar(chain_obj, ns_other, dist):
+        """Collect donor and acceptor atoms at the interface for a chain."""
+        donors = []
+        acceptors = []
+        for residue in chain_obj:
+            if not Polypeptide.is_aa(residue, standard=True):
+                continue
+            resname = residue.get_resname()
+            for atom in residue:
+                aname = atom.get_name()
+                if not is_interface_atom(atom, ns_other, dist):
+                    continue
+                # Backbone
+                if aname == 'N':
+                    donors.append(atom)
+                elif aname == 'O':
+                    acceptors.append(atom)
+                # Sidechain donors
+                elif aname in SIDECHAIN_DONORS.get(resname, ()):
+                    donors.append(atom)
+                # Sidechain acceptors
+                if aname in SIDECHAIN_ACCEPTORS.get(resname, ()):
+                    acceptors.append(atom)
+        return donors, acceptors
+
+    donors_c1, acceptors_c1 = collect_polar(model[chain1], ns_c2, contact_dist)
+    donors_c2, acceptors_c2 = collect_polar(model[chain2], ns_c1, contact_dist)
+
+    return donors_c1, acceptors_c1, donors_c2, acceptors_c2
+
+
+def compute_interface_hbonds(model, chain1, chain2):
+    """Count intermolecular hydrogen bonds using distance criterion.
+
+    Uses heavy-atom distance D-A < 3.5 A (standard for PDBs without hydrogens).
+    Counts unique donor-acceptor pairs across the interface.
+    """
+    donors_c1, acceptors_c1, donors_c2, acceptors_c2 = get_interface_polar_atoms(
+        model, chain1, chain2, contact_dist=4.0)
+
+    hbond_cutoff = 3.5
+    hbond_count = 0
+
+    # Donors on chain1 -> acceptors on chain2
+    for donor in donors_c1:
+        d_coord = donor.get_vector().get_array()
+        for acceptor in acceptors_c2:
+            dist = np.linalg.norm(d_coord - acceptor.get_vector().get_array())
+            if dist <= hbond_cutoff:
+                hbond_count += 1
+
+    # Donors on chain2 -> acceptors on chain1
+    for donor in donors_c2:
+        d_coord = donor.get_vector().get_array()
+        for acceptor in acceptors_c1:
+            dist = np.linalg.norm(d_coord - acceptor.get_vector().get_array())
+            if dist <= hbond_cutoff:
+                hbond_count += 1
+
+    return hbond_count
+
+
+def compute_unsat_hbonds(model, chain1, chain2):
+    """Approximate buried unsatisfied hydrogen bonds at the interface.
+
+    Identifies polar atoms (N, O) at the interface that are:
+    1. Buried (atom SASA < 2.0 A^2 in the complex)
+    2. Lacking any H-bond partner (no complementary polar atom within 3.5 A)
+    """
+    # Compute SASA for the complex
+    compute_sasa(model)
+
+    donors_c1, acceptors_c1, donors_c2, acceptors_c2 = get_interface_polar_atoms(
+        model, chain1, chain2, contact_dist=5.0)
+
+    burial_cutoff = 2.0  # A^2 -- atom is considered buried below this SASA
+    hbond_cutoff = 3.5
+
+    unsat_count = 0
+
+    # Check each buried donor: does it have an acceptor partner on the other chain?
+    for donor in donors_c1 + donors_c2:
+        if getattr(donor, 'sasa', 999.0) >= burial_cutoff:
+            continue  # not buried, skip
+        donor_chain = donor.get_parent().get_parent().get_id()
+        d_coord = donor.get_vector().get_array()
+        has_partner = False
+        partner_acceptors = acceptors_c2 if donor_chain == chain1 else acceptors_c1
+        for acc in partner_acceptors:
+            if np.linalg.norm(d_coord - acc.get_vector().get_array()) <= hbond_cutoff:
+                has_partner = True
+                break
+        if not has_partner:
+            unsat_count += 1
+
+    # Check each buried acceptor: does it have a donor partner on the other chain?
+    for acceptor in acceptors_c1 + acceptors_c2:
+        if getattr(acceptor, 'sasa', 999.0) >= burial_cutoff:
+            continue
+        acc_chain = acceptor.get_parent().get_parent().get_id()
+        a_coord = acceptor.get_vector().get_array()
+        has_partner = False
+        partner_donors = donors_c2 if acc_chain == chain1 else donors_c1
+        for don in partner_donors:
+            if np.linalg.norm(a_coord - don.get_vector().get_array()) <= hbond_cutoff:
+                has_partner = True
+                break
+        if not has_partner:
+            unsat_count += 1
+
+    return unsat_count
+
+
 def calculate_interface_metrics(model, pdb_path, chain1='A', chain2='B'):
     """Calculate interface metrics between specified chains.
 
-    Computes BSA, shape complementarity (sc-rs), binding deltaG (Prodigy).
-    PackStat and H-bond metrics have no open-source equivalent and use placeholders.
+    Computes BSA, shape complementarity (sc-rs), binding deltaG (Prodigy),
+    H-bonds (distance-based), and unsatisfied H-bonds (buried polar atoms).
+    PackStat has no open-source equivalent and uses a placeholder.
     """
     # Add suffix for metrics if not the default A_B interface
     suffix = '' if (chain1 == 'A' and chain2 == 'B') else f'_{chain1}_{chain2}'
@@ -360,13 +513,19 @@ def calculate_interface_metrics(model, pdb_path, chain1='A', chain2='B'):
     pg = compute_prodigy_scores(pdb_path, chain1, chain2)
     dg_to_bsa = round(pg['dg'] / bsa, 4) if bsa > 0 else 0.0
 
+    # Hydrogen bonds
+    hbonds = compute_interface_hbonds(model, chain1, chain2)
+
+    # Buried unsatisfied H-bonds
+    unsat = compute_unsat_hbonds(model, chain1, chain2)
+
     return {
         f'pr_intface_BSA{suffix}': bsa,
         f'pr_intface_shpcomp{suffix}': sc,
         f'pr_intface_deltaG{suffix}': round(pg['dg'], 2),
         f'pr_intface_deltaGtoBSA{suffix}': dg_to_bsa,
-        f'pr_intface_hbonds{suffix}': 0,
-        f'pr_intface_unsat_hbonds{suffix}': 0,
+        f'pr_intface_hbonds{suffix}': hbonds,
+        f'pr_intface_unsat_hbonds{suffix}': unsat,
         f'pr_intface_packstat{suffix}': 0.65,  # no non-Rosetta equivalent
     }
 
