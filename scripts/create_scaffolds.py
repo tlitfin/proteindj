@@ -9,13 +9,7 @@ import argparse
 from multiprocessing import Pool, cpu_count
 from functools import partial
 
-try:
-    import pyrosetta
-    pyrosetta.init()
-    APPROX = False
-except:
-    print("WARNING: pyRosetta not found, will use an approximate SSE calculation")
-    APPROX = True
+from Bio.PDB import PDBParser, DSSP
 
 
 def main():
@@ -85,19 +79,37 @@ def get_args():
 def extract_secstruc(fn):
     pdb = parse_pdb(fn)
     idx = pdb['idx']
-    if APPROX:
-        aa_sequence = pdb["seq"]
-        secstruct = get_sse(pdb["xyz"][:, 1])
-    else:
-        dssp = pyrosetta.rosetta.core.scoring.dssp
-        pose = pyrosetta.io.pose_from_pdb(fn)
-        dssp.Dssp(pose).insert_ss_into_pose(pose, True)
-        aa_sequence = pose.sequence()
-        secstruct = pose.secstruct()
+    aa_sequence = [aa3to1[num2aa[s]] for s in pdb["seq"]]
+    secstruct = dssp_biopython(fn)
     secstruc_dict = {'sequence': [i for i in aa_sequence],
                      'idx': [int(i) for i in idx],
                      'ss': [i for i in secstruct]}
     return secstruc_dict
+
+
+def dssp_biopython(pdb_path):
+    '''Compute 3-state secondary structure using BioPython DSSP + mkdssp.
+    Returns a string of H/E/L characters.
+    '''
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("s", pdb_path)
+    model = structure[0]
+
+    dssp_obj = DSSP(model, pdb_path, dssp="mkdssp")
+
+    # Map 8-state to 3-state
+    helix_codes = frozenset(('H', 'G', 'I'))
+    strand_codes = frozenset(('E', 'B'))
+    ss_chars = []
+    for key in dssp_obj.keys():
+        ss = dssp_obj[key][2]
+        if ss in helix_codes:
+            ss_chars.append('H')
+        elif ss in strand_codes:
+            ss_chars.append('E')
+        else:
+            ss_chars.append('L')
+    return "".join(ss_chars)
 
 
 def ss_to_tensor(ss):
@@ -354,6 +366,12 @@ num2aa = [
     'UNK', 'MAS',
 ]
 aa2num = {x: i for i, x in enumerate(num2aa)}
+aa3to1 = {
+    "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C",
+    "GLN": "Q", "GLU": "E", "GLY": "G", "HIS": "H", "ILE": "I",
+    "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P",
+    "SER": "S", "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V",
+}
 # full sc atom representation (Nx14)
 aa2long = [
     (" N  ", " CA ", " C  ", " O  ", " CB ", None, None, None, None, None, None, None, None, None, " H  ", " HA ", "1HB ",
@@ -403,27 +421,6 @@ aa2long = [
 ]
 
 
-def get_sse(ca_coord):
-    '''
-    calculates the SSE of a peptide chain based on the P-SEA algorithm (Labesse 1997)
-    code borrowed from biokite: https://github.com/biokit/biokit
-    '''
-
-    def vector_dot(v1, v2):
-        return (v1 * v2).sum(-1)
-
-    def norm_vector(v):
-        return v / np.linalg.norm(v, axis=-1, keepdims=True)
-
-    def displacement(atoms1, atoms2):
-        v1 = np.asarray(atoms1)
-        v2 = np.asarray(atoms2)
-        if len(v1.shape) <= len(v2.shape):
-            diff = v2
-
-    # You will need to complete the displacement method with the equation
-    # diff = v2 - v1[:v2.shape[0]]
-    # to get this working
 
 if __name__ == "__main__":
     main()
