@@ -201,11 +201,6 @@ def calculate_surface_chemistry(model, chain_id):
 # Placeholders (no open-source equivalent)
 # ---------------------------------------------------------------------------
 
-def calculate_tem():
-    """Placeholder for total energy metric (requires Rosetta force field)."""
-    return {'pr_TEM': 0}
-
-
 def calculate_sap_scores(num_chains, chain_id='A'):
     """Placeholder for SAP scores (requires PyRosetta PerResidueSapScoreMetric)."""
     metrics = {'pr_SAP': 0.0}
@@ -589,10 +584,6 @@ def calculate_chain_metrics(model, chain_id, pdb_path):
     surface_metrics = calculate_surface_chemistry(model, chain_id)
     surface_metrics = {f'{k}{suffix}': v for k, v in surface_metrics.items()}
 
-    # Calculate total energy metric
-    tem_metrics = calculate_tem()
-    tem_metrics = {f'{k}{suffix}': v for k, v in tem_metrics.items()}
-
     # Get sequence metrics
     seq_metrics = {}
     sequence = get_chain_sequence(pdb_path, chain_id)
@@ -605,7 +596,6 @@ def calculate_chain_metrics(model, chain_id, pdb_path):
     metrics.update(ss_metrics)
     metrics.update(rog_metrics)
     metrics.update(surface_metrics)
-    metrics.update(tem_metrics)
     metrics.update(seq_metrics)
 
     return metrics
@@ -635,7 +625,6 @@ def calculate_whole_pose_metrics(model, pdb_path):
     return {
         'pr_RoG_total': rog_all['pr_RoG'],
         'pr_surfhphobics_total': surfhphobics,
-        **calculate_tem()
     }
 
 

@@ -735,11 +735,6 @@
                     "description": "Minimum packing quality of the interface (0-1 scale; higher is better)",
                     "hidden": true
                 },
-                "pr_max_tem": {
-                    "type": "number",
-                    "description": "Maximum total energy metric score (Rosetta Energy Units; lower indicates more stable designs)",
-                    "hidden": true
-                },
                 "pr_max_surfhphobics": {
                     "type": "number",
                     "description": "Maximum percentage of hydrophobic residues exposed on the surface",

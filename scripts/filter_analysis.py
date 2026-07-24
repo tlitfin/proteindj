@@ -27,7 +27,6 @@ def parse_arguments():
     parser.add_argument('--pr-max-intface-deltag', type=float, help='Maximum interface deltaG (REU)')
     parser.add_argument('--pr-max-intface-deltagtobsa', type=float, help='Maximum interface deltaGtoBSA ratio')
     parser.add_argument('--pr-min-intface-packstat', type=float, help='Minimum interface packing statistic')
-    parser.add_argument('--pr-max-tem', type=float, help='Maximum total energy metric (REU)')
     parser.add_argument('--pr-max-surfhphobics', type=float, help='Maximum surface hydrophobics percentage')
     parser.add_argument('--pr-max-sap', type=float, help='Maximum mean residue SAP (solubility)')
     parser.add_argument('--pr-max-sap-complex', type=float, help='Maximum mean residue SAP in complex (solubility)')
@@ -125,7 +124,6 @@ def filter_data(data, args):
         ('pr_intface_deltaG', None, args.pr_max_intface_deltag, float),
         ('pr_intface_deltaGtoBSA', None, args.pr_max_intface_deltagtobsa, float),
         ('pr_intface_packstat', args.pr_min_intface_packstat, None, float),
-        ('pr_TEM', None, args.pr_max_tem, float),
         ('pr_surfhphobics', None, args.pr_max_surfhphobics, float),
         ('pr_SAP', None, args.pr_max_sap, float),
         ('pr_SAP_complex', None, args.pr_max_sap_complex, float),
@@ -253,7 +251,6 @@ def main():
         args.pr_max_intface_deltag,
         args.pr_max_intface_deltagtobsa,
         args.pr_min_intface_packstat,
-        args.pr_max_tem,
         args.pr_max_surfhphobics,
         args.pr_max_sap, args.pr_max_sap_complex,
     ]

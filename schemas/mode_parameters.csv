@@ -115,7 +115,6 @@ pr_max_intface_unsat_hbonds,null,,,,,,,,,pr_max_intface_unsat_hbonds,,pr_max_int
 pr_max_intface_deltag,null,,,,,,,,,pr_max_intface_deltag,,pr_max_intface_deltag,,pr_max_intface_deltag,,pr_max_intface_deltag,,pr_max_intface_deltag,
 pr_max_intface_deltagtobsa,null,,,,,,,,,pr_max_intface_deltagtobsa,,pr_max_intface_deltagtobsa,,pr_max_intface_deltagtobsa,,pr_max_intface_deltagtobsa,,pr_max_intface_deltagtobsa,
 pr_min_intface_packstat,null,,,,,,,,,pr_min_intface_packstat,,pr_min_intface_packstat,,pr_min_intface_packstat,,pr_min_intface_packstat,,pr_min_intface_packstat,
-pr_max_tem,null,pr_max_tem,,pr_max_tem,,pr_max_tem,,pr_max_tem,,pr_max_tem,,pr_max_tem,,pr_max_tem,,pr_max_tem,,pr_max_tem,
 pr_max_surfhphobics,null,pr_max_surfhphobics,,pr_max_surfhphobics,,pr_max_surfhphobics,,pr_max_surfhphobics,,pr_max_surfhphobics,,pr_max_surfhphobics,,pr_max_surfhphobics,,pr_max_surfhphobics,,pr_max_surfhphobics,
 seq_min_ext_coef,null,seq_min_ext_coef,,seq_min_ext_coef,,seq_min_ext_coef,,seq_min_ext_coef,,seq_min_ext_coef,,seq_min_ext_coef,,seq_min_ext_coef,,seq_min_ext_coef,,seq_min_ext_coef,
 seq_max_ext_coef,null,seq_max_ext_coef,,seq_max_ext_coef,,seq_max_ext_coef,,seq_max_ext_coef,,seq_max_ext_coef,,seq_max_ext_coef,,seq_max_ext_coef,,seq_max_ext_coef,,seq_max_ext_coef,
