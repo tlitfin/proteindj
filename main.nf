@@ -51,8 +51,7 @@ workflow {
     }
 
     if (params.run_fold_only && params.rank_designs) {
-        log.info("--rank_designs has no effect with --run_fold_only since no prediction metrics are generated to rank on. Disabling ranking.")
-        params.rank_designs = false
+        error("--rank_designs cannot be used with --run_fold_only since no prediction metrics are generated to rank on.")
     }
 
     // Validate ranking metric matches prediction method
