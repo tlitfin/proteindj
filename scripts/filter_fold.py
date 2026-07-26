@@ -1,15 +1,21 @@
 import argparse
 from pathlib import Path
-import biotite.application.dssp as dssp
-import biotite.structure as struc
-from biotite.structure.io.pdb import PDBFile
 from multiprocessing import Pool
 import logging
+import os
 import sys
+import tempfile
 import uuid
 import json
 import shutil
 import re
+
+import numpy as np
+from Bio.PDB import PDBParser, DSSP
+
+# 8-state DSSP to 3-state mapping
+DSSP_HELIX = frozenset(('H', 'G', 'I'))
+DSSP_STRAND = frozenset(('E', 'B'))
 
 def setup_logger():
     """Configure logging to output to both file and stdout"""
@@ -39,22 +45,107 @@ def extract_fold_id(pdb_filename):
     else:
         return None
 
-def load_structure_from_pdb(pdb_path):
-    """Load first model from a PDB file into a Biotite AtomArray."""
-    pdb_file = PDBFile.read(str(pdb_path))
+def parse_structure(pdb_path):
+    """Parse PDB file and return (structure, model)."""
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("s", str(pdb_path))
+    return structure, structure[0]
+
+
+def get_chain_ids(model):
+    """Get ordered list of chain IDs from a BioPython model."""
+    return [chain.get_id() for chain in model.get_chains()]
+
+
+def _prepare_dssp_input(pdb_path):
+    """Ensure a PDB file is recognized as PDB format by mkdssp (>=4.0).
+
+    mkdssp>=4.0 decides whether to parse a file as PDB or mmCIF based on
+    whether it starts with a HEADER record; without one it assumes mmCIF and
+    fails. RFdiffusion output PDBs have no HEADER line, so we prepend one to
+    a temporary copy when needed.
+
+    Returns a (path, tmp_path) tuple where path is what should be passed to
+    DSSP and tmp_path is the temporary file to clean up afterwards (None if
+    no temporary file was created).
+    """
+    pdb_path = Path(pdb_path)
+    with open(pdb_path) as f:
+        first_line = f.readline()
+
+    if first_line.startswith('HEADER'):
+        return str(pdb_path), None
+
+    fd, tmp_path = tempfile.mkstemp(suffix='.pdb', dir=pdb_path.parent)
+    with os.fdopen(fd, 'w') as dst, open(pdb_path) as src:
+        dst.write('HEADER\n')
+        shutil.copyfileobj(src, dst)
+
+    return tmp_path, tmp_path
+
+
+def count_secondary_structures(model, pdb_path, chain_id=None):
+    """Count secondary structure elements using BioPython DSSP + mkdssp.
+    If chain_id is provided, only counts SS for that chain.
+    """
+    dssp_path, tmp_path = _prepare_dssp_input(pdb_path)
     try:
-        structure = pdb_file.get_structure(model=1)
-    except Exception:
-        structure = pdb_file.get_structure()
+        dssp_obj = DSSP(model, dssp_path, dssp="mkdssp")
 
-    # If an AtomArrayStack is returned, use first model
-    if hasattr(structure, "stack_depth"):
-        stack_depth = structure.stack_depth() if callable(structure.stack_depth) else structure.stack_depth
-        if stack_depth == 0:
-            raise ValueError("No models found in structure")
-        structure = structure[0]
+        if chain_id is not None:
+            target_chains = {chain_id}
+        else:
+            target_chains = {c.get_id() for c in model.get_chains()}
 
-    return structure
+        dssp_chars = []
+        for key in dssp_obj.keys():
+            if key[0] in target_chains:
+                ss = dssp_obj[key][2]
+                if ss in DSSP_HELIX:
+                    dssp_chars.append('H')
+                elif ss in DSSP_STRAND:
+                    dssp_chars.append('E')
+                else:
+                    dssp_chars.append('L')
+    finally:
+        if tmp_path is not None:
+            os.unlink(tmp_path)
+
+    helix_count = 0
+    strand_count = 0
+    current_helix = False
+    current_strand = False
+
+    for ss in dssp_chars:
+        if ss == 'H':
+            if not current_helix:
+                helix_count += 1
+                current_helix = True
+            current_strand = False
+        elif ss == 'E':
+            if not current_strand:
+                strand_count += 1
+                current_strand = True
+            current_helix = False
+        else:
+            current_helix = False
+            current_strand = False
+
+    return helix_count, strand_count
+
+
+def calculate_rog(chain_or_model):
+    """Calculate mass-weighted radius of gyration for a chain or model."""
+    coords = np.array([atom.get_coord() for atom in chain_or_model.get_atoms()])
+    masses = np.array([atom.mass for atom in chain_or_model.get_atoms()])
+
+    if len(coords) == 0:
+        return 0.0
+
+    com = np.average(coords, axis=0, weights=masses)
+    diff = coords - com
+    rg = round(float(np.sqrt(np.sum(masses * np.sum(diff**2, axis=1)) / masses.sum())), 2)
+    return rg
 
 def analyze_structure(args):
     """Analyze structure with automatic chain detection"""
@@ -65,65 +156,38 @@ def analyze_structure(args):
     logger = logging.getLogger('filter_fold')
 
     try:
-        # Load structure with Biotite PDB parser
-        structure = load_structure_from_pdb(pdb_file)
+        # Load structure with BioPython PDB parser
+        structure, model = parse_structure(pdb_file)
 
         # Autodetect chain structure
-        chain_ids = [chain_id for chain_id in struc.get_chains(structure) if str(chain_id).strip()]
+        chain_ids = get_chain_ids(model)
         num_chains = len(chain_ids)
 
         if num_chains == 1:
             # Monomer - analyze entire structure (single chain)
-            structure_to_analyze = structure
+            primary_chain = chain_ids[0]
+            helix_count, strand_count = count_secondary_structures(model, pdb_file, primary_chain)
+            rog = calculate_rog(model[primary_chain])
             logger.info(f"{pdb_file.name}: Single chain detected - treating as monomer")
         elif num_chains == 2:
             # Binder - analyze first chain only
             first_chain_id = chain_ids[0]
-            structure_to_analyze = structure[structure.chain_id == first_chain_id]
+            helix_count, strand_count = count_secondary_structures(model, pdb_file, first_chain_id)
+            rog = calculate_rog(model[first_chain_id])
             logger.info(f"{pdb_file.name}: Two chains detected ({num_chains}) - treating as binder, analyzing first chain only")
         elif num_chains >= 3:
-            # Oligomer - analyse all chains
-            structure_to_analyze = structure
+            # Oligomer - aggregate per-chain SS counts and whole-structure RoG
+            helix_count = 0
+            strand_count = 0
+            for chain_id in chain_ids:
+                chain_helices, chain_strands = count_secondary_structures(model, pdb_file, chain_id)
+                helix_count += chain_helices
+                strand_count += chain_strands
+            rog = calculate_rog(model)
             logger.info(f"{pdb_file.name}: More than two chains detected - treating as oligomer, analysing all chains")
         else:
             logger.error(f"{pdb_file.name}: No chains found, skipping")
             return None
-
-        # Calculate radius of gyration with Biotite
-        if structure_to_analyze.array_length() == 0:
-            raise ValueError("No atoms available for RoG calculation")
-        rog = round(float(struc.gyration_radius(structure_to_analyze)), 2)
-
-        # Count secondary structures
-        dssp_dict = {'E': 'E', 'B': 'E', 
-                     'H': 'H', 'I': 'H', 'G': 'H',
-                     'C': 'L', 'T': 'L', 'S': 'L'}
-
-        app = dssp.DsspApp(structure_to_analyze)
-        app.start()
-        app.join()
-        sse = app.get_sse()
-        dssp_string = "".join([dssp_dict.get(k, "L") for k in map(str, sse)])
-
-        helix_count = 0
-        strand_count = 0
-        current_helix = False
-        current_strand = False
-
-        for ss in dssp_string:
-            if ss == 'H':
-                if not current_helix:
-                    helix_count += 1
-                    current_helix = True
-                current_strand = False
-            elif ss == 'E':
-                if not current_strand:
-                    strand_count += 1
-                    current_strand = True
-                current_helix = False
-            else:
-                current_helix = False
-                current_strand = False
 
         total_ss = helix_count + strand_count
         fold_id = extract_fold_id(pdb_file)
@@ -229,7 +293,7 @@ def main():
     pdb_files = list(Path(args.input_dir).glob('*.pdb'))
     if not pdb_files:
         logger.error(f"No PDB files found in {args.input_dir}")
-        return
+        sys.exit(1)
     
     logger.info(f"Found {len(pdb_files)} PDB files to analyze")
     logger.info(f"Looking for JSON files in {json_dir}")
@@ -253,6 +317,12 @@ def main():
     
     # filter out None results
     valid_results = [result for result in results if result is not None]
+    
+    if not valid_results:
+        logger.error(
+            f"All {len(pdb_files)} PDB files failed analysis"
+        )
+        sys.exit(1)
     
     # save analysis data to JSONL
     output_filename = f'fold_data_{str(uuid.uuid4())[:8]}.jsonl'
