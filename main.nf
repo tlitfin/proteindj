@@ -50,6 +50,11 @@ workflow {
         error("Cannot use --run_fold_only with --skip_fold. These options are contradictory.")
     }
 
+    if (params.run_fold_only && params.rank_designs) {
+        log.info("--rank_designs has no effect with --run_fold_only since no prediction metrics are generated to rank on. Disabling ranking.")
+        params.rank_designs = false
+    }
+
     // Validate ranking metric matches prediction method
     def ranking_metric = null
     if (params.rank_designs && params.ranking_metric) {
