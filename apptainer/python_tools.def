@@ -30,6 +30,7 @@ From: ubuntu:24.04
     export UV_NO_CACHE=1
     export UV_LINK_MODE=copy
     uv pip install \
+        arpeggia \
         biopython \
         matplotlib \
         pandas \
@@ -40,12 +41,6 @@ From: ubuntu:24.04
     uv pip install \
         torch \
         torchvision --index-url https://download.pytorch.org/whl/cpu
-
-    # Install sc-rs (shape complementarity binary) via rustup
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    . "$HOME/.cargo/env"
-    cargo install --git https://github.com/cytokineking/sc-rs --tag v1.0.0 --root /usr/local
-    rustup self uninstall -y
 
     # cleanup build dependencies
     apt-get autoremove -y
@@ -62,7 +57,7 @@ From: ubuntu:24.04
     fi
 
 %help
-    Container with BioPython, Matplotlib, Pandas, PDBFixer, PRODIGY, PyTorch (CPU), PyYAML, sc-rs and DSSP (mkdssp) installed in a Python virtual environment.
+    Container with Arpeggia, BioPython, Matplotlib, Pandas, PDBFixer, PRODIGY, PyTorch (CPU), PyYAML and DSSP (mkdssp) installed in a Python virtual environment.
     To use, run the container and your environment will be activated automatically.
 
 %labels
