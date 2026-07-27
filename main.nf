@@ -54,6 +54,10 @@ workflow {
         error("--rank_designs cannot be used with --run_fold_only since no prediction metrics are generated to rank on.")
     }
 
+    if (params.skip_fold_seq_pred && params.rank_designs) {
+        error("--rank_designs cannot be used with --skip_fold_seq_pred since no prediction metrics are generated to rank on.")
+    }
+
     // Validate ranking metric matches prediction method
     def ranking_metric = null
     if (params.rank_designs && params.ranking_metric) {
