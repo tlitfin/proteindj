@@ -52,7 +52,7 @@ HYDROPHOBIC_AA = frozenset("ACFGILMPVWY")
 
 # 8-state DSSP to 3-state mapping
 DSSP_HELIX = frozenset(('H', 'G', 'I'))
-DSSP_STRAND = frozenset(('E', 'B'))
+DSSP_STRAND = frozenset(('E',))
 
 
 # ---------------------------------------------------------------------------

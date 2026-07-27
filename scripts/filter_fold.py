@@ -15,7 +15,7 @@ from Bio.PDB import PDBParser, DSSP
 
 # 8-state DSSP to 3-state mapping
 DSSP_HELIX = frozenset(('H', 'G', 'I'))
-DSSP_STRAND = frozenset(('E', 'B'))
+DSSP_STRAND = frozenset(('E',))
 
 def setup_logger():
     """Configure logging to output to both file and stdout"""
