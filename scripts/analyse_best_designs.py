@@ -5,17 +5,23 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
-import traceback
+import time
 import logging
 import numpy as np
+import polars as pl
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
 
+import arpeggia
+import openmm
+from openmm import unit
+from openmm.app import ForceField, NoCutoff
+from openmm.app import PDBFile as OpenMMPDBFile
+from pdbfixer import PDBFixer
 from Bio import PDB
-from Bio.PDB import PDBParser, DSSP, Polypeptide
+from Bio.PDB import PDBParser, PDBIO, DSSP, Polypeptide
 from Bio.PDB.NeighborSearch import NeighborSearch
 from Bio.PDB.SASA import ShrakeRupley
 from Bio.PDB.Structure import Structure
@@ -87,6 +93,153 @@ def derive_ids_from_filename(filename):
     seq_id = int(seq_match.group(1)) if seq_match else None
 
     return fold_id, seq_id
+
+
+# ---------------------------------------------------------------------------
+# Structure relaxation (PDBFixer + OpenMM)
+# ---------------------------------------------------------------------------
+#
+# Boltz/AF2-predicted PDBs have no explicit hydrogens and commonly omit OXT
+# atoms at true chain termini, which prevents ForceField template matching.
+# Every metric in this script is computed on the relaxed (hydrogens added +
+# energy-minimized) structure, not the raw prediction: a short restrained
+# minimization settles newly-added hydrogens (and any restored heavy atoms)
+# into a sensible local energy minimum, giving more reliable geometry for
+# H-bond detection, shape complementarity, SASA, etc. PDBFixer/OpenMM reset
+# per-atom B-factors to 0.00 when writing output, so the original per-residue
+# B-factors (pLDDT from the prediction model) are restored afterwards.
+
+RELAXED_PDB_DIRNAME = 'relaxed_pdbs'
+
+
+def _get_residue_bfactors(pdb_path):
+    """Map (chain_id, resnum) -> B-factor using each residue's CA atom.
+
+    Boltz/AF2 write a uniform per-residue pLDDT value into the B-factor
+    column, so the CA atom is a sufficient representative for the whole
+    residue (same approach as scripts/prep_fampnn_designs.py's
+    get_residue_metadata()).
+    """
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure('orig', str(pdb_path))
+    bfactors = {}
+    for chain in structure[0]:
+        for residue in chain:
+            for atom in residue:
+                if atom.get_name() == 'CA':
+                    resnum = residue.get_id()[1]
+                    bfactors[(chain.get_id(), resnum)] = atom.get_bfactor()
+                    break
+    return bfactors
+
+
+def _restore_bfactors(relaxed_pdb_path, residue_bfactors):
+    """Rewrite the B-factor column of a relaxed PDB using residue_bfactors.
+
+    Applies the residue's B-factor to every atom in that residue, including
+    hydrogens and any other atoms PDBFixer added that have no counterpart in
+    the original structure.
+    """
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure('relaxed', str(relaxed_pdb_path))
+    for chain in structure[0]:
+        for residue in chain:
+            resnum = residue.get_id()[1]
+            bfactor = residue_bfactors.get((chain.get_id(), resnum), 0.0)
+            for atom in residue:
+                atom.set_bfactor(bfactor)
+
+    io = PDBIO()
+    io.set_structure(structure)
+    io.save(str(relaxed_pdb_path))
+
+
+def _relax_structure(pdb_path, ph=7.0, restraint_k=1000.0):
+    """Add hydrogens and energy-minimize a PDB file, preserving B-factors.
+
+    Uses PDBFixer to restore missing heavy atoms (Boltz/AF2 predictions
+    commonly omit OXT at true C-termini) and add hydrogens, then runs a
+    short OpenMM minimization with heavy atoms harmonically restrained to
+    their original positions so only hydrogens (and any restored atoms)
+    relax into sensible geometry. The relaxed structure is written to
+    RELAXED_PDB_DIRNAME alongside the input file and is used for every
+    metric computed by this script.
+
+    Returns the path to the relaxed PDB file.
+    """
+    pdb_path = Path(pdb_path)
+    residue_bfactors = _get_residue_bfactors(pdb_path)
+
+    fixer = PDBFixer(filename=str(pdb_path))
+    # Boltz/AF2-predicted PDBs often omit OXT atoms at genuine chain termini,
+    # which otherwise makes ForceField unable to tell whether a chain's last
+    # residue is an internal residue (expects a peptide bond onward) or a
+    # true C-terminus (expects OXT). Restore any missing heavy atoms first.
+    fixer.findMissingResidues()
+    fixer.findMissingAtoms()
+    fixer.addMissingAtoms()
+    fixer.addMissingHydrogens(ph)
+    # Register disulfide bonds explicitly so ForceField can unambiguously
+    # match the CYX (disulfide-bonded) template instead of confusing it with
+    # CYM (deprotonated thiolate), which looks identical without this bond.
+    fixer.topology.createDisulfideBonds(fixer.positions)
+
+    forcefield = ForceField('amber14-all.xml')
+    system = forcefield.createSystem(fixer.topology, nonbondedMethod=NoCutoff)
+
+    # Harmonically restrain heavy atoms so minimization only relaxes hydrogens
+    restraint = openmm.CustomExternalForce('k*((x-x0)^2+(y-y0)^2+(z-z0)^2)')
+    restraint.addGlobalParameter('k', restraint_k * unit.kilojoule_per_mole / unit.nanometer**2)
+    for name in ('x0', 'y0', 'z0'):
+        restraint.addPerParticleParameter(name)
+    for atom in fixer.topology.atoms():
+        if atom.element is not None and atom.element.symbol != 'H':
+            pos = fixer.positions[atom.index]
+            restraint.addParticle(atom.index, [pos.x, pos.y, pos.z])
+    system.addForce(restraint)
+
+    integrator = openmm.VerletIntegrator(1.0 * unit.femtoseconds)
+    context = openmm.Context(system, integrator, openmm.Platform.getPlatformByName('CPU'))
+    context.setPositions(fixer.positions)
+
+    energy_before = context.getState(getEnergy=True).getPotentialEnergy().value_in_unit(
+        unit.kilocalories_per_mole)
+
+    t0 = time.time()
+    openmm.LocalEnergyMinimizer.minimize(context)
+    elapsed = time.time() - t0
+
+    state_after = context.getState(getEnergy=True, getPositions=True)
+    energy_after = state_after.getPotentialEnergy().value_in_unit(unit.kilocalories_per_mole)
+    positions = state_after.getPositions()
+
+    logger.info(
+        f"OpenMM minimization ({pdb_path.name}): "
+        f"{energy_before:.1f} -> {energy_after:.1f} kcal/mol in {elapsed:.2f}s"
+    )
+
+    relaxed_dir = pdb_path.parent / RELAXED_PDB_DIRNAME
+    relaxed_dir.mkdir(exist_ok=True)
+    out_path = relaxed_dir / pdb_path.name
+
+    with open(out_path, 'w') as f:
+        OpenMMPDBFile.writeFile(fixer.topology, positions, f)
+
+    _restore_bfactors(out_path, residue_bfactors)
+
+    return out_path
+
+
+def _validate_relaxed_structure(orig_model, relaxed_model, chain_ids):
+    """Raise if relaxation changed the number of residues in any chain."""
+    for chain_id in chain_ids:
+        orig_count = sum(1 for _ in orig_model[chain_id])
+        relaxed_count = sum(1 for _ in relaxed_model[chain_id])
+        if orig_count != relaxed_count:
+            raise RuntimeError(
+                f"Relaxation changed residue count for chain {chain_id}: "
+                f"{orig_count} -> {relaxed_count}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -231,14 +384,78 @@ def calculate_surface_chemistry(model, chain_id):
 
 
 # ---------------------------------------------------------------------------
-# Placeholders (no open-source equivalent)
+# Spatial Aggregation Propensity (SAP) via arpeggia
 # ---------------------------------------------------------------------------
+#
+# PyRosetta's per-residue SAP calculation only counts an atom's contribution
+# toward its residue's score when that contribution is positive, which is
+# the same behavior as arpeggia's own level='residue' aggregation. The one
+# real difference is that PyRosetta reports a value (0.0 if no atom
+# qualifies) for every residue being scored, while arpeggia's residue-level
+# output simply omits residues where no atom qualifies. Since an omitted
+# residue would contribute 0 to the sum anyway, we sum arpeggia's reported
+# per-residue sap_score column but divide by the TRUE total residue count of
+# the chain (not len(df)) to keep the mean consistent with PyRosetta.
 
-def calculate_sap_scores(num_chains, chain_id='A'):
-    """Placeholder for SAP scores (requires PyRosetta PerResidueSapScoreMetric)."""
-    metrics = {'pr_SAP': 0.0}
+def _count_chain_residues(model, chain_id):
+    """Count amino-acid residues in a chain (SAP mean denominator)."""
+    return sum(1 for res in model[chain_id] if Polypeptide.is_aa(res, standard=True))
+
+
+def _sap_chain_sum(pdb_path, chains, target_chain, probe_radius=1.4, n_points=960, sap_radius=5.0):
+    """Sum of arpeggia's per-residue SAP scores (already filtered to positive
+    atom contributions per residue) for a single chain.
+
+    `chains` restricts both the SASA calculation and the neighbor search to
+    the given comma-separated chain IDs (empty string = all chains).
+    """
+    df = arpeggia.sap_score(
+        str(pdb_path),
+        level='residue',
+        probe_radius=probe_radius,
+        n_points=n_points,
+        sap_radius=sap_radius,
+        chains=chains,
+    )
+    if df.height == 0:
+        return 0.0
+    scores = df.filter(pl.col('chain') == target_chain)['sap_score']
+    return float(scores.sum()) if scores.len() else 0.0
+
+
+def calculate_sap_scores(model, pdb_path, num_chains, chain_id='A', complex_sap_df=None):
+    """
+    Calculate Spatial Aggregation Propensity (SAP) scores using arpeggia.
+
+    For monomer: Returns pr_SAP only
+    For complex: Returns pr_SAP (alone) and pr_SAP_complex (with target shielding)
+
+    `complex_sap_df`, if provided, is a pre-computed whole-structure
+    residue-level SAP dataframe (arpeggia.sap_score(pdb_path, level='residue',
+    chains='')) to avoid recomputing SASA/SAP for the full complex once per
+    chain in multi-chain designs.
+    """
+    metrics = {}
+    n_res = _count_chain_residues(model, chain_id)
+
+    # pr_SAP: chain calculated in isolation (matches old split_by_chain behavior)
+    alone_sum = _sap_chain_sum(pdb_path, chains=chain_id, target_chain=chain_id)
+    metrics['pr_SAP'] = round(alone_sum / n_res, 3) if n_res else 0.0
+
+    # pr_SAP_complex: chain's SAP within full complex context (all chains as neighbors)
     if num_chains >= 2:
-        metrics['pr_SAP_complex'] = 0.0
+        if complex_sap_df is None:
+            complex_sap_df = arpeggia.sap_score(
+                str(pdb_path), level='residue', probe_radius=1.4, n_points=960,
+                sap_radius=5.0, chains='',
+            )
+        complex_scores = (
+            complex_sap_df.filter(pl.col('chain') == chain_id)['sap_score']
+            if complex_sap_df.height else None
+        )
+        complex_sum = float(complex_scores.sum()) if complex_scores is not None and complex_scores.len() else 0.0
+        metrics['pr_SAP_complex'] = round(complex_sum / n_res, 3) if n_res else 0.0
+
     return metrics
 
 
@@ -251,73 +468,16 @@ def chain_total_sasa(chain):
     return sum(getattr(atom, "sasa", 0.0) for atom in chain.get_atoms())
 
 
-def resolve_sc_binary():
-    """Find the sc-rs shape complementarity binary.
-
-    Resolution order (matches FreeBindCraft):
-    1. Environment variables SC_RS_BIN, SC_BIN
-    2. PATH lookup for sc, sc-rs, shape-complementarity, sc_rs
-    """
-    env_candidates = [os.environ.get('SC_RS_BIN'), os.environ.get('SC_BIN')]
-    path_candidates = [
-        shutil.which('sc'),
-        shutil.which('sc-rs'),
-        shutil.which('shape-complementarity'),
-        shutil.which('sc_rs'),
-    ]
-
-    for candidate in env_candidates + path_candidates:
-        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-    return None
-
-
 def calculate_shape_complementarity(pdb_path, chain1, chain2):
-    """Calculate shape complementarity using sc-rs CLI.
-
-    Adapted from FreeBindCraft _calculate_shape_complementarity().
-    Falls back to 0.70 if binary not found or fails.
+    """Calculate shape complementarity using arpeggia's native `sc` function
+    (Lawrence & Colman 1993 algorithm), implemented in Rust and bundled with
+    the same `arpeggia` package used elsewhere in this script -- no external
+    binary required.
     """
-    sc_bin = resolve_sc_binary()
-    if sc_bin is None:
-        logger.warning("sc-rs binary not found; using placeholder 0.70")
-        return 0.70
-
-    try:
-        cmd = [sc_bin, str(pdb_path), str(chain1), str(chain2), '--json']
-        proc = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
-        stdout = (proc.stdout or '').strip()
-        if not stdout:
-            return 0.70
-
-        try:
-            payload = json.loads(stdout)
-        except Exception:
-            payload = None
-            # Try extracting JSON from mixed output
-            s_idx = stdout.rfind('{')
-            e_idx = stdout.rfind('}')
-            if s_idx != -1 and e_idx > s_idx:
-                try:
-                    payload = json.loads(stdout[s_idx:e_idx + 1])
-                except Exception:
-                    pass
-
-        if isinstance(payload, dict):
-            sc_key = 'sc' if 'sc' in payload else ('sc_value' if 'sc_value' in payload else None)
-            if sc_key is not None:
-                sc_val = float(payload[sc_key])
-                if 0.0 <= sc_val <= 1.0:
-                    return sc_val
-
-    except subprocess.TimeoutExpired:
-        logger.error(f"sc-rs timed out for {pdb_path}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"sc-rs failed for {pdb_path}: {e}")
-    except Exception as e:
-        logger.warning(f"sc-rs error for {pdb_path}: {e}")
-
-    return 0.70
+    sc_val = arpeggia.sc(str(pdb_path), groups=f'{chain1}/{chain2}')
+    if not (0.0 <= sc_val <= 1.0):
+        raise ValueError(f"arpeggia.sc returned out-of-range value {sc_val} for {pdb_path}")
+    return sc_val
 
 
 def compute_interface_bsa(model, chain1, chain2):
@@ -351,31 +511,30 @@ def compute_interface_bsa(model, chain1, chain2):
 def compute_prodigy_scores(pdb_path, chain1, chain2):
     """Predict binding affinity using Prodigy (IC-NIS model).
 
-    Returns dict with deltaG (kcal/mol) and Kd (M).
-    Falls back to neutral placeholders (dG=0.0) on failure.
+    Returns dict with deltaG (kcal/mol) and Kd (M), or None if the two
+    chains have no interface contacts (e.g. a failed/non-binding design)
+    -- Prodigy raises ValueError("No contacts found for selection") in
+    that case, which is a real, expected outcome rather than a bug.
     """
-    try:
-        from prodigy_prot.modules.parsers import parse_structure as prodigy_parse
-        from prodigy_prot.modules.prodigy import Prodigy as ProdigyPredictor
+    from prodigy_prot.modules.parsers import parse_structure as prodigy_parse
+    from prodigy_prot.modules.prodigy import Prodigy as ProdigyPredictor
 
-        models, _, _ = prodigy_parse(str(pdb_path))
-        prodigy = ProdigyPredictor(model=models[0], selection=[chain1, chain2])
+    models, _, _ = prodigy_parse(str(pdb_path))
+    prodigy = ProdigyPredictor(model=models[0], selection=[chain1, chain2])
+    try:
         prodigy.predict()
-        return {
-            'dg': prodigy.ba_val,
-            'kd': prodigy.kd_val,
-        }
-    except Exception as e:
-        logger.warning(f"Prodigy scoring failed for {pdb_path}: {e}. Using placeholders.")
-        return {
-            'dg': 0.0, 'kd': 0.0,
-        }
+    except ValueError as e:
+        if "No contacts found for selection" in str(e):
+            return None
+        raise
+    return {
+        'dg': prodigy.ba_val,
+        'kd': prodigy.kd_val,
+    }
 
 
 # ---------------------------------------------------------------------------
-# H-bond metrics
-# Distance-based approximation using heavy-atom D-A < 3.5 A cutoff.
-# Overcounts relative to PyRosetta's angle-dependent method.
+# H-bond metrics (arpeggia, on the relaxed/hydrogenated structure)
 # ---------------------------------------------------------------------------
 
 # H-bond donor/acceptor atom names by residue type (heavy atoms only).
@@ -441,120 +600,130 @@ def get_interface_polar_atoms(model, chain1, chain2, contact_dist=4.0):
     return donors_c1, acceptors_c1, donors_c2, acceptors_c2
 
 
-def compute_interface_hbonds(model, chain1, chain2):
-    """Count intermolecular hydrogen bonds using distance criterion.
+def compute_interface_hbonds(pdb_path, chain1, chain2):
+    """Count intermolecular hydrogen bonds using arpeggia's contacts().
 
-    Uses heavy-atom distance D-A < 3.5 A (standard for PDBs without hydrogens).
-    Counts unique donor-acceptor pairs across the interface.
+    `pdb_path` must be the relaxed (hydrogens-added) structure so arpeggia
+    can apply its donor-H...acceptor distance + angle (>= 90 deg) criterion,
+    rather than falling back to a distance-only polar contact.
     """
-    donors_c1, acceptors_c1, donors_c2, acceptors_c2 = get_interface_polar_atoms(
-        model, chain1, chain2, contact_dist=4.0)
-
-    hbond_cutoff = 3.5
-    hbond_count = 0
-
-    # Donors on chain1 -> acceptors on chain2
-    for donor in donors_c1:
-        d_coord = donor.get_vector().get_array()
-        for acceptor in acceptors_c2:
-            dist = np.linalg.norm(d_coord - acceptor.get_vector().get_array())
-            if dist <= hbond_cutoff:
-                hbond_count += 1
-
-    # Donors on chain2 -> acceptors on chain1
-    for donor in donors_c2:
-        d_coord = donor.get_vector().get_array()
-        for acceptor in acceptors_c1:
-            dist = np.linalg.norm(d_coord - acceptor.get_vector().get_array())
-            if dist <= hbond_cutoff:
-                hbond_count += 1
-
-    return hbond_count
+    df = arpeggia.contacts(str(pdb_path), groups=f'{chain1}/{chain2}')
+    if df.height == 0:
+        return 0
+    return df.filter(pl.col('interaction') == 'HydrogenBond').height
 
 
-def compute_unsat_hbonds(model, chain1, chain2):
-    """Approximate buried unsatisfied hydrogen bonds at the interface.
+def _get_hbond_satisfied_atoms(pdb_path):
+    """Heavy donor/acceptor atoms with a satisfied hydrogen bond anywhere in
+    the structure (intra- or inter-chain), per arpeggia's angle-dependent
+    detection on the relaxed (hydrogens-added) structure.
 
-    Identifies polar atoms (N, O) at the interface that are:
-    1. Buried (atom SASA < 2.0 A^2 in the complex)
-    2. Lacking any H-bond partner (no complementary polar atom within 3.5 A)
+    Uses the default (whole-structure) groups so that intra-chain backbone
+    H-bonds (e.g. helical i, i-4 pattern) count as satisfying -- a buried
+    polar atom should not be flagged as unsatisfied just because its H-bond
+    partner happens to be on the same chain.
+
+    Returns a set of (chain, resi, atom_name) tuples.
     """
-    # Compute SASA for the complex
+    df = arpeggia.contacts(str(pdb_path))
+    if df.height == 0:
+        return set()
+
+    hb = df.filter(pl.col('interaction') == 'HydrogenBond')
+    satisfied = set()
+    for row in hb.iter_rows(named=True):
+        satisfied.add((row['from_chain'], row['from_resi'], row['from_atomn']))
+        satisfied.add((row['to_chain'], row['to_resi'], row['to_atomn']))
+    return satisfied
+
+
+def compute_unsat_hbonds(model, pdb_path, chain1, chain2):
+    """Buried unsatisfied hydrogen bonds at the interface.
+
+    Identifies polar atoms at the interface that are buried (atom SASA <
+    2.0 A^2 in the complex) and lack a satisfied hydrogen bond, per
+    arpeggia's angle-dependent detection on the relaxed structure.
+    """
     compute_sasa(model)
 
     donors_c1, acceptors_c1, donors_c2, acceptors_c2 = get_interface_polar_atoms(
         model, chain1, chain2, contact_dist=5.0)
 
+    satisfied = _get_hbond_satisfied_atoms(pdb_path)
+
     burial_cutoff = 2.0  # A^2 -- atom is considered buried below this SASA
-    hbond_cutoff = 3.5
+
+    def is_satisfied(atom):
+        chain_id = atom.get_parent().get_parent().get_id()
+        resi = atom.get_parent().get_id()[1]
+        return (chain_id, resi, atom.get_name()) in satisfied
 
     unsat_count = 0
-
-    # Check each buried donor: does it have an acceptor partner on the other chain?
     for donor in donors_c1 + donors_c2:
         if getattr(donor, 'sasa', 999.0) >= burial_cutoff:
-            continue  # not buried, skip
-        donor_chain = donor.get_parent().get_parent().get_id()
-        d_coord = donor.get_vector().get_array()
-        has_partner = False
-        partner_acceptors = acceptors_c2 if donor_chain == chain1 else acceptors_c1
-        for acc in partner_acceptors:
-            if np.linalg.norm(d_coord - acc.get_vector().get_array()) <= hbond_cutoff:
-                has_partner = True
-                break
-        if not has_partner:
+            continue
+        if not is_satisfied(donor):
             unsat_count += 1
 
-    # Check each buried acceptor: does it have a donor partner on the other chain?
     for acceptor in acceptors_c1 + acceptors_c2:
         if getattr(acceptor, 'sasa', 999.0) >= burial_cutoff:
             continue
-        acc_chain = acceptor.get_parent().get_parent().get_id()
-        a_coord = acceptor.get_vector().get_array()
-        has_partner = False
-        partner_donors = donors_c2 if acc_chain == chain1 else donors_c1
-        for don in partner_donors:
-            if np.linalg.norm(a_coord - don.get_vector().get_array()) <= hbond_cutoff:
-                has_partner = True
-                break
-        if not has_partner:
+        if not is_satisfied(acceptor):
             unsat_count += 1
 
     return unsat_count
 
 
 def calculate_interface_metrics(model, pdb_path, chain1='A', chain2='B'):
-    """Calculate interface metrics between specified chains.
+    """Calculate interface metrics between specified chains on the relaxed
+    structure.
 
-    Computes BSA, shape complementarity (sc-rs), binding deltaG (Prodigy),
-    H-bonds (distance-based), and unsatisfied H-bonds (buried polar atoms).
-    PackStat has no open-source equivalent and uses a placeholder.
+    Computes BSA, shape complementarity (arpeggia), binding deltaG (Prodigy),
+    hydrogen bonds, and unsatisfied hydrogen bonds (arpeggia, angle-dependent).
+
+    If the two chains do not contact each other at all (e.g. a failed or
+    non-binding design), BSA is 0 and shape complementarity/binding
+    affinity/H-bonds are undefined -- these are reported as 0 rather than
+    attempting a calculation that both arpeggia and Prodigy would reject.
     """
     # Add suffix for metrics if not the default A_B interface
     suffix = '' if (chain1 == 'A' and chain2 == 'B') else f'_{chain1}_{chain2}'
 
     # Geometry metrics
     bsa = compute_interface_bsa(model, chain1, chain2)
+
+    if bsa == 0:
+        logger.warning(
+            f"No interface contact between chain {chain1} and chain {chain2} "
+            f"in {pdb_path} (BSA=0); reporting zero-valued interface metrics."
+        )
+        return {
+            f'pr_intface_BSA{suffix}': 0,
+            f'pr_intface_shpcomp{suffix}': 0.0,
+            f'pr_intface_deltaG{suffix}': 0.0,
+            f'pr_intface_deltaGtoBSA{suffix}': 0.0,
+            f'pr_intface_hbonds{suffix}': 0,
+            f'pr_intface_unsat_hbonds{suffix}': 0,
+        }
+
     sc = round(calculate_shape_complementarity(pdb_path, chain1, chain2), 3)
 
-    # Binding affinity (Prodigy IC-NIS model)
+    # Binding affinity (Prodigy IC-NIS model); None if no contacts found
     pg = compute_prodigy_scores(pdb_path, chain1, chain2)
-    dg_to_bsa = round(pg['dg'] / bsa, 4) if bsa > 0 else 0.0
+    dg = pg['dg'] if pg is not None else 0.0
+    dg_to_bsa = round(dg / bsa, 4)
 
-    # Hydrogen bonds
-    hbonds = compute_interface_hbonds(model, chain1, chain2)
-
-    # Buried unsatisfied H-bonds
-    unsat = compute_unsat_hbonds(model, chain1, chain2)
+    # Hydrogen bonds and buried unsatisfied hydrogen bonds (arpeggia)
+    hbonds = compute_interface_hbonds(pdb_path, chain1, chain2)
+    unsat = compute_unsat_hbonds(model, pdb_path, chain1, chain2)
 
     return {
         f'pr_intface_BSA{suffix}': bsa,
         f'pr_intface_shpcomp{suffix}': sc,
-        f'pr_intface_deltaG{suffix}': round(pg['dg'], 2),
+        f'pr_intface_deltaG{suffix}': round(dg, 2),
         f'pr_intface_deltaGtoBSA{suffix}': dg_to_bsa,
         f'pr_intface_hbonds{suffix}': hbonds,
         f'pr_intface_unsat_hbonds{suffix}': unsat,
-        f'pr_intface_packstat{suffix}': 0.65,  # no non-Rosetta equivalent
     }
 
 
@@ -564,21 +733,19 @@ def calculate_interface_metrics(model, pdb_path, chain1='A', chain2='B'):
 
 def get_chain_sequence(pdb_path, chain_id):
     """Extract sequence for a specific chain from PDB file."""
-    try:
-        parser = PDBParser(QUIET=True)
-        structure = parser.get_structure('temp', str(pdb_path))
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure('temp', str(pdb_path))
 
-        # Convert numeric chain IDs to letters if needed
-        if chain_id.isdigit():
-            chain_id = chr(64 + int(chain_id))  # Convert 1->A, 2->B etc
+    # Convert numeric chain IDs to letters if needed
+    if chain_id.isdigit():
+        chain_id = chr(64 + int(chain_id))  # Convert 1->A, 2->B etc
 
-        for chain in structure.get_chains():
-            if chain.id == chain_id:
-                residues = [r for r in chain.get_residues() if PDB.is_aa(r)]
-                return ''.join([Polypeptide.protein_letters_3to1[r.get_resname()] for r in residues])
-    except Exception as e:
-        logger.error(f"Error getting sequence: {str(e)}")
-    return None
+    for chain in structure.get_chains():
+        if chain.id == chain_id:
+            residues = [r for r in chain.get_residues() if PDB.is_aa(r)]
+            return ''.join([Polypeptide.protein_letters_3to1[r.get_resname()] for r in residues])
+
+    raise ValueError(f"Chain {chain_id} not found in {pdb_path}")
 
 
 def calculate_seq_metrics(sequence):
@@ -618,11 +785,9 @@ def calculate_chain_metrics(model, chain_id, pdb_path):
     surface_metrics = {f'{k}{suffix}': v for k, v in surface_metrics.items()}
 
     # Get sequence metrics
-    seq_metrics = {}
     sequence = get_chain_sequence(pdb_path, chain_id)
-    if sequence:
-        seq_metrics = calculate_seq_metrics(sequence)
-        seq_metrics = {f'{k}{suffix}': v for k, v in seq_metrics.items()}
+    seq_metrics = calculate_seq_metrics(sequence)
+    seq_metrics = {f'{k}{suffix}': v for k, v in seq_metrics.items()}
 
     # Combine all metrics
     metrics = {}
@@ -666,94 +831,105 @@ def calculate_whole_pose_metrics(model, pdb_path):
 # ---------------------------------------------------------------------------
 
 def process_single_pdb(pdb_path):
-    """Process a single PDB file and return all calculated metrics."""
+    """Process a single PDB file and return all calculated metrics.
 
+    The structure is relaxed (hydrogens added + energy-minimized) once up
+    front; every metric below is computed from that relaxed structure. The
+    original input PDB is only used to determine chain IDs and to validate
+    that relaxation didn't change any chain's residue count.
+    """
     logger.info(f"Processing PDB file: {pdb_path}")
-    try:
-        structure, model = parse_structure(pdb_path)
-        chain_ids = get_chain_ids(model)
 
-        metrics = {'description': pdb_path.stem}
+    _, orig_model = parse_structure(pdb_path)
+    chain_ids = get_chain_ids(orig_model)
 
-        # Handle metrics calculation based on design type
-        if len(chain_ids) == 1:
-            # Monomer design
-            primary_chain = chain_ids[0]
-            chain_metrics = calculate_chain_metrics(model, primary_chain, pdb_path)
-            metrics.update(chain_metrics)
+    relaxed_path = _relax_structure(pdb_path)
+    _, model = parse_structure(relaxed_path)
+    _validate_relaxed_structure(orig_model, model, chain_ids)
 
-            # Calculate SAP scores for monomer
-            sap_metrics = calculate_sap_scores(1, primary_chain)
-            metrics.update(sap_metrics)
+    metrics = {'description': pdb_path.stem}
 
-        elif len(chain_ids) == 2:
-            # Calculate binder chain (A) sequence metrics
-            sequence = get_chain_sequence(pdb_path, 'A')
-            if sequence:
-                seq_metrics = calculate_seq_metrics(sequence)
-                metrics.update(seq_metrics)
+    # Handle metrics calculation based on design type
+    if len(chain_ids) == 1:
+        # Monomer design
+        primary_chain = chain_ids[0]
+        chain_metrics = calculate_chain_metrics(model, primary_chain, relaxed_path)
+        metrics.update(chain_metrics)
 
-            # Calculate interface metrics for A-B
-            interface_metrics = calculate_interface_metrics(model, pdb_path, 'A', 'B')
-            metrics.update(interface_metrics)
+        # Calculate SAP scores for monomer
+        sap_metrics = calculate_sap_scores(model, relaxed_path, 1, primary_chain)
+        metrics.update(sap_metrics)
 
-            # Calculate chain metrics for binder chain only
-            chain_metrics = calculate_chain_metrics(model, 'A', pdb_path)
-            metrics.update(chain_metrics)
+    elif len(chain_ids) == 2:
+        # Calculate binder chain (A) sequence metrics
+        sequence = get_chain_sequence(relaxed_path, 'A')
+        seq_metrics = calculate_seq_metrics(sequence)
+        metrics.update(seq_metrics)
 
-            # Calculate SAP scores for binder (alone and complex)
-            sap_metrics = calculate_sap_scores(2, 'A')
-            metrics.update(sap_metrics)
+        # Calculate interface metrics for A-B
+        interface_metrics = calculate_interface_metrics(model, relaxed_path, 'A', 'B')
+        metrics.update(interface_metrics)
 
-        elif len(chain_ids) >= 3:
-            # Oligomer design: calculate all pairwise interfaces
-            for i, c1 in enumerate(chain_ids):
-                for c2 in chain_ids[i+1:]:
-                    interface_metrics = calculate_interface_metrics(model, pdb_path, c1, c2)
-                    metrics.update(interface_metrics)
+        # Calculate chain metrics for binder chain only
+        chain_metrics = calculate_chain_metrics(model, 'A', relaxed_path)
+        metrics.update(chain_metrics)
 
-            # Calculate per-chain metrics
-            all_chain_metrics = {}
-            total_helices = 0
-            total_strands = 0
-            total_ss = 0
+        # Calculate SAP scores for binder (alone and complex)
+        sap_metrics = calculate_sap_scores(model, relaxed_path, 2, 'A')
+        metrics.update(sap_metrics)
 
-            for chain_id in chain_ids:
-                chain_metrics = calculate_chain_metrics(model, chain_id, pdb_path)
+    elif len(chain_ids) >= 3:
+        # Oligomer design: calculate all pairwise interfaces
+        for i, c1 in enumerate(chain_ids):
+            for c2 in chain_ids[i+1:]:
+                interface_metrics = calculate_interface_metrics(model, relaxed_path, c1, c2)
+                metrics.update(interface_metrics)
 
-                # Track secondary structure aggregates
-                suffix = '' if chain_id == 'A' else f'_{chain_id}'
-                total_helices += chain_metrics.get(f'pr_helices{suffix}', 0)
-                total_strands += chain_metrics.get(f'pr_strands{suffix}', 0)
-                total_ss += chain_metrics.get(f'pr_total_ss{suffix}', 0)
+        # Calculate per-chain metrics
+        all_chain_metrics = {}
+        total_helices = 0
+        total_strands = 0
+        total_ss = 0
 
-                all_chain_metrics.update(chain_metrics)
+        for chain_id in chain_ids:
+            chain_metrics = calculate_chain_metrics(model, chain_id, relaxed_path)
 
-            # Add whole-pose metrics
-            whole_pose_metrics = calculate_whole_pose_metrics(model, pdb_path)
-            all_chain_metrics.update(whole_pose_metrics)
+            # Track secondary structure aggregates
+            suffix = '' if chain_id == 'A' else f'_{chain_id}'
+            total_helices += chain_metrics.get(f'pr_helices{suffix}', 0)
+            total_strands += chain_metrics.get(f'pr_strands{suffix}', 0)
+            total_ss += chain_metrics.get(f'pr_total_ss{suffix}', 0)
 
-            # Calculate SAP for each chain
-            for chain_id in chain_ids:
-                sap_metrics = calculate_sap_scores(len(chain_ids), chain_id)
-                # Add suffix if not chain A
-                if chain_id != 'A':
-                    sap_metrics = {f'{k}_{chain_id}': v for k, v in sap_metrics.items()}
-                all_chain_metrics.update(sap_metrics)
+            all_chain_metrics.update(chain_metrics)
 
-            # Add aggregated secondary structure metrics
-            all_chain_metrics.update({
-                'pr_helices_allchains': total_helices,
-                'pr_strands_allchains': total_strands,
-                'pr_total_ss_allchains': total_ss
-            })
+        # Add whole-pose metrics
+        whole_pose_metrics = calculate_whole_pose_metrics(model, relaxed_path)
+        all_chain_metrics.update(whole_pose_metrics)
 
-            metrics.update(all_chain_metrics)
+        # Calculate SAP for each chain (complex-context SAP computed once and reused)
+        complex_sap_df = arpeggia.sap_score(
+            str(relaxed_path), level='residue', probe_radius=1.4, n_points=960,
+            sap_radius=5.0, chains='',
+        )
+        for chain_id in chain_ids:
+            sap_metrics = calculate_sap_scores(
+                model, relaxed_path, len(chain_ids), chain_id, complex_sap_df=complex_sap_df
+            )
+            # Add suffix if not chain A
+            if chain_id != 'A':
+                sap_metrics = {f'{k}_{chain_id}': v for k, v in sap_metrics.items()}
+            all_chain_metrics.update(sap_metrics)
 
-        return metrics
-    except Exception as e:
-        logger.error(f"Error processing {pdb_path}: {str(e)}\n{traceback.format_exc()}")
-        return {}
+        # Add aggregated secondary structure metrics
+        all_chain_metrics.update({
+            'pr_helices_allchains': total_helices,
+            'pr_strands_allchains': total_strands,
+            'pr_total_ss_allchains': total_ss
+        })
+
+        metrics.update(all_chain_metrics)
+
+    return metrics
 
 
 # ---------------------------------------------------------------------------
@@ -785,56 +961,47 @@ def process_pdbs(pdb_dir=None, output_path=None, num_processes=4):
     """Main function to process multiple PDB files in parallel and create enriched JSONL."""
 
     logger.info(f"Starting processing of PDB files in directory: {pdb_dir}")
-    try:
-        # Get all PDB files in the directory
-        pdb_paths = list(Path(pdb_dir).glob('*.pdb'))
-        logger.info(f"Found {len(pdb_paths)} PDB files to process")
 
-        if not pdb_paths:
-            logger.error(f"No PDB files found in directory: {pdb_dir}")
-            return []
+    # Get all PDB files in the directory
+    pdb_paths = list(Path(pdb_dir).glob('*.pdb'))
+    logger.info(f"Found {len(pdb_paths)} PDB files to process")
 
-        # Process PDB files in parallel
-        logger.info(f"Processing PDB files with {num_processes} processes")
-        process_func = partial(process_single_pdb)
+    if not pdb_paths:
+        raise FileNotFoundError(f"No PDB files found in directory: {pdb_dir}")
 
-        with Pool(processes=num_processes) as pool:
-            results = pool.map(process_func, pdb_paths)
+    # Process PDB files in parallel
+    logger.info(f"Processing PDB files with {num_processes} processes")
+    process_func = partial(process_single_pdb)
 
-        # Create enriched records with fold_id and seq_id derived from filenames
-        enriched_records = []
-        for i, pdb_path in enumerate(pdb_paths):
-            result = results[i]
-            if result:  # Skip failed processing results
-                # Extract fold_id and seq_id from filename
-                fold_id, seq_id = derive_ids_from_filename(pdb_path.name)
+    with Pool(processes=num_processes) as pool:
+        results = pool.map(process_func, pdb_paths)
 
-                # Create record with derived IDs and calculated metrics
-                record = {
-                    'description': pdb_path.stem,
-                    'fold_id': fold_id,
-                    'seq_id': seq_id
-                }
+    # Create enriched records with fold_id and seq_id derived from filenames
+    enriched_records = []
+    for pdb_path, result in zip(pdb_paths, results):
+        # Extract fold_id and seq_id from filename
+        fold_id, seq_id = derive_ids_from_filename(pdb_path.name)
 
-                # Add all calculated metrics (excluding duplicate description)
-                for key, value in result.items():
-                    if key != 'description':
-                        record[key] = value
+        # Create record with derived IDs and calculated metrics
+        record = {
+            'description': pdb_path.stem,
+            'fold_id': fold_id,
+            'seq_id': seq_id
+        }
 
-                enriched_records.append(record)
-            else:
-                logger.warning(f"Failed to process {pdb_path}, skipping")
+        # Add all calculated metrics (excluding duplicate description)
+        for key, value in result.items():
+            if key != 'description':
+                record[key] = value
 
-        # Save enriched records to output JSONL
-        logger.info(f"Saving enriched JSONL to {output_path}")
-        write_jsonl(output_path, enriched_records)
-        logger.info(f"Processing completed successfully. Processed {len(enriched_records)} files")
+        enriched_records.append(record)
 
-        return enriched_records
+    # Save enriched records to output JSONL
+    logger.info(f"Saving enriched JSONL to {output_path}")
+    write_jsonl(output_path, enriched_records)
+    logger.info(f"Processing completed successfully. Processed {len(enriched_records)} files")
 
-    except Exception as e:
-        logger.error(f"Error in main processing: {str(e)}\n{traceback.format_exc()}")
-        return []
+    return enriched_records
 
 
 if __name__ == "__main__":

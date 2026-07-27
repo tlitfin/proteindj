@@ -604,7 +604,7 @@ workflow {
         AnalysePredictions(analysis_input_pdbs)
 
         // Filtering of analysis results
-        FilterAnalysis(AnalysePredictions.out.jsonl, analysis_input_pdbs)
+        FilterAnalysis(AnalysePredictions.out.jsonl, AnalysePredictions.out.relaxed_pdbs)
 
         // Use placeholder PDB file if no designs survive filtering
         FilterAnalysis.out.pdbs

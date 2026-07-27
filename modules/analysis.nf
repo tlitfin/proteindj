@@ -10,6 +10,7 @@ process AnalysePredictions {
     output:
     path "best_designs.jsonl", emit: jsonl, topic: metadata_ch_fold_seq
     path "analysis.log", emit: log
+    path "relaxed_pdbs/*.pdb", emit: relaxed_pdbs
 
     script:
     def num_processes = task.cpus - 1
@@ -55,7 +56,7 @@ process FilterAnalysis {
             "max_intface_unsat_hbonds",
             "max_intface_deltag",
             "max_intface_deltagtobsa",
-                        "max_surfhphobics",
+            "max_surfhphobics",
             "max_sap",
             "max_sap_complex"
         ],
