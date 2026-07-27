@@ -275,7 +275,6 @@ Analysis Filtering Parameters for the final Analysis stage using PyRosetta and B
 | `pr_max_intface_unsat_hbonds` | Maximum number of buried, unsatisfied hydrogen bonds at the interface                         |
 | `pr_max_intface_deltag`       | Maximum solvation free energy gain at interface (Rosetta Energy Units; lower is better)       |
 | `pr_max_intface_deltagtobsa`  | Maximum ratio of delta-G to buried surface area                                               |
-| `pr_min_intface_packstat`     | Minimum packing quality of the interface (0-1 scale; higher is better)                        |
 | `pr_max_surfhphobics`         | Maximum percentage of hydrophobic residues exposed on the surface                             |
 | `pr_max_sap`                  | Maximum mean residue Spatial Aggregation Propensity for monomer/binder (solubility prediction; lower is better) |
 | `pr_max_sap_complex`          | Maximum mean residue Spatial Aggregation Propensity for binder in complex (solubility prediction; lower is better) |

@@ -55,8 +55,7 @@ process FilterAnalysis {
             "max_intface_unsat_hbonds",
             "max_intface_deltag",
             "max_intface_deltagtobsa",
-            "min_intface_packstat",
-            "max_surfhphobics",
+                        "max_surfhphobics",
             "max_sap",
             "max_sap_complex"
         ],

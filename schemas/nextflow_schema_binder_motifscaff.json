@@ -671,11 +671,6 @@
           "description": "Maximum ratio of delta-G to buried surface area",
           "hidden": true
         },
-        "pr_min_intface_packstat": {
-          "type": "number",
-          "description": "Minimum packing quality of the interface (0-1 scale; higher is better)",
-          "hidden": true
-        },
         "pr_max_surfhphobics": {
           "type": "number",
           "description": "Maximum percentage of hydrophobic residues exposed on the surface",
