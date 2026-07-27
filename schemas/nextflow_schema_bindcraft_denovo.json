@@ -677,7 +677,7 @@
         },
         "pr_max_intface_deltag": {
           "type": "number",
-          "description": "Maximum solvation free energy gain at interface (Rosetta Energy Units; lower is better)",
+          "description": "Maximum predicted binding free energy at the interface (PRODIGY IC-NIS model, kcal/mol; more negative is better)",
           "hidden": true
         },
         "pr_max_intface_deltagtobsa": {

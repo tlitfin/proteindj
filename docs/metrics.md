@@ -28,8 +28,8 @@ Metrics calculated on the BindCraft or RFdiffusion generated folds.
 | `bc_length` | Length of binder selected by BindCraft |
 | `bc_plddt` | Average per-residue confidence score (0-100) for the complex calculated by BindCraft. |
 | `bc_rmsd_target` | The RMSD between the input target structure and the target structure after binder design |
-| `fold_helices`      | Number of alpha-helices in the designed fold (calculated by PyRosetta).         |
-| `fold_strands`      | Number of beta-strands in the designed fold (calculated by PyRosetta).          |
+| `fold_helices`      | Number of alpha-helices in the designed fold.         |
+| `fold_strands`      | Number of beta-strands in the designed fold.          |
 | `fold_total_ss`     | Total secondary structures (helices + strands) in the designed fold.            |
 | `fold_RoG`          | Radius of gyration (compactness measure) for designed fold.                     |
 | `rfd_time`         | Time taken (seconds) by RFdiffusion to produce a fold.                           |
@@ -88,7 +88,7 @@ Metrics from AlphaFold2 Initial-Guess or Boltz-2 predictions evaluating structur
 
 ## Biophysical Analysis Metrics
 
-Measures related to protein structure stability and interface interactions.
+Measures related to protein structure stability and interface interactions. Each predicted structure is first energy-minimized (PDBFixer/OpenMM) and these metrics are calculated on the resulting relaxed structure using [arpeggia](https://github.com/y1zhou/arpeggia), [PRODIGY](https://github.com/haddocking/prodigy), and BioPython.
 
 | Metric                | Description                                                            |
 | --------------------- | ---------------------------------------------------------------------- |
@@ -100,7 +100,7 @@ Measures related to protein structure stability and interface interactions.
 | `pr_intface_shpcomp`  | Shape complementarity of interface (0-1 scale; 1 is optimal).          |
 | `pr_intface_hbonds`   | Number of hydrogen bonds at the interface.                             |
 | `pr_intface_unsat_hbonds`   | Number of buried, unsatisfied hydrogen bonds at the interface.                             |
-| `pr_intface_deltaG`   | Solvation free energy gain at interface (in Rosetta Energy Units; lower is better).                    |
+| `pr_intface_deltaG`   | Predicted binding free energy at the interface (PRODIGY IC-NIS model, kcal/mol; more negative is better).                    |
 | `pr_intface_deltaGtoBSA`   | Ratio of delta-G to buried surface area                    |
 | `pr_surfhphobics`   | Percentage of hydrophobic residues exposed on the surface.             |
 | `pr_SAP`              | Mean residue Spatial Aggregation Propensity of monomer/binder (solubility prediction; lower is better). |

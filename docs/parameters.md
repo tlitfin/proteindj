@@ -162,7 +162,7 @@ Due to the inherently stochastic nature of protein design, often we see problema
 - **Fold Filtering** - Filters designs according to the number of secondary structure elements and radius of gyration.
 - **Sequence Filtering** - Filters designs according to the score of the generated sequence
 - **AlphaFold2/Boltz-2 Filtering** - Filters designs according to the quality of the structure prediction
-- **Analysis Filtering** - Filters designs according to detailed biophysical metrics calculated by PyRosetta and BioPython, including interface quality, energy, and sequence properties
+- **Analysis Filtering** - Filters designs according to detailed biophysical metrics calculated by arpeggia, PRODIGY, and BioPython on the energy-minimized structure, including interface quality, energy, and sequence properties
 
 The most powerful predictors of experimental success are structure prediction metrics, but some metrics are more effective than others. Here are some recommended filters for binder design from the literature and their corresponding parameters in ProteinDJ:
 
@@ -257,7 +257,7 @@ Boltz-2 Filtering Parameters.
 
 ### Analysis Filtering Parameters
 
-Analysis Filtering Parameters for the final Analysis stage using PyRosetta and BioPython. These metrics provide detailed biophysical characterization of the predicted structures, particularly useful for binder design. Note that interface metrics are only calculated for binder design modes.
+Analysis Filtering Parameters for the final Analysis stage using PDBFixer/OpenMM, arpeggia, PRODIGY, and BioPython. These metrics provide detailed biophysical characterization of the predicted structures, particularly useful for binder design. Note that interface metrics are only calculated for binder design modes.
 
 | Parameter                     | Description                                                                                   |
 | ----------------------------- | --------------------------------------------------------------------------------------------- |
@@ -273,7 +273,7 @@ Analysis Filtering Parameters for the final Analysis stage using PyRosetta and B
 | `pr_min_intface_shpcomp`      | Minimum shape complementarity of interface (0-1 scale; 1 is optimal)                          |
 | `pr_min_intface_hbonds`       | Minimum number of hydrogen bonds at the interface                                             |
 | `pr_max_intface_unsat_hbonds` | Maximum number of buried, unsatisfied hydrogen bonds at the interface                         |
-| `pr_max_intface_deltag`       | Maximum solvation free energy gain at interface (Rosetta Energy Units; lower is better)       |
+| `pr_max_intface_deltag`       | Maximum predicted binding free energy at the interface (PRODIGY IC-NIS model, kcal/mol; more negative is better)       |
 | `pr_max_intface_deltagtobsa`  | Maximum ratio of delta-G to buried surface area                                               |
 | `pr_max_surfhphobics`         | Maximum percentage of hydrophobic residues exposed on the surface                             |
 | `pr_max_sap`                  | Maximum mean residue Spatial Aggregation Propensity for monomer/binder (solubility prediction; lower is better) |
