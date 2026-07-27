@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import traceback
 import logging
 import numpy as np
@@ -92,27 +93,59 @@ def derive_ids_from_filename(filename):
 # Secondary structure and radius of gyration
 # ---------------------------------------------------------------------------
 
+def _prepare_dssp_input(pdb_path):
+    """Ensure a PDB file is recognized as PDB format by mkdssp (>=4.0).
+
+    mkdssp>=4.0 decides whether to parse a file as PDB or mmCIF based on
+    whether it starts with a HEADER record; without one it assumes mmCIF and
+    fails. AF2/Boltz output PDBs have no HEADER line, so we prepend one to
+    a temporary copy when needed.
+
+    Returns a (path, tmp_path) tuple where path is what should be passed to
+    DSSP and tmp_path is the temporary file to clean up afterwards (None if
+    no temporary file was created).
+    """
+    pdb_path = Path(pdb_path)
+    with open(pdb_path) as f:
+        first_line = f.readline()
+
+    if first_line.startswith('HEADER'):
+        return str(pdb_path), None
+
+    fd, tmp_path = tempfile.mkstemp(suffix='.pdb', dir=pdb_path.parent)
+    with os.fdopen(fd, 'w') as dst, open(pdb_path) as src:
+        dst.write('HEADER\n')
+        shutil.copyfileobj(src, dst)
+
+    return tmp_path, tmp_path
+
+
 def count_secondary_structures(model, pdb_path, chain_id=None):
     """Count secondary structure elements using BioPython DSSP + mkdssp.
     If chain_id is provided, only counts SS for that chain.
     """
-    dssp_obj = DSSP(model, str(pdb_path), dssp="mkdssp")
+    dssp_path, tmp_path = _prepare_dssp_input(pdb_path)
+    try:
+        dssp_obj = DSSP(model, dssp_path, dssp="mkdssp")
 
-    if chain_id is not None:
-        target_chains = {chain_id}
-    else:
-        target_chains = {c.get_id() for c in model.get_chains()}
+        if chain_id is not None:
+            target_chains = {chain_id}
+        else:
+            target_chains = {c.get_id() for c in model.get_chains()}
 
-    dssp_chars = []
-    for key in dssp_obj.keys():
-        if key[0] in target_chains:
-            ss = dssp_obj[key][2]
-            if ss in DSSP_HELIX:
-                dssp_chars.append('H')
-            elif ss in DSSP_STRAND:
-                dssp_chars.append('E')
-            else:
-                dssp_chars.append('L')
+        dssp_chars = []
+        for key in dssp_obj.keys():
+            if key[0] in target_chains:
+                ss = dssp_obj[key][2]
+                if ss in DSSP_HELIX:
+                    dssp_chars.append('H')
+                elif ss in DSSP_STRAND:
+                    dssp_chars.append('E')
+                else:
+                    dssp_chars.append('L')
+    finally:
+        if tmp_path is not None:
+            os.unlink(tmp_path)
 
     helix_count = 0
     strand_count = 0
