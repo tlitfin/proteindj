@@ -64,7 +64,7 @@ The ProteinDJ consists of four stages:
 
 1. Fold Design - Using RFdiffusion or BindCraft
 2. Sequence Design - Using ProteinMPNN or Full-Atom MPNN
-3. Structure Prediction - Using AlphaFold2 Initial Guess or Boltz-2
+3. Structure Prediction - Using AlphaFold2 Initial Guess, Boltz-2, or both sequentially
 4. Analysis and Reporting - Using PDBFixer/OpenMM, arpeggia, PRODIGY, and BioPython
 
 <img src="img/pipelineoverview.png" height="200">

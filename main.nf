@@ -65,12 +65,13 @@ workflow {
     } else if (params.rank_designs && !params.ranking_metric) {
         // Use default ranking metrics based on mode and prediction method
         def is_monomer = params.design_mode.startsWith('monomer_')
+        // 'af2_boltz' defaults to boltz_* metrics since Boltz is the final/most-refined stage
         if (is_monomer) {
             // For monomer modes, use overall quality metrics (no interface)
-            ranking_metric = params.pred_method == 'boltz' ? 'boltz_ptm' : 'af2_plddt_overall'
+            ranking_metric = params.pred_method in ['boltz', 'af2_boltz'] ? 'boltz_ptm' : 'af2_plddt_overall'
         } else {
             // For binder modes, use interface-specific metrics
-            ranking_metric = params.pred_method == 'boltz' ? 'boltz_ipSAE_min' : 'af2_pae_interaction'
+            ranking_metric = params.pred_method in ['boltz', 'af2_boltz'] ? 'boltz_ipSAE_min' : 'af2_pae_interaction'
         }
     }
 
@@ -566,6 +567,129 @@ workflow {
                 .collect()
                 .set { analysis_input_pdbs }
         }
+        else if (params.pred_method == "af2_boltz") {
+            // Cascaded prediction: run AF2 first (fast pre-filter), then re-feed the
+            // original design PDBs of AF2 survivors into Boltz-2
+
+            // --- Stage 1: AF2 predict + filter ---
+
+            // reallocate batching for GPU
+            Utils
+                .rebatchGPUByNumRes(pred_input_pdbs, params.gpus)
+                .set { af2c_pred_input_tuple }
+
+            // AlphaFold2-Initial Guess
+            RunAF2(af2c_pred_input_tuple)
+
+            // Compress output files
+            CompressAF2("af2", RunAF2.out.pdbs_jsons.flatten().collect())
+
+            // Batch files for CPUs
+            Utils
+                .rebatchTuples(RunAF2.out.pdbs_jsons, 200)
+                .set { af2c_pred_tuple }
+
+            // Filtering of AF2 results
+            FilterAF2(af2c_pred_tuple)
+
+            if (params.design_mode in ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+                // Alignment of PDBs to target chain(s). Only need one reference file
+                AlignAF2(FilterAF2.out.pdbs.flatten().collect(), pred_input_pdbs.flatten().last())
+                AlignAF2.out.pdbs
+                    .flatten()
+                    .collect()
+                    .set { af2c_survivor_pdbs }
+            } else {
+                FilterAF2.out.pdbs
+                    .flatten()
+                    .collect()
+                    .set { af2c_survivor_pdbs }
+            }
+
+            // --- Join AF2 survivors back to their original (pre-prediction) design PDBs ---
+            // AF2 renames outputs by appending '_af2pred' to the basename (e.g. 'fold_0_seq_1.pdb'
+            // -> 'fold_0_seq_1_af2pred.pdb'), so strip that suffix before matching on filename.
+            pred_input_pdbs
+                .flatten()
+                .map { pdb -> tuple(pdb.getName(), pdb) }
+                .join(
+                    af2c_survivor_pdbs
+                        .flatten()
+                        .map { pdb -> tuple(pdb.getName().replaceFirst(/_af2pred\.pdb$/, '.pdb'), pdb) }
+                )
+                .map { name, orig_pdb, survivor_pdb -> orig_pdb }
+                .collect()
+                .set { boltz_input_pdbs }
+
+            // --- Stage 2: Boltz-2 predict + filter on AF2 survivors ---
+
+            // Handle MSA file input
+            if (params.boltz_input_msa) {
+                msa_input = file(params.boltz_input_msa, checkIfExists: true)
+            } else {
+                msa_input = file("${projectDir}/lib/NO_FILE")
+            }
+
+            // Prep yaml files for Boltz-2
+            PrepBoltz(boltz_input_pdbs, msa_input)
+
+            // Handle templates - use empty channel if not present
+            PrepBoltz.out.templates
+                .ifEmpty(file("${projectDir}/lib/NO_FILE"))
+                .set { templates_ch }
+
+            // Handle MSA file - use empty channel if not present
+            PrepBoltz.out.msa_file
+                .ifEmpty(file("${projectDir}/lib/NO_FILE"))
+                .set { msa_ch }
+
+            // reallocate batching for GPU
+            Utils
+                .rebatchGPU(PrepBoltz.out.yamls, params.gpus)
+                .combine(templates_ch)
+                .combine(msa_ch)
+                .set { pred_input_tuple }
+
+            // Perform prediction of designs using Boltz-2
+            RunBoltz(pred_input_tuple)
+
+            // Batch files for CPUs
+            Utils
+                .rebatchTuples(RunBoltz.out.pdbs_jsons, 200)
+                .set { pred_tuple }
+
+            // Convert npz files to value channel for reuse across all batches
+            RunBoltz.out.npzs.collect().set { npz_files_for_analysis }
+
+            // Convert boltz_input_pdbs to value channel for reuse across all batches
+            boltz_input_pdbs.collect().set { designs_for_alignment }
+
+            // Calculate Boltz-2 interface scores for binders only
+            if (params.design_mode in ['binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff' , 'bindcraft_denovo' ]) {
+                AnalyseBoltz(pred_tuple, npz_files_for_analysis)
+                AnalyseBoltz.out.pdbs_jsons
+                    .set { boltz_with_metrics }
+            } else{
+                pred_tuple.set { boltz_with_metrics }
+            }
+
+            // Align Boltz Predictions to FAMPNN output and calculate RMSD
+            if (params.design_mode in ['bindcraft_denovo','binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+                AlignBoltz(boltz_with_metrics, designs_for_alignment, 'binder')
+            }
+            else {
+                AlignBoltz(boltz_with_metrics, designs_for_alignment, 'monomer')
+            }
+            // Compress output files
+            CompressBoltz("boltz", AlignBoltz.out.pdbs_jsons.flatten().collect())
+
+            // Filtering of Boltz-2 results
+            FilterBoltz(AlignBoltz.out.pdbs_jsons)
+            FilterBoltz.out.pdbs
+                .flatten()
+                .collect()
+                .set { analysis_input_pdbs }
+        }
         else {
             error("Not a valid structure prediction method")
         }
@@ -649,6 +773,10 @@ workflow {
         pred_count = 0
         filter_pred_count = 0
         filter_analysis_count = 0
+        af2_count = 0
+        af2_filter_count = 0
+        boltz_count = 0
+        boltz_filter_count = 0
     }
     else if (params.skip_fold_seq_pred) {
         fold_count = 0
@@ -658,6 +786,10 @@ workflow {
         pred_count = 0
         Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
         Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
+        af2_count = 0
+        af2_filter_count = 0
+        boltz_count = 0
+        boltz_filter_count = 0
     }
     else if (params.skip_fold_seq) {
         fold_count = 0
@@ -667,6 +799,17 @@ workflow {
         Utils.countPdbFiles(pred_tuple).set { pred_count }
         Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
         Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
+        if (params.pred_method == 'af2_boltz') {
+            Utils.countPdbFiles(af2c_pred_tuple).set { af2_count }
+            Utils.countPdbFiles(af2c_survivor_pdbs).set { af2_filter_count }
+            Utils.countPdbFiles(pred_tuple).set { boltz_count }
+            Utils.countPdbFiles(analysis_input_pdbs).set { boltz_filter_count }
+        } else {
+            af2_count = 0
+            af2_filter_count = 0
+            boltz_count = 0
+            boltz_filter_count = 0
+        }
     }
     else if (params.skip_fold) {
         fold_count = 0
@@ -676,6 +819,17 @@ workflow {
         Utils.countPdbFiles(pred_tuple).set { pred_count }
         Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
         Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
+        if (params.pred_method == 'af2_boltz') {
+            Utils.countPdbFiles(af2c_pred_tuple).set { af2_count }
+            Utils.countPdbFiles(af2c_survivor_pdbs).set { af2_filter_count }
+            Utils.countPdbFiles(pred_tuple).set { boltz_count }
+            Utils.countPdbFiles(analysis_input_pdbs).set { boltz_filter_count }
+        } else {
+            af2_count = 0
+            af2_filter_count = 0
+            boltz_count = 0
+            boltz_filter_count = 0
+        }
     }
     else {
         Utils.countPdbFiles(fold_tuples).set { fold_count }
@@ -685,6 +839,17 @@ workflow {
         Utils.countPdbFiles(pred_tuple).set { pred_count }
         Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
         Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
+        if (params.pred_method == 'af2_boltz') {
+            Utils.countPdbFiles(af2c_pred_tuple).set { af2_count }
+            Utils.countPdbFiles(af2c_survivor_pdbs).set { af2_filter_count }
+            Utils.countPdbFiles(pred_tuple).set { boltz_count }
+            Utils.countPdbFiles(analysis_input_pdbs).set { boltz_filter_count }
+        } else {
+            af2_count = 0
+            af2_filter_count = 0
+            boltz_count = 0
+            boltz_filter_count = 0
+        }
     }
 
     // Generate report and statistics of run
@@ -697,7 +862,11 @@ workflow {
         filter_seq_count,
         pred_count,
         filter_pred_count,
-        filter_analysis_count
+        filter_analysis_count,
+        af2_count,
+        af2_filter_count,
+        boltz_count,
+        boltz_filter_count
     )
     
     // Save log file on completion
@@ -742,6 +911,13 @@ def validateranking_metric(ranking_metric, pred_method) {
         throw new IllegalArgumentException(
             "Ranking metric '${ranking_metric}' does not match prediction method '${pred_method}'. " +
             "For Boltz-2 predictions, use metrics with 'boltz_' prefix (e.g., 'boltz_ptm_interface', 'boltz_ipSAE_min', 'boltz_LIS')."
+        )
+    }
+    if (pred_method == 'af2_boltz' && !(ranking_metric.startsWith('af2_') || ranking_metric.startsWith('boltz_'))) {
+        throw new IllegalArgumentException(
+            "Ranking metric '${ranking_metric}' does not match prediction method '${pred_method}'. " +
+            "For the combined AF2 + Boltz-2 cascade, use metrics with either the 'af2_' prefix " +
+            "(e.g., 'af2_pae_interaction') or the 'boltz_' prefix (e.g., 'boltz_ipSAE_min')."
         )
     }
     return ranking_metric
