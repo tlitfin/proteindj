@@ -173,7 +173,7 @@
         },
         "bg_flexible_residues": {
           "type": "string",
-          "description": "Target residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible target regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible.",
+          "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_redesign mode this may also reference chain A residues kept by bg_redesign_spec.",
           "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
           "hidden": true
         }

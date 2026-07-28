@@ -466,39 +466,81 @@ boltzgen_denovo {
 
 ### BoltzGen Redesign Mode (boltzgen_redesign) <a name="mode-boltzgenredesign"></a>
 
-BoltzGen redesign mode rediffuses part (or all) of an existing chain A binder while keeping the remaining target chain(s) of `input_pdb` fixed. This is useful for improving or diversifying an existing binder without starting from scratch.
+BoltzGen redesign mode reworks an existing chain A binder while keeping the remaining target chain(s) of `input_pdb` fixed. This is useful for improving or diversifying an existing binder without starting from scratch, and can optionally change the binder's architecture (inserting/deleting residues) as well as its sequence and/or structural flexibility.
+
+At least one of `bg_redesign_spec`, `bg_redesign_inpaint_seq`, or `bg_flexible_residues` must be set in this mode - otherwise chain A would be left completely unchanged, which is a hard error (wasted computation).
+
+**Changing the architecture with `bg_redesign_spec`**
+
+`bg_redesign_spec` describes the new chain A architecture as an ordered, comma-separated list of tokens:
+- Keep token `A<start>-<end>` or `A<n>` - a contiguous run of original chain A residues (PDB author numbering) to retain as-is (sequence + structure). Keep tokens must be strictly ascending/non-overlapping.
+- Insert token `<n>` (exact count) or `<min>-<max>` (sampled range) - bare digit(s), no chain letter. Adds that many brand-new, fully designed residues at this position.
+
+Any original chain A residue not covered by a keep token (leading, trailing, or between two keep tokens) is implicitly deleted. For example, to insert 7-10 new residues at the N-terminus, keep residues A1-60, insert 5 new residues, keep A70-100 (implicitly deleting A61-69), then append 10 new residues at the C-terminus:
 
 ```
 boltzgen_redesign {
     params {
         design_mode = 'boltzgen_redesign'
         input_pdb = './lib/examplebinder.pdb'
+        bg_redesign_spec = '7-10,A1-60,5,A70-100,10'
     }
 }
 ```
 
-By default, the entire chain A binder is redesigned. To only rediffuse specific binder residues (e.g. a loop or interface patch) and keep the rest of chain A fixed, use `bg_redesign_residues` (comma-separated ranges referencing chain A only, e.g. `'A10-50,A60'`):
+If `bg_redesign_spec` is null, chain A's architecture (length) is left unchanged.
+
+**Redesigning the sequence with `bg_redesign_inpaint_seq`**
+
+`bg_redesign_inpaint_seq` marks chain A residues - within those kept by `bg_redesign_spec` - whose sequence is allowed to change while their structure stays fixed/conditioned (comma-separated ranges referencing chain A only, e.g. `'A10-50,A60'`):
 
 ```
 boltzgen_redesign {
     params {
         design_mode = 'boltzgen_redesign'
         input_pdb = './lib/examplebinder.pdb'
-        bg_redesign_residues = 'A60-88'
+        bg_redesign_inpaint_seq = 'A60-88'
     }
 }
 ```
 
-As with `boltzgen_denovo`, `hotspot_residues`/`bg_not_binding_residues` and `bg_flexible_residues` can be used to guide/restrict binding location and mark flexible target regions - these apply to the fixed non-A target chain(s):
+**Freeing up structure with `bg_flexible_residues`**
+
+`bg_flexible_residues` marks residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Unlike `bg_redesign_inpaint_seq`, it can reference any chain, including chain A residues kept by `bg_redesign_spec`:
 
 ```
 boltzgen_redesign {
     params {
         design_mode = 'boltzgen_redesign'
         input_pdb = './lib/examplebinder.pdb'
-        bg_redesign_residues = 'A60-88'
+        bg_flexible_residues = 'A60-88'
+    }
+}
+```
+
+Combining `bg_redesign_inpaint_seq` and `bg_flexible_residues` on the same chain A residues reproduces full redesign (both structure and sequence change) for that region, while everything else stays fixed:
+
+```
+boltzgen_redesign {
+    params {
+        design_mode = 'boltzgen_redesign'
+        input_pdb = './lib/examplebinder.pdb'
+        bg_redesign_inpaint_seq = 'A60-88'
+        bg_flexible_residues = 'A60-88'
+    }
+}
+```
+
+As with `boltzgen_denovo`, `hotspot_residues`/`bg_not_binding_residues` can be used to guide/restrict binding location - these apply to the fixed non-A target chain(s):
+
+```
+boltzgen_redesign {
+    params {
+        design_mode = 'boltzgen_redesign'
+        input_pdb = './lib/examplebinder.pdb'
+        bg_redesign_inpaint_seq = 'A60-88'
+        bg_flexible_residues = 'A60-88'
         hotspot_residues = 'B56,B115,B123'
-        bg_flexible_residues = 'B'
     }
 }
 ```

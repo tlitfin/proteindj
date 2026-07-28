@@ -5,8 +5,11 @@ Generate a BoltzGen design-spec YAML for ProteinDJ's boltzgen_denovo/boltzgen_re
 - boltzgen_denovo: designs a new binder (entity 1, chain A) against a fixed target
   (entity 2, taken from input_pdb), with optional hotspot/anti-hotspot residues and/or
   target structural flexibility.
-- boltzgen_redesign: rediffuses a range of residues within an existing chain A binder,
-  against the remaining fixed chain(s) of input_pdb (default: the whole of chain A).
+- boltzgen_redesign: reworks an existing chain A binder against the remaining fixed
+  chain(s) of input_pdb - optionally changing its architecture (keeping/deleting/
+  inserting residues via bg_redesign_spec), redesigning the sequence of kept residues
+  (bg_redesign_inpaint_seq), and/or freeing up the structure of residues on any chain
+  (bg_flexible_residues).
 
 Entities are emitted binder-then-target so BoltzGen's generated CIF naturally places
 the binder as chain A (matches ProteinDJ's chain A=binder/chain B=target convention).
@@ -113,10 +116,10 @@ def parse_design_length(design_length):
 
 def parse_residue_ranges(spec_str, rank_map):
     """
-    Parse a hotspot/anti-hotspot/redesign/flexible-residue style string, e.g.
+    Parse a hotspot/anti-hotspot/inpaint-seq/flexible-residue style string, e.g.
     'A56,A115-120,B10', into {chain: 'res_index string'}. This is the shared token
     grammar for all of ProteinDJ's bg_* residue-spec params (bg_not_binding_residues,
-    bg_redesign_residues, bg_flexible_residues) as well as hotspot_residues. PDB
+    bg_redesign_inpaint_seq, bg_flexible_residues) as well as hotspot_residues. PDB
     author residue numbers are translated to BoltzGen's 1-based positional rank via
     rank_map (see get_residue_rank_map), and emitted as an explicit comma-separated
     list of positions (not a '..' range) so gaps in PDB numbering don't get
@@ -155,6 +158,85 @@ def parse_flexible_spec(spec_str, rank_map):
     parsed = parse_residue_ranges(spec_str, rank_map)
     return {chain: (None if res_index == 'all' else res_index) for chain, res_index in parsed.items()}
 
+
+
+def _res_index_to_ranks(res_index, chain_length):
+    """
+    Expand a BoltzGen res_index value - as produced by parse_residue_ranges/
+    parse_flexible_spec, i.e. 'all', None, or a comma-separated list of 1-based
+    positional ranks - into a Python set of ints for containment checks.
+    """
+    if res_index is None or res_index == 'all':
+        return set(range(1, chain_length + 1))
+    return {int(r) for r in res_index.split(',')}
+
+
+def parse_architecture_spec(spec_str, rank_map, chain_a_length):
+    """
+    Parse a bg_redesign_spec string, e.g. '7-10,A1-60,5,A70-100,10', describing the
+    new chain A architecture as an ordered sequence of tokens:
+      - Keep token 'A<n>' or 'A<start>-<end>': PDB-author-numbered (rank_map-translated)
+        contiguous run of ORIGINAL chain A residues to retain as-is (sequence +
+        structure) at this position in the new architecture. Must be strictly
+        ascending / non-overlapping relative to the previous keep token.
+      - Insert token '<n>' or '<min>-<max>': bare digit(s), no chain letter. Adds that
+        many brand-new (BoltzGen design_insertions, fully designed) residues at this
+        position.
+    Any original chain A residue not covered by a keep token (including a leading gap
+    before the first keep token, a gap between keep tokens, or a trailing gap after the
+    last keep token) is implicitly deleted (added to BoltzGen `exclude`).
+
+    Returns (exclude_ranks, insertions, kept_ranks):
+      - exclude_ranks: list of (start_rank, end_rank) 1-based inclusive tuples (original
+        chain A numbering) to drop.
+      - insertions: list of (anchor_rank, num_residues_spec) tuples for BoltzGen
+        `design_insertions` (anchor_rank is the 1-based original rank to insert before;
+        num_residues_spec is already converted to BoltzGen's '<n>'/'<min>..<max>' syntax).
+      - kept_ranks: sorted list of 1-based original ranks retained.
+    """
+    keep_re = re.compile(r'^A(\d+)(?:-(\d+))?$')
+    insert_re = re.compile(r'^(\d+)(?:-(\d+))?$')
+
+    exclude_ranks = []
+    insertions = []
+    kept_ranks = []
+    last_kept_end_rank = 0
+
+    for token in (t.strip() for t in spec_str.split(',') if t.strip()):
+        keep_match = keep_re.match(token)
+        insert_match = None if keep_match else insert_re.match(token)
+        if keep_match:
+            start, end = keep_match.groups()
+            start, end = int(start), int(end) if end else int(start)
+            if end < start:
+                raise ValueError(f"Invalid bg_redesign_spec keep token '{token}': end before start")
+            start_rank = _resolve_rank('A', start, rank_map)
+            end_rank = _resolve_rank('A', end, rank_map)
+            if start_rank <= last_kept_end_rank:
+                raise ValueError(
+                    f"bg_redesign_spec keep token '{token}' is out of order or overlaps a "
+                    "previous keep token - keep tokens must be strictly ascending"
+                )
+            if start_rank > last_kept_end_rank + 1:
+                exclude_ranks.append((last_kept_end_rank + 1, start_rank - 1))
+            kept_ranks.extend(range(start_rank, end_rank + 1))
+            last_kept_end_rank = end_rank
+        elif insert_match:
+            count_start, count_end = insert_match.groups()
+            if count_end and int(count_end) < int(count_start):
+                raise ValueError(f"Invalid bg_redesign_spec insert token '{token}': end before start")
+            num_residues_spec = count_start if not count_end else f"{count_start}..{count_end}"
+            insertions.append((last_kept_end_rank + 1, num_residues_spec))
+        else:
+            raise ValueError(
+                f"Could not parse bg_redesign_spec token: '{token}' "
+                "(expected e.g. 'A1-60', 'A56', '10', or '7-10')"
+            )
+
+    if last_kept_end_rank < chain_a_length:
+        exclude_ranks.append((last_kept_end_rank + 1, chain_a_length))
+
+    return exclude_ranks, insertions, kept_ranks
 
 
 def build_structure_groups(flexible_by_chain):
@@ -241,37 +323,86 @@ def build_redesign_spec(args, all_chains, rank_map):
     if 'A' not in all_chains:
         raise ValueError("boltzgen_redesign requires input_pdb to contain a chain A (binder)")
 
+    if not (args.bg_redesign_spec or args.bg_redesign_inpaint_seq or args.bg_flexible_residues):
+        raise ValueError(
+            "boltzgen_redesign mode requires at least one of bg_redesign_spec, "
+            "bg_redesign_inpaint_seq, or bg_flexible_residues to be set - otherwise chain A "
+            "would be left completely unchanged (wasted computation)."
+        )
+
     other_chains = [c for c in all_chains if c != 'A']
 
-    if args.bg_redesign_residues:
-        redesign_by_chain = parse_residue_ranges(args.bg_redesign_residues, rank_map)
-        invalid_chains = set(redesign_by_chain) - {'A'}
-        if invalid_chains:
-            raise ValueError(f"bg_redesign_residues must only reference chain A, got: {sorted(invalid_chains)}")
-        redesign_res_index = redesign_by_chain.get('A', 'all')
-    else:
-        redesign_res_index = 'all'
+    chain_a_length = get_chain_length(args.input_pdb, 'A')
+    if chain_a_length == 0:
+        raise ValueError("Chain A in input_pdb has no standard residues")
 
-    if redesign_res_index == 'all':
-        chain_a_length = get_chain_length(args.input_pdb, 'A')
-        if chain_a_length == 0:
-            raise ValueError("Chain A in input_pdb has no standard residues")
-        redesign_res_index = f"1..{chain_a_length}"
+    if args.bg_redesign_spec:
+        exclude_ranks, insertions, kept_ranks = parse_architecture_spec(
+            args.bg_redesign_spec, rank_map, chain_a_length
+        )
+    else:
+        exclude_ranks, insertions, kept_ranks = [], [], list(range(1, chain_a_length + 1))
+    kept_ranks_set = set(kept_ranks)
 
     file_entity = {
         'path': Path(args.input_pdb).name,
         'include': [{'chain': {'id': chain}} for chain in all_chains],
-        'design': [{'chain': {'id': 'A', 'res_index': redesign_res_index}}],
-        # Hide the redesigned residues' existing coordinates from template attention
-        # (visibility=0), otherwise BoltzGen conditions on chain A's input structure as
-        # a template and only resamples its sequence, leaving the backbone unchanged.
-        'structure_groups': build_structure_groups({'A': redesign_res_index}),
     }
 
-    # hotspot_residues/bg_not_binding_residues/bg_flexible_residues apply to the fixed
-    # non-A context chain(s), same as the target in boltzgen_denovo.
+    if exclude_ranks:
+        file_entity['exclude'] = [
+            {'chain': {'id': 'A', 'res_index': str(start) if start == end else f"{start}..{end}"}}
+            for start, end in exclude_ranks
+        ]
+
+    if insertions:
+        file_entity['design_insertions'] = [
+            {'insertion': {'id': 'A', 'res_index': anchor, 'num_residues': num_residues_spec}}
+            for anchor, num_residues_spec in insertions
+        ]
+
+    if exclude_ranks or insertions:
+        # Chain A's residue numbering shifts once residues are excluded/inserted; reset it to
+        # a clean 1..N sequence so downstream tooling sees contiguous chain A numbering in
+        # BoltzGen's output structure.
+        file_entity['reset_res_index'] = [{'chain': {'id': 'A'}}]
+
+    if args.bg_redesign_inpaint_seq:
+        inpaint_by_chain = parse_residue_ranges(args.bg_redesign_inpaint_seq, rank_map)
+        invalid_chains = set(inpaint_by_chain) - {'A'}
+        if invalid_chains:
+            raise ValueError(
+                f"bg_redesign_inpaint_seq must only reference chain A, got: {sorted(invalid_chains)}"
+            )
+        inpaint_res_index = inpaint_by_chain.get('A', 'all')
+        invalid_ranks = _res_index_to_ranks(inpaint_res_index, chain_a_length) - kept_ranks_set
+        if invalid_ranks:
+            raise ValueError(
+                "bg_redesign_inpaint_seq references chain A residue(s) removed by "
+                f"bg_redesign_spec: {sorted(invalid_ranks)}"
+            )
+        # design:True keeps the residue's original identity/coordinates as a template (BoltzGen's
+        # design step only diffuses structure) but marks it for downstream sequence redesign via
+        # MPNN/FAMPNN (--skip_inverse_folding); structure_groups visibility stays at the default
+        # (1, conditioned) so the backbone itself is not freed up here - only bg_flexible_residues
+        # does that.
+        file_entity.setdefault('design', []).append({'chain': {'id': 'A', 'res_index': inpaint_res_index}})
+
+    if args.bg_flexible_residues:
+        flexible_by_chain = parse_flexible_spec(args.bg_flexible_residues, rank_map)
+        if 'A' in flexible_by_chain:
+            invalid_ranks = _res_index_to_ranks(flexible_by_chain['A'], chain_a_length) - kept_ranks_set
+            if invalid_ranks:
+                raise ValueError(
+                    "bg_flexible_residues references chain A residue(s) removed by "
+                    f"bg_redesign_spec: {sorted(invalid_ranks)}"
+                )
+
+    # hotspot_residues/bg_not_binding_residues apply to the fixed non-A context chain(s), same
+    # as the target in boltzgen_denovo. bg_flexible_residues may target chain A's kept residues
+    # in addition to the fixed non-A context chain(s).
     apply_binding_types(file_entity, args.hotspot_residues, args.bg_not_binding_residues, other_chains, rank_map)
-    apply_structure_groups(file_entity, args.bg_flexible_residues, other_chains, rank_map)
+    apply_structure_groups(file_entity, args.bg_flexible_residues, all_chains, rank_map)
 
     return {'entities': [{'file': file_entity}]}
 
@@ -283,8 +414,19 @@ def main():
     parser.add_argument('--design_length', default='', help="Binder length, e.g. '80' or '60-100' (denovo only)")
     parser.add_argument('--hotspot_residues', default='', help="Target hotspot residues, e.g. 'A56,A115-120'")
     parser.add_argument('--bg_not_binding_residues', default='', help="Target anti-hotspot residues")
-    parser.add_argument('--bg_redesign_residues', default='', help='Chain A residues to redesign (redesign only)')
-    parser.add_argument('--bg_flexible_residues', default='', help='Target residues with unconditioned structure')
+    parser.add_argument(
+        '--bg_redesign_spec', default='',
+        help=(
+            "Chain A architecture spec (redesign only), e.g. '7-10,A1-60,5,A70-100,10': "
+            "ordered comma-separated keep ('A<start>-<end>') and insert ('<n>' or "
+            "'<min>-<max>') tokens. Residues not covered by a keep token are deleted."
+        ),
+    )
+    parser.add_argument(
+        '--bg_redesign_inpaint_seq', default='',
+        help="Chain A residues (within kept residues) whose sequence is allowed to change (redesign only)",
+    )
+    parser.add_argument('--bg_flexible_residues', default='', help='Residues with unconditioned/free structure')
     parser.add_argument('--output', required=True, help='Output YAML file path')
     args = parser.parse_args()
 

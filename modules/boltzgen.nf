@@ -17,7 +17,8 @@ process PrepBG {
         --design_length "${params.design_length}" \
         --hotspot_residues "${params.hotspot_residues ?: ''}" \
         --bg_not_binding_residues "${params.bg_not_binding_residues ?: ''}" \
-        --bg_redesign_residues "${params.bg_redesign_residues ?: ''}" \
+        --bg_redesign_spec "${params.bg_redesign_spec ?: ''}" \
+        --bg_redesign_inpaint_seq "${params.bg_redesign_inpaint_seq ?: ''}" \
         --bg_flexible_residues "${params.bg_flexible_residues ?: ''}" \
         --output batch${batch_id}.yaml
     """
