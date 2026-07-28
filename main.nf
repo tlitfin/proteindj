@@ -79,7 +79,16 @@ workflow {
     def num_batches = Math.min(params.gpus, params.num_designs).intValue()
     def batch_size = Math.ceil(params.num_designs / num_batches).intValue()
     def num_designs = num_batches * batch_size
-    
+
+    // Pre-compute filter parameter strings here in the workflow body (to enable caching and resume)
+    def fold_filter_params = Utils.formatFilterParams(params, "fold", ["min_ss", "max_ss", "min_helices", "max_helices", "min_strands", "max_strands", "min_rog", "max_rog"])
+    def seq_max_score = params.seq_method == 'mpnn' ? params.mpnn_max_score : params.fampnn_max_psce
+    def seq_max_score_param = seq_max_score != null ? "--max-score ${seq_max_score}" : ''
+    def seq_filter_params = Utils.formatFilterParams(params, "seq", ["min_ext_coef", "max_ext_coef", "min_pi", "max_pi"])
+    def af2_filter_params = Utils.formatFilterParams(params, "af2", ["max_pae_interaction", "max_pae_overall", "max_pae_binder", "max_pae_target", "min_plddt_overall", "min_plddt_binder", "min_plddt_target", "max_rmsd_overall", "max_rmsd_binder_bndaln", "max_rmsd_binder_tgtaln", "max_rmsd_target"])
+    def boltz_filter_params = Utils.formatFilterParams(params, "boltz", ["max_rmsd_overall", "max_rmsd_binder", "max_rmsd_target", "min_conf_score", "min_ptm", "min_ptm_binder", "min_ptm_target", "min_ptm_interface", "min_plddt", "min_plddt_interface", "max_pde", "max_pde_interface", "min_ipSAE_min", "min_LIS", "min_pDockQ2_min", "max_pae_interaction"])
+    def analysis_filter_params = Utils.formatFilterParams(params, "pr", ["min_helices", "max_helices", "min_strands", "max_strands", "min_total_ss", "max_total_ss", "min_rog", "max_rog", "min_intface_bsa", "min_intface_shpcomp", "min_intface_hbonds", "max_intface_unsat_hbonds", "max_intface_deltag", "max_intface_deltagtobsa", "max_surfhphobics", "max_sap", "max_sap_complex"])
+
     println("***********************************************************************")
     println("██████╗ ██████╗  ██████╗ ████████╗███████╗██╗███╗   ██╗██████╗      ██╗")
     println("██╔══██╗██╔══██╗██╔═══██╗╚══██╔══╝██╔════╝██║████╗  ██║██╔══██╗     ██║")
@@ -258,6 +267,11 @@ workflow {
                 .combine(rfdContigs)
                 .combine(target_adj)
                 .combine(target_ss)
+                .map { batchId, batchSizeVal, designStartnum, mode, files, contigs, adj, ss ->
+                    def rfdParams = new RFDiffusionParams(params)
+                    def rfdCommand = rfdParams.generateCommandString(contigs)
+                    tuple(batchId, batchSizeVal, designStartnum, mode, files, rfdCommand, adj, ss)
+                }
             
             // Run RFdiffusion with the generated channel
             RunRFD(rf_ch)
@@ -273,7 +287,7 @@ workflow {
         }
 
         // Fold filtering - secondary structure and radius of gyration
-        FilterFold(fold_tuples)
+        FilterFold(fold_tuples, fold_filter_params)
 
         // If Running Fold Design only these are the final pdbs
         if (params.run_fold_only) {
@@ -402,7 +416,7 @@ workflow {
         }
 
         // Filter designs by sequence score
-        FilterSeq(seq_tuple)
+        FilterSeq(seq_tuple, seq_max_score_param, seq_filter_params)
         FilterSeq.out.pdbs
             .flatten()
             .collect()
@@ -483,7 +497,7 @@ workflow {
                 .set { pred_tuple }
 
             // Filtering of AF2 results
-            FilterAF2(pred_tuple)
+            FilterAF2(pred_tuple, af2_filter_params)
 
             if (params.design_mode in ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
                 // Alignment of PDBs to target chain(s). Only need one reference file
@@ -561,7 +575,7 @@ workflow {
             CompressBoltz("boltz", AlignBoltz.out.pdbs_jsons.flatten().collect())
 
             // Filtering of Boltz-2 results
-            FilterBoltz(AlignBoltz.out.pdbs_jsons)
+            FilterBoltz(AlignBoltz.out.pdbs_jsons, boltz_filter_params)
             FilterBoltz.out.pdbs
                 .flatten()
                 .collect()
@@ -590,7 +604,7 @@ workflow {
                 .set { af2c_pred_tuple }
 
             // Filtering of AF2 results
-            FilterAF2(af2c_pred_tuple)
+            FilterAF2(af2c_pred_tuple, af2_filter_params)
 
             if (params.design_mode in ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
                 // Alignment of PDBs to target chain(s). Only need one reference file
@@ -684,7 +698,7 @@ workflow {
             CompressBoltz("boltz", AlignBoltz.out.pdbs_jsons.flatten().collect())
 
             // Filtering of Boltz-2 results
-            FilterBoltz(AlignBoltz.out.pdbs_jsons)
+            FilterBoltz(AlignBoltz.out.pdbs_jsons, boltz_filter_params)
             FilterBoltz.out.pdbs
                 .flatten()
                 .collect()
@@ -732,7 +746,7 @@ workflow {
         AnalysePredictions(analysis_input_pdbs)
 
         // Filtering of analysis results
-        FilterAnalysis(AnalysePredictions.out.jsonl, AnalysePredictions.out.relaxed_pdbs)
+        FilterAnalysis(AnalysePredictions.out.jsonl, AnalysePredictions.out.relaxed_pdbs, analysis_filter_params)
 
         // Use placeholder PDB file if no designs survive filtering
         FilterAnalysis.out.pdbs

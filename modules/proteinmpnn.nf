@@ -72,6 +72,8 @@ process FilterSeq {
 
     input:
     tuple path(pdb_files), path(json_files)
+    val(maxScoreParam)
+    val(seqParams)
 
     output:
     path ("filtered_output/*.pdb"), emit: pdbs, optional: true
@@ -80,9 +82,6 @@ process FilterSeq {
     path ("seq_metrics_${task.index}.jsonl"), topic: metadata_ch_fold_seq
 
     script:
-    def maxScore = params.seq_method == 'mpnn' ? params.mpnn_max_score : params.fampnn_max_psce
-    def maxScoreParam = maxScore != null ? "--max-score ${maxScore}" : ''
-    def seqParams = Utils.formatFilterParams(params, "seq", ["min_ext_coef", "max_ext_coef", "min_pi", "max_pi"])
 
     """    
     python /scripts/filter_seq.py \
