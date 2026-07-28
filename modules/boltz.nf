@@ -176,6 +176,7 @@ process FilterBoltz {
 
     input:
     tuple path(pdb_files), path(json_files)
+    val(paramString)
 
     output:
     path ("output/*.pdb"), emit: pdbs, optional: true
@@ -183,28 +184,6 @@ process FilterBoltz {
     path ("filtered.jsonl"), emit: jsonl, optional: true
 
     script:
-    def paramString = Utils.formatFilterParams(
-        params,
-        "boltz",
-        [
-            "max_rmsd_overall",
-            "max_rmsd_binder",
-            "max_rmsd_target",
-            "min_conf_score",
-            "min_ptm",
-            "min_ptm_binder",
-            "min_ptm_target",
-            "min_ptm_interface",
-            "min_plddt",
-            "min_plddt_interface",
-            "max_pde",
-            "max_pde_interface",
-            "min_ipSAE_min",
-            "min_LIS",
-            "min_pDockQ2_min",
-            "max_pae_interaction",
-        ],
-    )
 
     """
     python -u /scripts/filter_boltz.py \\
