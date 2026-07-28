@@ -227,7 +227,7 @@ workflow {
                 log.info("* Redesign inpaint seq = ${params.bg_redesign_inpaint_seq}")
             }
             if (params.bg_flexible_residues){
-                log.info("* Flexible target residues = ${params.bg_flexible_residues}")
+                log.info("* Flexible residues = ${params.bg_flexible_residues}")
             }
 
             // Collect input files
@@ -235,9 +235,9 @@ workflow {
 
             // Copy input files to output directory
             inputFiles.each { inputFile ->
-                "rsync -r ${inputFile} ${inputsDir}/.".execute()
+                inputFile.copyTo(inputsDir.resolve(inputFile.name))
             }
-
+            
             // Create channel with items for requested designs
             bg_ch = Channel
                 .fromList((0..<num_batches))
