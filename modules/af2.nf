@@ -16,7 +16,7 @@ process RunAF2 {
 
     script:
     def jaxCompilationCacheExport = params.af2_jax_compilation_cache_dir \
-        ? "export JAX_COMPILATION_CACHE_DIR=\"${params.af2_jax_compilation_cache_dir}\"" \
+        ? 'export JAX_COMPILATION_CACHE_DIR="/af2_jax_compilation_cache"' \
         : ''
 
     """
