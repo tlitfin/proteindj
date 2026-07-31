@@ -88,7 +88,7 @@ workflow {
     println("╚═╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝╚═╝  ╚═══╝╚═════╝  ╚════╝ ")
     println("                   ProteinDJ Protein Design Pipeline                   ")
     println("         Developers: Dylan Silke, Josh Hardy, Julie Iskander,          ")
-    println("                       Thomas Litfin, David Ladd                       ")
+    println("                  Junqi Pan, Thomas Litfin, David Ladd                 ")
     println("***********************************************************************")
     println("* Pipeline Mode: ${params.design_mode}")
     println("* Number of designs: ${num_designs}")
