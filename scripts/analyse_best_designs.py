@@ -540,14 +540,14 @@ def compute_prodigy_scores(pdb_path, chain1, chain2):
 # H-bond donor/acceptor atom names by residue type (heavy atoms only).
 # Backbone N is donor, backbone O is acceptor for all residues.
 SIDECHAIN_DONORS = {
-    'ARG': ('NE', 'NH1', 'NH2'), 'ASN': ('ND2',), 'GLN': ('NE2',),
-    'HIS': ('ND1', 'NE2'), 'LYS': ('NZ',), 'SER': ('OG',),
+    'ARG': ('NE', 'NH1', 'NH2'), 'ASN': ('ND2',), 'CYS': ('SG',),
+    'GLN': ('NE2',), 'HIS': ('ND1', 'NE2'), 'LYS': ('NZ',), 'SER': ('OG',),
     'THR': ('OG1',), 'TRP': ('NE1',), 'TYR': ('OH',),
 }
 SIDECHAIN_ACCEPTORS = {
-    'ASN': ('OD1',), 'ASP': ('OD1', 'OD2'), 'GLN': ('OE1',),
-    'GLU': ('OE1', 'OE2'), 'HIS': ('ND1', 'NE2'), 'SER': ('OG',),
-    'THR': ('OG1',), 'TYR': ('OH',),
+    'ASN': ('OD1',), 'ASP': ('OD1', 'OD2'), 'CYS': ('SG',), 'GLN': ('OE1',),
+    'GLU': ('OE1', 'OE2'), 'HIS': ('ND1', 'NE2'), 'MET': ('SD',),
+    'SER': ('OG',), 'THR': ('OG1',), 'TYR': ('OH',),
 }
 
 
