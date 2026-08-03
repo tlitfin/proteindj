@@ -55,8 +55,14 @@ def process_file_pair(json_path, pdb_path):
     with open(json_path) as f:
         data = json.load(f)
     
-    # Get indices where sequence was fixed (True)
-    inpaint_seq = data.get('rfd_inpaint_seq', [])
+    # Get indices where sequence was fixed (True). Only one of these keys will be present,
+    # depending on which fold design tool (RFdiffusion, BindCraft, BoltzGen) produced this fold.
+    inpaint_seq = (
+        data.get('rfd_inpaint_seq')
+        or data.get('bc_inpaint_seq')
+        or data.get('bg_inpaint_seq')
+        or []
+    )
     fixed_indices = [i for i, val in enumerate(inpaint_seq) if val]
     
     # Get chain residue mapping from PDB

@@ -10,6 +10,7 @@ REGISTRY="oras://ghcr.io/papenfusslab/proteindj"
 CONTAINERS=(
     "bindcraft"
     "boltz2"
+    "boltzgen"
     "dl_binder_design"
     "fampnn"
     "python_tools"

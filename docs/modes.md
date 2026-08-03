@@ -17,6 +17,10 @@ Due to the creative nature of protein design and the complexity of RFdiffusion t
 - [**binder_partialdiff**](#mode-bindpartdiff) – partial diffusion of a binder from an input PDB
 - [**bindcraft_denovo**](#mode-bindcraft) - hallucination of a binder using BindCraft
 
+[**BoltzGen design**](#boltzgendesign)
+- [**boltzgen_denovo**](#mode-boltzgendenovo) – generative design of new binders against a target using BoltzGen
+- [**boltzgen_redesign**](#mode-boltzgenredesign) – redesign/rediffusion of an existing binder using BoltzGen
+
 ## Monomer Design <a name="monomerdesign"></a>
 
 ### Monomer De Novo Mode (monomer_denovo) <a name="mode-monomerdenovo"></a>
@@ -411,5 +415,136 @@ bindcraft_denovo {
 BindCraft offers more advanced settings and several protocols are available with preset settings. If you are trying to design beta-sheeted binders try setting `bc_design_protocol` to `'betasheet'`. There is also a protocol for peptide design `bc_design_protocol = 'peptide'`. If your target protein has flexible regions you can also try `bc_template_protocol = 'flexible'`, which will allow for larger changes to target protein conformation during binder design iterations. As implemented in the BindCraft design pipeline, by default we preserve/fix the sequence of binder residues near the target interface when performing downstream sequence design, but this behaviour can be disabled by setting `bc_fix_interface_residues = false`. 
 
 For more details on BindCraft, see the official BindCraft [GitHub](https://github.com/martinpacesa/BindCraft) and [publication](https://doi.org/10.1038/s41586-025-09429-6). Note that since we are skipping the internal MPNN and AF2 prediction steps of BindCraft and using our own implementation, some of the advanced settings and filtering settings described will not be relevant for ProteinDJ. Refer to the ProteinDJ [Parameter Guide](docs/parameters.md) and [Filtering Guide](docs/parameters.md/#filtering-parameters) for which options are available here.
+
+## BoltzGen Design <a name="boltzgendesign"></a>
+
+[BoltzGen](https://github.com/HannesStark/boltzgen) is an all-atom generative model that can design binders directly against a target structure (`boltzgen_denovo`), or redesign/rediffuse part of an existing binder (`boltzgen_redesign`). Unlike RFdiffusion/BindCraft, BoltzGen's design step does not require separate sequence design or structure prediction outputs to be treated as a proposal - it produces both backbone and an initial sequence together, which ProteinDJ still passes through its usual sequence design, structure prediction, and analysis stages for consistency with the other modes.
+
+### BoltzGen De Novo Mode (boltzgen_denovo) <a name="mode-boltzgendenovo"></a>
+
+BoltzGen de novo mode designs a new binder (chain A) against a fixed target taken from your input PDB.
+
+At minimum, you need to provide an input PDB and a design length for the binder:
+
+```
+boltzgen_denovo {
+    params {
+        design_mode = 'boltzgen_denovo'
+        design_length = '60-100'
+        input_pdb = './benchmarkdata/5o45_pd-l1.pdb'
+    }
+}
+```
+
+By default, all chains in `input_pdb` are treated as the target. Guide binding location with `hotspot_residues` (comma-separated, chain-qualified, e.g. `'A56,A115,A123'`) and/or mark residues the binder should avoid with `bg_not_binding_residues` (comma-separated, chain-qualified ranges, e.g. `'A200,A210-215'`):
+
+```
+boltzgen_denovo {
+    params {
+        design_mode = 'boltzgen_denovo'
+        design_length = '60-100'
+        input_pdb = './benchmarkdata/5o45_pd-l1.pdb'
+        hotspot_residues = 'A56,A115,A123'
+        bg_not_binding_residues = 'A98'
+    }
+}
+```
+
+If part of your target is flexible or disordered (e.g. loops or an IDR) and you don't want BoltzGen to condition on that region's structure, mark it with `bg_flexible_residues`. This accepts a comma-separated list of contiguous ranges (`'A10-13'`), single residues (`'A16'`), or whole chains (`'B'`):
+
+```
+boltzgen_denovo {
+    params {
+        design_mode = 'boltzgen_denovo'
+        design_length = '60-100'
+        input_pdb = './benchmarkdata/5o45_pd-l1.pdb'
+        hotspot_residues = 'A56,A115,A123'
+        bg_flexible_residues = 'A17-20'
+    }
+}
+```
+
+### BoltzGen Redesign Mode (boltzgen_redesign) <a name="mode-boltzgenredesign"></a>
+
+BoltzGen redesign mode reworks an existing chain A binder while keeping the remaining target chain(s) of `input_pdb` fixed. This is useful for improving or diversifying an existing binder without starting from scratch, and can optionally change the binder's architecture (inserting/deleting residues) as well as its sequence and/or structural flexibility.
+
+At least one of `bg_redesign_spec`, `bg_redesign_inpaint_seq`, or `bg_flexible_residues` must be set in this mode - otherwise chain A would be left completely unchanged, which is a hard error (wasted computation).
+
+**Changing the architecture with `bg_redesign_spec`**
+
+`bg_redesign_spec` describes the new chain A architecture as an ordered, comma-separated list of tokens:
+- Keep token `A<start>-<end>` or `A<n>` - a contiguous run of original chain A residues (PDB author numbering) to retain as-is (sequence + structure). Keep tokens must be strictly ascending/non-overlapping.
+- Insert token `<n>` (exact count) or `<min>-<max>` (sampled range) - bare digit(s), no chain letter. Adds that many brand-new, fully designed residues at this position.
+
+Any original chain A residue not covered by a keep token (leading, trailing, or between two keep tokens) is implicitly deleted. For example, to insert 7-10 new residues at the N-terminus, keep residues A1-60, insert 5 new residues, keep A70-100 (implicitly deleting A61-69), then append 10 new residues at the C-terminus:
+
+```
+boltzgen_redesign {
+    params {
+        design_mode = 'boltzgen_redesign'
+        input_pdb = './lib/examplebinder.pdb'
+        bg_redesign_spec = '7-10,A1-60,5,A70-100,10'
+    }
+}
+```
+
+If `bg_redesign_spec` is null, chain A's architecture (length) is left unchanged.
+
+**Redesigning the sequence with `bg_redesign_inpaint_seq`**
+
+`bg_redesign_inpaint_seq` marks chain A residues - within those kept by `bg_redesign_spec` - whose sequence is allowed to change while their structure stays fixed/conditioned (comma-separated ranges referencing chain A only, e.g. `'A10-50,A60'`):
+
+```
+boltzgen_redesign {
+    params {
+        design_mode = 'boltzgen_redesign'
+        input_pdb = './lib/examplebinder.pdb'
+        bg_redesign_inpaint_seq = 'A60-88'
+    }
+}
+```
+
+**Freeing up structure with `bg_flexible_residues`**
+
+`bg_flexible_residues` marks residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Unlike `bg_redesign_inpaint_seq`, it can reference any chain, including chain A residues kept by `bg_redesign_spec`:
+
+```
+boltzgen_redesign {
+    params {
+        design_mode = 'boltzgen_redesign'
+        input_pdb = './lib/examplebinder.pdb'
+        bg_flexible_residues = 'A60-88'
+    }
+}
+```
+
+Combining `bg_redesign_inpaint_seq` and `bg_flexible_residues` on the same chain A residues reproduces full redesign (both structure and sequence change) for that region, while everything else stays fixed:
+
+```
+boltzgen_redesign {
+    params {
+        design_mode = 'boltzgen_redesign'
+        input_pdb = './lib/examplebinder.pdb'
+        bg_redesign_inpaint_seq = 'A60-88'
+        bg_flexible_residues = 'A60-88'
+    }
+}
+```
+
+As with `boltzgen_denovo`, `hotspot_residues`/`bg_not_binding_residues` can be used to guide/restrict binding location - these apply to the fixed non-A target chain(s):
+
+```
+boltzgen_redesign {
+    params {
+        design_mode = 'boltzgen_redesign'
+        input_pdb = './lib/examplebinder.pdb'
+        bg_redesign_inpaint_seq = 'A60-88'
+        bg_flexible_residues = 'A60-88'
+        hotspot_residues = 'B56,B115,B123'
+    }
+}
+```
+
+For more details on BoltzGen, see the official [GitHub](https://github.com/HannesStark/boltzgen).
 
 [⬅️ Back to Main README](../README.md)
