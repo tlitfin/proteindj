@@ -344,6 +344,12 @@
           "hidden": true,
           "description": "Additional configuration parameters to pass to AlphaFold2 Initial-Guess that are not externalised in Nextflow. e.g. '-recycle 3'"
         },
+        "af2_jax_compilation_cache_dir": {
+          "type": "string",
+          "hidden": true,
+          "format": "directory-path",
+          "description": "Optional existing path for the persistent JAX compilation cache used by AlphaFold2. Relative paths are resolved against the workflow launch directory. The path is bind-mounted into the container. When unset, JAX_COMPILATION_CACHE_DIR is not set."
+        },
         "boltz_recycling_steps": {
           "type": "integer",
           "default": 3,
