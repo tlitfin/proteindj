@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# RFdiffusion, AlphaFold2, and Boltz-2 Model Downloader
+# RFdiffusion, AlphaFold2, Boltz-2, and BoltzGen Model Downloader
 # This script downloads all required models for protein prediction pipelines
-# Total download size: ~15.0 GB
+# Total download size: ~16 GB
 
 set -e  # Exit on any error
 
@@ -85,7 +85,7 @@ verify_file() {
 }
 
 print_status "Starting model downloads..."
-print_status "Total expected download size: ~15.2 GB. Final size: ~7.0 GB"
+print_status "Total expected download size: ~19.2 GB. Final size: ~16.0 GB"
 print_status "This may take a while depending on your internet connection."
 
 # ============================================================================
@@ -120,40 +120,50 @@ cd ../..
 print_success "RFdiffusion models download completed!"
 
 # ============================================================================
-# AlphaFold2 Models (~5.2 GB)
+# AlphaFold2 Models (~5.3 GB)
 # ============================================================================
 
-print_status "Downloading AlphaFold2 models (~5.2 GB)..."
+print_status "Downloading AlphaFold2 models (~5.3 GB)..."
 mkdir -p models/af2 && cd models/af2
 
 AF2_URL="https://storage.googleapis.com/alphafold/alphafold_params_2022-12-06.tar"
 AF2_FILE="alphafold_params_2022-12-06.tar"
+AF2_EXPECTED_NPZ_COUNT=15
 
-if [ -f "$AF2_FILE" ]; then
-    print_success "$AF2_FILE already exists, skipping download..."
-else
-    download_with_retry "$AF2_URL" "$AF2_FILE" || exit 1
-fi
+# The tar extracts .npz files directly into this directory (no "params" subfolder),
+# so check the actual extracted files rather than a directory that never exists.
+af2_npz_count=$(ls -1 params_model_*.npz 2>/dev/null | wc -l)
 
-# Extract if not already extracted
-if [ -d "params" ]; then
+if [ "$af2_npz_count" -eq "$AF2_EXPECTED_NPZ_COUNT" ]; then
     print_success "AlphaFold2 params already extracted, skipping..."
 else
+    if [ -f "$AF2_FILE" ]; then
+        print_success "$AF2_FILE already exists, skipping download..."
+    else
+        download_with_retry "$AF2_URL" "$AF2_FILE" || exit 1
+    fi
+
     print_status "Extracting AlphaFold2 parameters..."
     tar --extract --verbose --file="$AF2_FILE" || exit 1
-    rm -f alphafold_params_2022-12-06.tar
 
-    print_success "AlphaFold2 parameters extracted!"
+    af2_npz_count=$(ls -1 params_model_*.npz 2>/dev/null | wc -l)
+    if [ "$af2_npz_count" -eq "$AF2_EXPECTED_NPZ_COUNT" ]; then
+        rm -f "$AF2_FILE"
+        print_success "AlphaFold2 parameters extracted!"
+    else
+        print_error "AlphaFold2 extraction incomplete: expected $AF2_EXPECTED_NPZ_COUNT .npz files, found $af2_npz_count. Keeping $AF2_FILE for retry."
+        exit 1
+    fi
 fi
 
 cd ../..
 print_success "AlphaFold2 models download completed!"
 
 # ============================================================================
-# Boltz-2 Models (~6.0 GB)
+# Boltz-2 Models (~2.5 GB)
 # ============================================================================
 
-print_status "Downloading Boltz-2 models (~6.0 GB)..."
+print_status "Downloading Boltz-2 models (~2.5 GB)..."
 mkdir -p models/boltz && cd models/boltz
 
 # Array of Boltz-2 model URLs and filenames
@@ -188,10 +198,50 @@ cd ../..
 print_success "Boltz-2 models download completed!"
 
 # ============================================================================
-# ProteinMPNN Model Weights (~0.2 GB)
+# BoltzGen Models (~4.0 GB)
+# ============================================================================
+# Only the design-step artifacts are downloaded here (the diffusion checkpoints
+# and the molecule/CCD dataset). BoltzGen's inverse-folding/folding/affinity
+# checkpoints are not needed since ProteinDJ only runs BoltzGen's design step
+# and re-designs sequences itself downstream (MPNN/FAMPNN).
+#
+# These files are served from the Hub's Xet storage backend. Plain wget/curl
+# only ever reach a slow single-connection compatibility bridge for Xet-backed
+# files, so we use the `hf` CLI (huggingface_hub + hf-xet) instead, which
+# fetches chunks in parallel and is dramatically faster.
+
+print_status "Downloading BoltzGen models..."
+mkdir -p models/boltzgen
+
+if ! command_exists hf; then
+    print_warning "'hf' CLI not found. Installing huggingface_hub (with hf-xet for fast parallel downloads)..."
+    pip install -U "huggingface_hub[hf_xet]" || {
+        print_error "Failed to install huggingface_hub. Install manually with: pip install -U 'huggingface_hub[hf_xet]'"
+        exit 1
+    }
+fi
+
+if [ -f "models/boltzgen/boltzgen1_diverse.ckpt" ] && [ -f "models/boltzgen/boltzgen1_adherence.ckpt" ]; then
+    print_success "BoltzGen design checkpoints already exist, skipping..."
+else
+    hf download boltzgen/boltzgen-1 boltzgen1_diverse.ckpt boltzgen1_adherence.ckpt \
+        --local-dir models/boltzgen || exit 1
+fi
+
+if [ -f "models/boltzgen/mols.zip" ]; then
+    print_success "models/boltzgen/mols.zip already exists, skipping..."
+else
+    hf download boltzgen/inference-data mols.zip \
+        --repo-type dataset --local-dir models/boltzgen || exit 1
+fi
+
+print_success "BoltzGen models download completed!"
+
+# ============================================================================
+# ProteinMPNN Model Weights (~0.1 GB)
 # ============================================================================
 
-print_status "Downloading ProteinMPNN model weights (~0.2 GB)..."
+print_status "Downloading ProteinMPNN model weights (~0.1 GB)..."
 
 # Vanilla ProteinMPNN weights
 mkdir -p models/mpnn/vanilla_model_weights && cd models/mpnn/vanilla_model_weights
@@ -269,6 +319,14 @@ else
     print_error "Boltz-2: Missing required files (.ckpt files or mols directory)"
 fi
 
+# Check BoltzGen models
+print_status "Checking BoltzGen models..."
+if [ -f "models/boltzgen/boltzgen1_diverse.ckpt" ] && [ -f "models/boltzgen/boltzgen1_adherence.ckpt" ] && [ -f "models/boltzgen/mols.zip" ]; then
+    print_success "BoltzGen: Found design checkpoints and mols.zip"
+else
+    print_error "BoltzGen: Missing required files (boltzgen1_diverse.ckpt, boltzgen1_adherence.ckpt or mols.zip)"
+fi
+
 # Check ProteinMPNN weights
 print_status "Checking ProteinMPNN weights..."
 vanilla_count=$(ls -1 models/mpnn/vanilla_model_weights/*.pt 2>/dev/null | wc -l)
@@ -285,6 +343,7 @@ print_status "Download Summary:"
 echo "  - RFdiffusion models: $(du -sh models/rfd 2>/dev/null | cut -f1 || echo 'N/A')"
 echo "  - AlphaFold2 models:  $(du -sh models/af2 2>/dev/null | cut -f1 || echo 'N/A')"
 echo "  - Boltz-2 models:     $(du -sh models/boltz 2>/dev/null | cut -f1 || echo 'N/A')"
+echo "  - BoltzGen models:    $(du -sh models/boltzgen 2>/dev/null | cut -f1 || echo 'N/A')"
 echo "  - ProteinMPNN models: $(du -sh models/mpnn 2>/dev/null | cut -f1 || echo 'N/A')"
 echo "  - Total size:         $(du -sh models/ 2>/dev/null | tail -1 | cut -f1 || echo 'N/A')"
 
@@ -294,3 +353,4 @@ echo "  - models/rfd = './models/rfd'"
 echo "  - models/mpnn = './models/mpnn'"
 echo "  - models/af2 = './models/af2'"
 echo "  - models/boltz = './models/boltz'"
+echo "  - models/boltzgen = './models/boltzgen'"

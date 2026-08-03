@@ -1,0 +1,101 @@
+Bootstrap: docker
+From: nvidia/cuda:12.9.2-base-ubuntu24.04
+
+%environment
+    export PATH="/opt/venv/bin:$PATH"
+    export VIRTUAL_ENV="/opt/venv"
+    export CUDA_HOME=/usr/local/cuda
+    export HF_HOME=/cache
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    export PIP_NO_CACHE_DIR=1
+    export PYTHONDONTWRITEBYTECODE=1
+    export PYTHONUNBUFFERED=1
+    
+    # Update and install system packages
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        python3.12 \
+        python3.12-dev \
+        python3-pip \
+        python3-venv \
+        gcc \
+        git \
+        libgl1
+
+    # create and activate virtual environment
+    python3 -m venv /opt/venv
+    . /opt/venv/bin/activate
+
+    # Set up pip
+    pip install --upgrade pip setuptools setuptools_scm wheel
+
+    # Download BoltzGen
+    git clone https://github.com/JoshuaMHardy/boltzgen.git && cd /boltzgen
+
+    # Install the application
+    pip install .
+
+    # Create cache directory
+    mkdir -p /cache
+
+    # Cleanup
+    rm -rf /var/lib/apt/lists/*
+    apt-get autoremove -y
+    apt-get clean
+
+%runscript
+    exec boltzgen "$@"
+
+%test
+    . /opt/venv/bin/activate
+    boltzgen --help
+
+%labels
+    Author JoshuaHardy
+    Version 3.0
+    Description "Apptainer container for BoltzGen with CUDA 12.9 runtime"
+
+%help
+    This container runs BoltzGen with CUDA 12.9 support.
+    
+    === BASIC USAGE ===
+    
+    Run BoltzGen:
+        apptainer run --nv boltzgen.sif [boltzgen arguments]
+    
+    Execute commands inside container:
+        apptainer exec --nv boltzgen.sif boltzgen [arguments]
+    
+    Interactive shell:
+        apptainer shell --nv boltzgen.sif
+    
+    Note: The --nv flag is required to enable NVIDIA GPU support.
+    
+    === MODEL WEIGHTS ===
+
+    # Create cache directory on host
+    mkdir -p boltzgen_cache
+    
+    # Run with bind mount to external cache
+    apptainer run --nv \
+                    --bind boltzgen_cache:/cache \
+                    boltzgen.sif download all --cache /cache
+    
+    # Use the cached weights for inference
+    apptainer run --nv \
+                    --bind boltzgen_cache:/cache \
+                    --bind $(pwd)/output:/output \
+                    boltzgen.sif run config.yaml --output /output
+    
+    === CACHE DIRECTORY ===
+    
+    The container uses /cache as the default location for model weights.
+    You can override this with:
+    
+    1. Bind mount (recommended for sharing cache across runs):
+        apptainer run --nv --bind /host/path:/cache boltzgen.sif [args]
+    
+    2. Environment variable:
+        apptainer run --nv --env HF_HOME=/custom/path boltzgen.sif [args]

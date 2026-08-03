@@ -374,6 +374,48 @@ class BCMetadataConverter(MetadataConverter):
             logging.error(f"Failed to create JSONL file {output_file}: {e}")
             return False
 
+class BGMetadataConverter(MetadataConverter):
+    def _parse_metadata(self, input_file: Path) -> Iterator[Dict[str, Any]]:
+        """
+        Parse BoltzGen analysis JSON files and yield their contents directly.
+        
+        Args:
+            input_file: Path to BoltzGen analysis JSON file
+            
+        Yields:
+            Dictionary record with pre-formatted fields from analysis script
+        """
+        try:
+            with open(input_file, 'r') as f:
+                data = json.load(f)
+                yield data
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in {input_file}: {e}")
+        except Exception as e:
+            logging.error(f"Error processing {input_file}: {e}")
+
+    def save_jsonl_file(self, input_files: list, output_file: Path) -> bool:
+        """
+        Convert multiple JSON files to a single JSONL file with selected metadata.
+        
+        Args:
+            input_files: List of JSON file paths
+            output_file: Path to save the JSONL file
+            
+        Returns:
+            True if conversion succeeded, False otherwise
+        """
+        try:
+            with open(output_file, 'w') as out_file:
+                for input_file in input_files:
+                    for record in self._parse_metadata(input_file):
+                        json.dump(record, out_file)
+                        out_file.write('\n')
+            return True
+        except Exception as e:
+            logging.error(f"Failed to create JSONL file {output_file}: {e}")
+            return False
+
 class BoltzMetadataConverter(MetadataConverter):
     def _parse_metadata(self, input_file: Path) -> Iterator[Dict[str, Any]]:
         """
@@ -568,8 +610,8 @@ def main():
     parser.add_argument('--input_ext', '-e', 
                         help='Input filename extension. Only applies if using an input directory e.g. ".json"')
     parser.add_argument('--converter', '-c', default="rfd",
-                        choices=['af2','bc','boltz','fampnn','mpnn','rfd'], 
-                        help='Converter to use. e.g. af2, bc, boltz, fampnn, mpnn,rfd')
+                        choices=['af2','bc','bg','boltz','fampnn','mpnn','rfd'], 
+                        help='Converter to use. e.g. af2, bc, bg, boltz, fampnn, mpnn,rfd')
     parser.add_argument('--output_dir', 
                         help='Output directory path')
     parser.add_argument('--output_file', '-o', default='metadata.jsonl', 
@@ -583,6 +625,7 @@ def main():
     converters = {
         "af2": AF2MetadataConverter,
         "bc": BCMetadataConverter,
+        "bg": BGMetadataConverter,
         "boltz": BoltzMetadataConverter,
         "fampnn": FAMPNNMetadataConverter,
         "mpnn": MPNNMetadataConverter,
@@ -623,6 +666,25 @@ def main():
         
         return
     if args.converter == 'bc' and args.input_dir:
+        input_dir = Path(args.input_dir)
+        output_dir = Path(args.output_dir) if args.output_dir else input_dir
+        output_dir.mkdir(exist_ok=True, parents=True)
+        
+        extension = args.input_ext if args.input_ext.startswith('.') else '.' + args.input_ext
+        input_files = list(input_dir.glob(f'*{extension}'))
+        
+        if not input_files:
+            print(f"No {extension} files found in {input_dir}")
+            return
+        
+        # Create a JSONL file with selected metadata
+        output_jsonl = Path(args.output_file)
+        if selected_converter.save_jsonl_file(input_files, output_jsonl):
+            print(f"Successfully created JSONL file with selected metadata at {output_jsonl}")
+        else:
+            print(f"Failed to create JSONL file at {output_jsonl}")
+        return
+    if args.converter == 'bg' and args.input_dir:
         input_dir = Path(args.input_dir)
         output_dir = Path(args.output_dir) if args.output_dir else input_dir
         output_dir.mkdir(exist_ok=True, parents=True)

@@ -225,6 +225,38 @@
                 }
             }
         },
+        "boltzgen_advanced_parameters": {
+            "title": "BoltzGen Advanced Parameters",
+            "type": "object",
+            "description": "Advanced parameters to control the behaviour of BoltzGen.",
+            "default": "",
+            "properties": {
+                "bg_not_binding_residues": {
+                    "type": "string",
+                    "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
+                    "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
+                    "hidden": true
+                },
+                "bg_redesign_spec": {
+                    "type": "string",
+                    "description": "Chain A (binder) architecture spec for boltzgen_redesign: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, the whole chain A architecture (length) is left unchanged.",
+                    "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$",
+                    "hidden": true
+                },
+                "bg_redesign_inpaint_seq": {
+                    "type": "string",
+                    "description": "Chain A (binder) residues, within those kept by bg_redesign_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'.",
+                    "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$",
+                    "hidden": true
+                },
+                "bg_flexible_residues": {
+                    "type": "string",
+                    "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_redesign mode this may also reference chain A residues kept by bg_redesign_spec.",
+                    "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
+                    "hidden": true
+                }
+            }
+        },
         "rfdiffusion_advanced_parameters": {
             "title": "RFdiffusion Advanced Parameters",
             "type": "object",
@@ -853,6 +885,9 @@
         },
         {
             "$ref": "#/definitions/bindcraft_advanced_parameters"
+        },
+        {
+            "$ref": "#/definitions/boltzgen_advanced_parameters"
         },
         {
             "$ref": "#/definitions/rfdiffusion_advanced_parameters"

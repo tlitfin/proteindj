@@ -11,6 +11,7 @@ ProteinDJ is a Nextflow pipeline for protein design that installs and utilises m
 - BindCraft (from https://github.com/martinpacesa/BindCraft) and FreeBindCraft (https://github.com/cytokineking/FreeBindCraft)
 - BioPython (from https://biopython.org/)
 - Boltz-2 (from https://github.com/jwohlwend/boltz)
+- BoltzGen (from https://github.com/HannesStark/boltzgen)
 - Full-Atom MPNN (from https://github.com/richardshuai/fampnn)
 - HyperMPNN (from https://github.com/meilerlab/HyperMPNN)
 - OpenMM (from https://openmm.org/) and PDBFixer (from https://github.com/openmm/pdbfixer)
@@ -62,7 +63,7 @@ Apptainer will automatically fetch containers as needed during the Nextflow run 
 
 The ProteinDJ consists of four stages:
 
-1. Fold Design - Using RFdiffusion or BindCraft
+1. Fold Design - Using RFdiffusion, BindCraft, or BoltzGen
 2. Sequence Design - Using ProteinMPNN or Full-Atom MPNN
 3. Structure Prediction - Using AlphaFold2 Initial Guess or Boltz-2
 4. Analysis and Reporting - Using PDBFixer/OpenMM, arpeggia, PRODIGY, and BioPython
@@ -80,6 +81,8 @@ Due to the creative nature of protein design and the complexity of RFdiffusion t
 - **binder_motifscaff** – diffusion of binding motifs in input scaffolds
 - **binder_partialdiff** – partial diffusion of a binder from an input PDB
 - **bindcraft_denovo** - hallucination of new binders using BindCraft
+- **boltzgen_denovo** – generative design of new binders against a target using BoltzGen
+- **boltzgen_redesign** – redesign/rediffusion of an existing binder using BoltzGen
 
 <img src="img/modes_overview.png" height="720">
 
@@ -87,7 +90,7 @@ All the settings and parameters for ProteinDJ can be found in the `nextflow.conf
 
 | Parameter         | Example Value      | Description                                                                                                                                                                                     |
 | ----------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design_mode`        | `'monomer_denovo'` | Pipeline mode. Choose from 'monomer_denovo', 'monomer_foldcond', 'monomer_motifscaff', 'monomer_partialdiff', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', or 'bindcraft_denovo'. |
+| `design_mode`        | `'monomer_denovo'` | Pipeline mode. Choose from 'monomer_denovo', 'monomer_foldcond', 'monomer_motifscaff', 'monomer_partialdiff', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'bindcraft_denovo', 'boltzgen_denovo', or 'boltzgen_redesign'. |
 | `num_designs` | `8`                | Number of designs to generate using RFdiffusion or Bindcraft.                                                                                                                                                |
 | `seqs_per_design` | `8`                | Number of sequences to generate per design.                                                                                                                                         |
 | `out_dir`         | `'./pdj_results'`  | Output directory for results. Existing results in this directory will be overwritten.                                                                                                           |

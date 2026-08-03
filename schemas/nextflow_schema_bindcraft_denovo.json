@@ -208,6 +208,13 @@
         }
       }
     },
+    "boltzgen_advanced_parameters": {
+      "title": "BoltzGen Advanced Parameters",
+      "type": "object",
+      "description": "Advanced parameters to control the behaviour of BoltzGen.",
+      "default": "",
+      "properties": {}
+    },
     "rfdiffusion_advanced_parameters": {
       "title": "RFdiffusion Advanced Parameters",
       "type": "object",
@@ -798,6 +805,9 @@
     },
     {
       "$ref": "#/definitions/bindcraft_advanced_parameters"
+    },
+    {
+      "$ref": "#/definitions/boltzgen_advanced_parameters"
     },
     {
       "$ref": "#/definitions/rfdiffusion_advanced_parameters"

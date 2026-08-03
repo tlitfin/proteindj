@@ -15,6 +15,8 @@ MODE_REQUIRED_PARAMS = {
     'binder_motifscaff': ['input_pdb', 'rfd_contigs'],
     'binder_partialdiff': ['input_pdb', 'rfd_partial_diffusion_timesteps'],
     'bindcraft_denovo': ['input_pdb', 'design_length'],
+    'boltzgen_denovo': ['input_pdb', 'design_length'],
+    'boltzgen_redesign': ['input_pdb'],
     'custom': []  # Custom mode has no required mode-specific parameters
 }
 
@@ -128,7 +130,9 @@ def build_mode_schema(main_schema, mode, overrides):
                     "monomer_denovo",
                     "monomer_foldcond",
                     "monomer_motifscaff",
-                    "monomer_partialdiff"
+                    "monomer_partialdiff",
+                    "boltzgen_denovo",
+                    "boltzgen_redesign"
                 ]
                 # Preserve default if specified in CSV
                 if 'design_mode' in overrides and overrides['design_mode'] is not None:
