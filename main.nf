@@ -38,6 +38,18 @@ workflow {
         throw new IllegalArgumentException("--gpus must be >= 1")
     }
 
+    // Auto-create the AF2 JAX compilation cache dir since apptainer/singularity fail to bind-mount a missing path
+    if (params.af2_jax_compilation_cache_dir != null) {
+        def jaxCacheDir = launchDir.resolve(params.af2_jax_compilation_cache_dir.toString()).normalize()
+        if (jaxCacheDir.exists() && !jaxCacheDir.isDirectory()) {
+            throw new IllegalArgumentException("af2_jax_compilation_cache_dir (${jaxCacheDir}) exists but is not a directory")
+        }
+        jaxCacheDir.mkdirs()
+        if (!jaxCacheDir.exists()) {
+            throw new IllegalArgumentException("Failed to create af2_jax_compilation_cache_dir (${jaxCacheDir}). Check parent directory permissions.")
+        }
+    }
+
     def outputDirectory = params.out_dir
 
     VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'monomer_denovo', 'monomer_foldcond', 'monomer_motifscaff', 'monomer_partialdiff']
