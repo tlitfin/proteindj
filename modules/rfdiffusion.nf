@@ -46,7 +46,7 @@ process RunRFD {
     """
 
     input:
-    tuple val(batch_id), val(batch_size), val(design_startnum), val(mode), path(input_files), val(rfdContigs), path(target_adj), path(target_ss)
+    tuple val(batch_id), val(batch_size), val(design_startnum), val(mode), path(input_files), val(rfdCommand), path(target_adj), path(target_ss)
 
     output:
     path ("rfd_results/*.pdb"), emit: pdbs
@@ -55,9 +55,10 @@ process RunRFD {
     path ("rfd_metadata_${batch_id}.jsonl"), topic: metadata_ch_fold
 
     script:
+    // Note: rfdCommand is precomputed in the workflow body (main.nf) rather than here, so
+    // that the task cache is keyed only on this specific string rather than the entire
+    // global params object.
     def inference_log_filename = "rfd_${batch_id}.log"
-    def rfdParams = new RFDiffusionParams(params)
-    def rfdCommand = rfdParams.generateCommandString(rfdContigs)
     
     """
     echo "Running RFdiffusion for batch ${batch_id} in ${mode} mode"
@@ -77,6 +78,7 @@ process FilterFold {
 
     input:
     tuple path(pdb_files), path(json_files)
+    val(paramString)
 
     output:
     tuple path("filtered_output/*.pdb"), path("filtered_output/*.json"), emit: pdbs_jsons, optional: true
@@ -84,21 +86,6 @@ process FilterFold {
     path "filter_fold_*.log"
 
     script:
-    // Only pass parameters if filter values are provided
-    def paramString = Utils.formatFilterParams(
-        params,
-        "fold",
-        [
-            "min_ss",
-            "max_ss",
-            "min_helices",
-            "max_helices",
-            "min_strands",
-            "max_strands",
-            "min_rog",
-            "max_rog",
-        ],
-    )
 
     def num_processes = task.cpus - 1
     """
