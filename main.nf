@@ -50,6 +50,14 @@ workflow {
         error("Cannot use --run_fold_only with --skip_fold. These options are contradictory.")
     }
 
+    if (params.run_fold_only && params.rank_designs) {
+        error("--rank_designs cannot be used with --run_fold_only since no prediction metrics are generated to rank on.")
+    }
+
+    if (params.skip_fold_seq_pred && params.rank_designs) {
+        error("--rank_designs cannot be used with --skip_fold_seq_pred since no prediction metrics are generated to rank on.")
+    }
+
     // Validate ranking metric matches prediction method
     def ranking_metric = null
     if (params.rank_designs && params.ranking_metric) {
@@ -80,7 +88,7 @@ workflow {
     println("╚═╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝╚═╝  ╚═══╝╚═════╝  ╚════╝ ")
     println("                   ProteinDJ Protein Design Pipeline                   ")
     println("         Developers: Dylan Silke, Josh Hardy, Julie Iskander,          ")
-    println("                       Thomas Litfin, David Ladd                       ")
+    println("                  Junqi Pan, Thomas Litfin, David Ladd                 ")
     println("***********************************************************************")
     println("* Pipeline Mode: ${params.design_mode}")
     println("* Number of designs: ${num_designs}")
@@ -602,7 +610,7 @@ workflow {
         AnalysePredictions(analysis_input_pdbs)
 
         // Filtering of analysis results
-        FilterAnalysis(AnalysePredictions.out.jsonl, analysis_input_pdbs)
+        FilterAnalysis(AnalysePredictions.out.jsonl, AnalysePredictions.out.relaxed_pdbs)
 
         // Use placeholder PDB file if no designs survive filtering
         FilterAnalysis.out.pdbs

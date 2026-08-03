@@ -560,11 +560,6 @@
           "description": "Maximum radius of gyration (\u00c5) of predicted structure",
           "hidden": true
         },
-        "pr_max_tem": {
-          "type": "number",
-          "description": "Maximum total energy metric score (Rosetta Energy Units; lower indicates more stable designs)",
-          "hidden": true
-        },
         "pr_max_surfhphobics": {
           "type": "number",
           "description": "Maximum percentage of hydrophobic residues exposed on the surface",

@@ -662,22 +662,12 @@
         },
         "pr_max_intface_deltag": {
           "type": "number",
-          "description": "Maximum solvation free energy gain at interface (Rosetta Energy Units; lower is better)",
+          "description": "Maximum predicted binding free energy at the interface (PRODIGY IC-NIS model, kcal/mol; more negative is better)",
           "hidden": true
         },
         "pr_max_intface_deltagtobsa": {
           "type": "number",
           "description": "Maximum ratio of delta-G to buried surface area",
-          "hidden": true
-        },
-        "pr_min_intface_packstat": {
-          "type": "number",
-          "description": "Minimum packing quality of the interface (0-1 scale; higher is better)",
-          "hidden": true
-        },
-        "pr_max_tem": {
-          "type": "number",
-          "description": "Maximum total energy metric score (Rosetta Energy Units; lower indicates more stable designs)",
           "hidden": true
         },
         "pr_max_surfhphobics": {
