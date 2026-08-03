@@ -2,13 +2,9 @@
 
 import copy
 import json
-import os
 import re
-import shutil
-import tempfile
 import time
 import logging
-import numpy as np
 import polars as pl
 from functools import partial
 from multiprocessing import Pool
@@ -21,13 +17,15 @@ from openmm.app import ForceField, NoCutoff
 from openmm.app import PDBFile as OpenMMPDBFile
 from pdbfixer import PDBFixer
 from Bio import PDB
-from Bio.PDB import PDBParser, PDBIO, DSSP, Polypeptide
+from Bio.PDB import PDBParser, PDBIO, Polypeptide
 from Bio.PDB.NeighborSearch import NeighborSearch
 from Bio.PDB.SASA import ShrakeRupley
 from Bio.PDB.Structure import Structure
 from Bio.PDB.Model import Model
 from Bio.SeqUtils import seq1
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
+
+from metrics_utils import compute_dssp_chars_by_chain, count_ss_elements, calculate_rog
 
 def setup_logging():
     """Setup logging configuration."""
@@ -49,10 +47,6 @@ R_CHOTHIA = {"H": 1.20, "C": 1.70, "N": 1.55, "O": 1.52, "S": 1.80}
 
 # Hydrophobic amino acids (matches FreeBindCraft HYDROPHOBIC_AA_SET)
 HYDROPHOBIC_AA = frozenset("ACFGILMPVWY")
-
-# 8-state DSSP to 3-state mapping
-DSSP_HELIX = frozenset(('H', 'G', 'I'))
-DSSP_STRAND = frozenset(('E',))
 
 
 # ---------------------------------------------------------------------------
@@ -240,105 +234,6 @@ def _validate_relaxed_structure(orig_model, relaxed_model, chain_ids):
                 f"Relaxation changed residue count for chain {chain_id}: "
                 f"{orig_count} -> {relaxed_count}"
             )
-
-
-# ---------------------------------------------------------------------------
-# Secondary structure and radius of gyration
-# ---------------------------------------------------------------------------
-
-def _prepare_dssp_input(pdb_path):
-    """Ensure a PDB file is recognized as PDB format by mkdssp (>=4.0).
-
-    mkdssp>=4.0 decides whether to parse a file as PDB or mmCIF based on
-    whether it starts with a HEADER record; without one it assumes mmCIF and
-    fails. AF2/Boltz output PDBs have no HEADER line, so we prepend one to
-    a temporary copy when needed.
-
-    Returns a (path, tmp_path) tuple where path is what should be passed to
-    DSSP and tmp_path is the temporary file to clean up afterwards (None if
-    no temporary file was created).
-    """
-    pdb_path = Path(pdb_path)
-    with open(pdb_path) as f:
-        first_line = f.readline()
-
-    if first_line.startswith('HEADER'):
-        return str(pdb_path), None
-
-    fd, tmp_path = tempfile.mkstemp(suffix='.pdb', dir=pdb_path.parent)
-    with os.fdopen(fd, 'w') as dst, open(pdb_path) as src:
-        dst.write('HEADER\n')
-        shutil.copyfileobj(src, dst)
-
-    return tmp_path, tmp_path
-
-
-def count_secondary_structures(model, pdb_path, chain_id=None):
-    """Count secondary structure elements using BioPython DSSP + mkdssp.
-    If chain_id is provided, only counts SS for that chain.
-    """
-    dssp_path, tmp_path = _prepare_dssp_input(pdb_path)
-    try:
-        dssp_obj = DSSP(model, dssp_path, dssp="mkdssp")
-
-        if chain_id is not None:
-            target_chains = {chain_id}
-        else:
-            target_chains = {c.get_id() for c in model.get_chains()}
-
-        dssp_chars = []
-        for key in dssp_obj.keys():
-            if key[0] in target_chains:
-                ss = dssp_obj[key][2]
-                if ss in DSSP_HELIX:
-                    dssp_chars.append('H')
-                elif ss in DSSP_STRAND:
-                    dssp_chars.append('E')
-                else:
-                    dssp_chars.append('L')
-    finally:
-        if tmp_path is not None:
-            os.unlink(tmp_path)
-
-    helix_count = 0
-    strand_count = 0
-    current_helix = False
-    current_strand = False
-
-    for ss in dssp_chars:
-        if ss == 'H':
-            if not current_helix:
-                helix_count += 1
-                current_helix = True
-            current_strand = False
-        elif ss == 'E':
-            if not current_strand:
-                strand_count += 1
-                current_strand = True
-            current_helix = False
-        else:
-            current_helix = False
-            current_strand = False
-
-    return {
-        'pr_helices': helix_count,
-        'pr_strands': strand_count,
-        'pr_total_ss': helix_count + strand_count
-    }
-
-
-def calculate_rog(chain):
-    """Calculate mass-weighted radius of gyration for a chain or model."""
-    coords = np.array([atom.get_coord() for atom in chain.get_atoms()])
-    masses = np.array([atom.mass for atom in chain.get_atoms()])
-
-    if len(coords) == 0:
-        return {'pr_RoG': 0.0}
-
-    com = np.average(coords, axis=0, weights=masses)
-    diff = coords - com
-    rg = round(float(np.sqrt(np.sum(masses * np.sum(diff**2, axis=1)) / masses.sum())), 2)
-    return {'pr_RoG': rg}
 
 
 # ---------------------------------------------------------------------------
@@ -767,18 +662,26 @@ def calculate_seq_metrics(sequence):
 # Per-chain and whole-pose metric aggregation
 # ---------------------------------------------------------------------------
 
-def calculate_chain_metrics(model, chain_id, pdb_path):
-    """Calculate all metrics for a single chain."""
+def calculate_chain_metrics(model, chain_id, pdb_path, dssp_chars_by_chain):
+    """Calculate all metrics for a single chain.
+
+    `dssp_chars_by_chain` is the whole-structure DSSP result from a single
+    compute_dssp_chars_by_chain() call, shared across all chains so mkdssp
+    only runs once per PDB file.
+    """
     # Add suffix for metrics if not chain A
     suffix = '' if chain_id == 'A' else f'_{chain_id}'
 
     # Calculate secondary structure metrics
-    ss_metrics = count_secondary_structures(model, pdb_path, chain_id)
-    ss_metrics = {f'{k}{suffix}': v for k, v in ss_metrics.items()}
+    helix_count, strand_count = count_ss_elements(dssp_chars_by_chain.get(chain_id, []))
+    ss_metrics = {
+        f'pr_helices{suffix}': helix_count,
+        f'pr_strands{suffix}': strand_count,
+        f'pr_total_ss{suffix}': helix_count + strand_count,
+    }
 
     # Calculate RoG
-    rog_metrics = calculate_rog(model[chain_id])
-    rog_metrics = {f'{k}{suffix}': v for k, v in rog_metrics.items()}
+    rog_metrics = {f'pr_RoG{suffix}': calculate_rog(model[chain_id])}
 
     # Calculate surface chemistry
     surface_metrics = calculate_surface_chemistry(model, chain_id)
@@ -821,7 +724,7 @@ def calculate_whole_pose_metrics(model, pdb_path):
     surfhphobics = round(hydrophobic_sasa / total_sasa * 100.0, 1) if total_sasa > 0 else 0.0
 
     return {
-        'pr_RoG_total': rog_all['pr_RoG'],
+        'pr_RoG_total': rog_all,
         'pr_surfhphobics_total': surfhphobics,
     }
 
@@ -847,13 +750,17 @@ def process_single_pdb(pdb_path):
     _, model = parse_structure(relaxed_path)
     _validate_relaxed_structure(orig_model, model, chain_ids)
 
+    # Run mkdssp once regardless of chain count; per-chain counts are then
+    # derived from the cached result instead of re-running mkdssp per chain.
+    dssp_chars_by_chain = compute_dssp_chars_by_chain(model, relaxed_path)
+
     metrics = {'description': pdb_path.stem}
 
     # Handle metrics calculation based on design type
     if len(chain_ids) == 1:
         # Monomer design
         primary_chain = chain_ids[0]
-        chain_metrics = calculate_chain_metrics(model, primary_chain, relaxed_path)
+        chain_metrics = calculate_chain_metrics(model, primary_chain, relaxed_path, dssp_chars_by_chain)
         metrics.update(chain_metrics)
 
         # Calculate SAP scores for monomer
@@ -871,7 +778,7 @@ def process_single_pdb(pdb_path):
         metrics.update(interface_metrics)
 
         # Calculate chain metrics for binder chain only
-        chain_metrics = calculate_chain_metrics(model, 'A', relaxed_path)
+        chain_metrics = calculate_chain_metrics(model, 'A', relaxed_path, dssp_chars_by_chain)
         metrics.update(chain_metrics)
 
         # Calculate SAP scores for binder (alone and complex)
@@ -892,7 +799,7 @@ def process_single_pdb(pdb_path):
         total_ss = 0
 
         for chain_id in chain_ids:
-            chain_metrics = calculate_chain_metrics(model, chain_id, relaxed_path)
+            chain_metrics = calculate_chain_metrics(model, chain_id, relaxed_path, dssp_chars_by_chain)
 
             # Track secondary structure aggregates
             suffix = '' if chain_id == 'A' else f'_{chain_id}'

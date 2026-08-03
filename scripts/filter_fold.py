@@ -2,20 +2,15 @@ import argparse
 from pathlib import Path
 from multiprocessing import Pool
 import logging
-import os
 import sys
-import tempfile
 import uuid
 import json
 import shutil
 import re
 
-import numpy as np
-from Bio.PDB import PDBParser, DSSP
+from Bio.PDB import PDBParser
 
-# 8-state DSSP to 3-state mapping
-DSSP_HELIX = frozenset(('H', 'G', 'I'))
-DSSP_STRAND = frozenset(('E',))
+from metrics_utils import compute_dssp_chars_by_chain, count_ss_elements, calculate_rog
 
 def setup_logger():
     """Configure logging to output to both file and stdout"""
@@ -57,96 +52,6 @@ def get_chain_ids(model):
     return [chain.get_id() for chain in model.get_chains()]
 
 
-def _prepare_dssp_input(pdb_path):
-    """Ensure a PDB file is recognized as PDB format by mkdssp (>=4.0).
-
-    mkdssp>=4.0 decides whether to parse a file as PDB or mmCIF based on
-    whether it starts with a HEADER record; without one it assumes mmCIF and
-    fails. RFdiffusion output PDBs have no HEADER line, so we prepend one to
-    a temporary copy when needed.
-
-    Returns a (path, tmp_path) tuple where path is what should be passed to
-    DSSP and tmp_path is the temporary file to clean up afterwards (None if
-    no temporary file was created).
-    """
-    pdb_path = Path(pdb_path)
-    with open(pdb_path) as f:
-        first_line = f.readline()
-
-    if first_line.startswith('HEADER'):
-        return str(pdb_path), None
-
-    fd, tmp_path = tempfile.mkstemp(suffix='.pdb', dir=pdb_path.parent)
-    with os.fdopen(fd, 'w') as dst, open(pdb_path) as src:
-        dst.write('HEADER\n')
-        shutil.copyfileobj(src, dst)
-
-    return tmp_path, tmp_path
-
-
-def count_secondary_structures(model, pdb_path, chain_id=None):
-    """Count secondary structure elements using BioPython DSSP + mkdssp.
-    If chain_id is provided, only counts SS for that chain.
-    """
-    dssp_path, tmp_path = _prepare_dssp_input(pdb_path)
-    try:
-        dssp_obj = DSSP(model, dssp_path, dssp="mkdssp")
-
-        if chain_id is not None:
-            target_chains = {chain_id}
-        else:
-            target_chains = {c.get_id() for c in model.get_chains()}
-
-        dssp_chars = []
-        for key in dssp_obj.keys():
-            if key[0] in target_chains:
-                ss = dssp_obj[key][2]
-                if ss in DSSP_HELIX:
-                    dssp_chars.append('H')
-                elif ss in DSSP_STRAND:
-                    dssp_chars.append('E')
-                else:
-                    dssp_chars.append('L')
-    finally:
-        if tmp_path is not None:
-            os.unlink(tmp_path)
-
-    helix_count = 0
-    strand_count = 0
-    current_helix = False
-    current_strand = False
-
-    for ss in dssp_chars:
-        if ss == 'H':
-            if not current_helix:
-                helix_count += 1
-                current_helix = True
-            current_strand = False
-        elif ss == 'E':
-            if not current_strand:
-                strand_count += 1
-                current_strand = True
-            current_helix = False
-        else:
-            current_helix = False
-            current_strand = False
-
-    return helix_count, strand_count
-
-
-def calculate_rog(chain_or_model):
-    """Calculate mass-weighted radius of gyration for a chain or model."""
-    coords = np.array([atom.get_coord() for atom in chain_or_model.get_atoms()])
-    masses = np.array([atom.mass for atom in chain_or_model.get_atoms()])
-
-    if len(coords) == 0:
-        return 0.0
-
-    com = np.average(coords, axis=0, weights=masses)
-    diff = coords - com
-    rg = round(float(np.sqrt(np.sum(masses * np.sum(diff**2, axis=1)) / masses.sum())), 2)
-    return rg
-
 def analyze_structure(args):
     """Analyze structure with automatic chain detection"""
     (pdb_file, fold_min_ss, fold_max_ss, fold_min_helices, fold_max_helices, 
@@ -163,16 +68,20 @@ def analyze_structure(args):
         chain_ids = get_chain_ids(model)
         num_chains = len(chain_ids)
 
+        # Run mkdssp once regardless of chain count; per-chain counts are
+        # then derived from the cached result instead of re-running mkdssp.
+        dssp_chars_by_chain = compute_dssp_chars_by_chain(model, pdb_file)
+
         if num_chains == 1:
             # Monomer - analyze entire structure (single chain)
             primary_chain = chain_ids[0]
-            helix_count, strand_count = count_secondary_structures(model, pdb_file, primary_chain)
+            helix_count, strand_count = count_ss_elements(dssp_chars_by_chain.get(primary_chain, []))
             rog = calculate_rog(model[primary_chain])
             logger.info(f"{pdb_file.name}: Single chain detected - treating as monomer")
         elif num_chains == 2:
             # Binder - analyze first chain only
             first_chain_id = chain_ids[0]
-            helix_count, strand_count = count_secondary_structures(model, pdb_file, first_chain_id)
+            helix_count, strand_count = count_ss_elements(dssp_chars_by_chain.get(first_chain_id, []))
             rog = calculate_rog(model[first_chain_id])
             logger.info(f"{pdb_file.name}: Two chains detected ({num_chains}) - treating as binder, analyzing first chain only")
         elif num_chains >= 3:
@@ -180,7 +89,7 @@ def analyze_structure(args):
             helix_count = 0
             strand_count = 0
             for chain_id in chain_ids:
-                chain_helices, chain_strands = count_secondary_structures(model, pdb_file, chain_id)
+                chain_helices, chain_strands = count_ss_elements(dssp_chars_by_chain.get(chain_id, []))
                 helix_count += chain_helices
                 strand_count += chain_strands
             rog = calculate_rog(model)
