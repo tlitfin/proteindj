@@ -15,7 +15,13 @@ process RunAF2 {
     path "*.log"
 
     script:
+    def jaxCompilationCacheExport = params.af2_jax_compilation_cache_dir \
+        ? 'export JAX_COMPILATION_CACHE_DIR="/af2_jax_compilation_cache"' \
+        : ''
+
     """
+        ${jaxCompilationCacheExport}
+
         python3 /dl_binder_design/af2_initial_guess/predict.py \
             -pdbdir ./ \
             -outpdbdir outputs \

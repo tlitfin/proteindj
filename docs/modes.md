@@ -59,7 +59,7 @@ Fold conditioning guides the RFdiffusion diffusion process by providing secondar
 
 <img src="../img/monomer_foldcond.png" width="400">
 
-To run fold conditioning you need a directory containing pytorch files (`rfd_scaffold_dir`) with secondary structure and block adjacency information for each scaffold e.g. scaffold1_ss.pt scaffold2_adj.pt. You can generate these from a pdb or directory of pdbs using `scripts/create_scaffolds.py` (note this script requires a python environment with pyrosetta and pytorch installed). RFdiffusion will select a random scaffold from the directory for each design during the backbone diffusion process. Here we will use a directory of assorted scaffolds in `proteindj/binderscaffolds/scaffolds_assorted`.
+To run fold conditioning you need a directory containing pytorch files (`rfd_scaffold_dir`) with secondary structure and block adjacency information for each scaffold e.g. scaffold1_ss.pt scaffold2_adj.pt. You can generate these from a pdb or directory of pdbs using `scripts/create_scaffolds.py` (note this script requires a python environment with BioPython and pytorch installed). RFdiffusion will select a random scaffold from the directory for each design during the backbone diffusion process. Here we will use a directory of assorted scaffolds in `proteindj/binderscaffolds/scaffolds_assorted`.
 
 ```
 monomer_foldcond {
@@ -272,7 +272,7 @@ One approach to improving the success rate of binder design is to use scaffolds 
 
 To enable scaffold guided binder design you need a directory containing pytorch files (`rfd_scaffold_dir`) with secondary structure and block adjacency information for each scaffold e.g. scaffold1_ss.pt scaffold2_adj.pt. You can generate these from an input pdb or set of pdbs (see [Scaffold Generation Guide](../docs/scaffolds.md)). RFdiffusion will select a random scaffold from the directory for each design during the backbone diffusion process. We have generated pytorch files for the recommended scaffolds from [Cao et al. 2021](https://doi.org/10.1038/s41586-022-04654-9) (~23,000 templates) in `scripts/recmndscaffs.tar.gz` - see more details about the composition of these scaffolds and how to make your own [here](../docs/scaffolds.md).
 
-RFdiffusion also requires these .pt files for the target PDB file. We generate these target .pt files internally for you using PyRosetta. We have noticed that ligands, insertion codes (e.g. res 82A, 82B), and non-standard amino acid codes (e.g. TPO, SEP) cause errors, so it is best to remove them from input structures first
+RFdiffusion also requires these .pt files for the target PDB file. We generate these target .pt files internally for you using BioPython/PyTorch. We have noticed that ligands, insertion codes (e.g. res 82A, 82B), and non-standard amino acid codes (e.g. TPO, SEP) cause errors, so it is best to remove them from input structures first
 
 Note that when using scaffolds contigs are ignored i.e. the binder length is determined by each template/scaffold and the entire input PDB is passed to RFdiffusion. You may need to edit your input PDB to remove unwanted residues/domains from the target protein first. 
 

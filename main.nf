@@ -52,6 +52,14 @@ workflow {
         error("Cannot use --run_fold_only with --skip_fold. These options are contradictory.")
     }
 
+    if (params.run_fold_only && params.rank_designs) {
+        error("--rank_designs cannot be used with --run_fold_only since no prediction metrics are generated to rank on.")
+    }
+
+    if (params.skip_fold_seq_pred && params.rank_designs) {
+        error("--rank_designs cannot be used with --skip_fold_seq_pred since no prediction metrics are generated to rank on.")
+    }
+
     // Validate ranking metric matches prediction method
     def ranking_metric = null
     if (params.rank_designs && params.ranking_metric) {
@@ -82,7 +90,7 @@ workflow {
     println("╚═╝     ╚═╝  ╚═╝ ╚═════╝    ╚═╝   ╚══════╝╚═╝╚═╝  ╚═══╝╚═════╝  ╚════╝ ")
     println("                   ProteinDJ Protein Design Pipeline                   ")
     println("         Developers: Dylan Silke, Josh Hardy, Julie Iskander,          ")
-    println("                       Thomas Litfin, David Ladd                       ")
+    println("                  Junqi Pan, Thomas Litfin, David Ladd                 ")
     println("***********************************************************************")
     println("* Pipeline Mode: ${params.design_mode}")
     println("* Number of designs: ${num_designs}")
@@ -97,14 +105,16 @@ workflow {
     println("***********************************************************************\n")
 
     // Create output directory for copy of config files used in run
-    def configDir = file("${outputDirectory}/configs")
+    def outputDir = file(outputDirectory)
+    def configDir = outputDir.resolve('configs')
     configDir.mkdirs()
     workflow.configFiles.each { configFile ->
-        configFile.copyTo("${configDir}/${configFile.getName()}")
+        def configPath = file(configFile)
+        configPath.copyTo(configDir.resolve(configPath.name))
     }
 
     // Create output directory for copy of input files used in run
-    def inputsDir = file("${outputDirectory}/inputs")
+    def inputsDir = outputDir.resolve('inputs')
     inputsDir.mkdirs()
 
     ///////////////////////
@@ -122,7 +132,7 @@ workflow {
             if (!params.input_pdb) {
                 throw new IllegalArgumentException("Please provide input PDB file path required by $params.design_mode mode")
             }
-            inputFile = new File(params.input_pdb)
+            def inputFile = file(params.input_pdb)
             if (!inputFile.exists()) {
                 throw new FileNotFoundException("Input PDB file not found at path: ${params.input_pdb}. Please ensure the file exists and the path is correct.")
             }
@@ -172,7 +182,7 @@ workflow {
 
             // Copy input files to output directory
             inputFiles.each { inputFile ->
-                "rsync -r ${inputFile} ${inputsDir}/.".execute()
+                inputFile.copyTo(inputsDir.resolve(inputFile.name))
             }
             
             // Create channel with items for requested designs
@@ -295,7 +305,7 @@ workflow {
 
             // Copy input files to output directory
             inputFiles.each { inputFile ->
-                "rsync -r ${inputFile} ${inputsDir}/.".execute()
+                inputFile.copyTo(inputsDir.resolve(inputFile.name))
             }
             // Create the channel for RFdiffusion
             rf_ch = Channel
@@ -352,8 +362,8 @@ workflow {
         if (!file(params.skip_input_dir).exists()) {
             throw new FileNotFoundException("Skip input file directory not found at: ${params.skip_input_dir}. Please ensure the path is correct.")
         }
-        def previous_pdbs = file("${params.skip_input_dir}").listFiles().findAll { it.name.endsWith('.pdb') }
-        def previous_jsons = file("${params.skip_input_dir}").listFiles().findAll { it.name.endsWith('.json') }
+        def previous_pdbs = files(file(params.skip_input_dir).resolve('*.pdb'))
+        def previous_jsons = files(file(params.skip_input_dir).resolve('*.json'))
         // Error handling for missing files
         if (previous_pdbs.isEmpty()) {
             throw new FileNotFoundException("No PDB files found in directory: ${params.skip_input_dir}. Please provide PDB files to proceed with the workflow.")
@@ -369,10 +379,10 @@ workflow {
 
         // Copy PDB and JSON files from the previous results directory to inputs directory
         previous_pdbs.each { pdbFile ->
-            pdbFile.copyTo("${inputsDir}/${pdbFile.getName()}")
+            pdbFile.copyTo(inputsDir.resolve(pdbFile.name))
         }
         previous_jsons.each { jsonFile ->
-            jsonFile.copyTo("${inputsDir}/${jsonFile.getName()}")
+            jsonFile.copyTo(inputsDir.resolve(jsonFile.name))
         }
 
         // Create channel with PDB-JSON tuples from specified directory
@@ -473,7 +483,7 @@ workflow {
         if (!file(params.skip_input_dir).exists()) {
             throw new FileNotFoundException("Skip input file directory not found at: ${params.skip_input_dir}. Please ensure the path is correct.")
         }
-        def pdbs_for_pred = file("${params.skip_input_dir}").listFiles().findAll { it.name.endsWith('.pdb') }
+        def pdbs_for_pred = files(file(params.skip_input_dir).resolve('*.pdb'))
         if (pdbs_for_pred.isEmpty()) {
             throw new FileNotFoundException("No PDB files found in directory: ${params.skip_input_dir}. Please provide PDB files to proceed with the workflow.")
         }
@@ -484,7 +494,7 @@ workflow {
 
         // Copy PDB files from the previous results directory to inputs directory
         pdbs_for_pred.each { pdbFile ->
-            pdbFile.copyTo("${inputsDir}/${pdbFile.getName()}")
+            pdbFile.copyTo(inputsDir.resolve(pdbFile.name))
         }
 
         // Create channel with PDBs from specified directory
@@ -635,7 +645,7 @@ workflow {
         if (!file(params.skip_input_dir).exists()) {
             throw new FileNotFoundException("Skip input file directory not found at: ${params.skip_input_dir}. Please ensure the path is correct.")
         }
-        def pdbs_for_analysis = file("${params.skip_input_dir}").listFiles().findAll { it.name.endsWith('.pdb') }
+        def pdbs_for_analysis = files(file(params.skip_input_dir).resolve('*.pdb'))
         if (pdbs_for_analysis.isEmpty()) {
             throw new FileNotFoundException("No PDB files found in directory: ${params.skip_input_dir}. Please provide PDB files to proceed with the workflow.")
         }
@@ -646,7 +656,7 @@ workflow {
 
         // Copy PDB files from the previous results directory to inputs directory
         pdbs_for_analysis.each { pdbFile ->
-            pdbFile.copyTo("${inputsDir}/${pdbFile.getName()}")
+            pdbFile.copyTo(inputsDir.resolve(pdbFile.name))
         }
 
         // Create channel with PDBs from specified directory
@@ -665,7 +675,7 @@ workflow {
         AnalysePredictions(analysis_input_pdbs)
 
         // Filtering of analysis results
-        FilterAnalysis(AnalysePredictions.out.jsonl, analysis_input_pdbs)
+        FilterAnalysis(AnalysePredictions.out.jsonl, AnalysePredictions.out.relaxed_pdbs)
 
         // Use placeholder PDB file if no designs survive filtering
         FilterAnalysis.out.pdbs
@@ -760,7 +770,6 @@ workflow {
     // Save log file on completion
     workflow.onComplete {
         def logFile = file('.nextflow.log')
-        def outputDir = file(outputDirectory)
         if (logFile.exists()) {
             logFile.copyTo(outputDir.resolve('nextflow.log'))
         }
@@ -817,13 +826,13 @@ def validateRFDParameters(params) {
             if (!params.rfd_scaffold_dir) {
                 throw new IllegalArgumentException("Please provide path to directory containing scaffold files for fold conditioning (rfd_scaffold_dir)")
             }
-            def scaffoldsDir = new File(params.rfd_scaffold_dir)
+            def scaffoldsDir = file(params.rfd_scaffold_dir)
             if (!scaffoldsDir.exists() || !scaffoldsDir.isDirectory()) {
                 throw new IllegalArgumentException("rfd_scaffold_dir does not exist or is not a directory")
             }
             
-            def ss_files = scaffoldsDir.listFiles().findAll { it.name.endsWith('_ss.pt') }
-            def adj_files = scaffoldsDir.listFiles().findAll { it.name.endsWith('_adj.pt') }
+            def ss_files = files(scaffoldsDir.resolve('*_ss.pt'))
+            def adj_files = files(scaffoldsDir.resolve('*_adj.pt'))
             if (!ss_files || !adj_files) {
                 throw new IllegalArgumentException("rfd_scaffold_dir does not contain required _ss.pt and _adj.pt files")
             }
@@ -833,13 +842,13 @@ def validateRFDParameters(params) {
                 throw new IllegalArgumentException("Please provide path to directory containing scaffold files for fold conditioning (rfd_scaffold_dir)")
             }
 
-            def scaffoldsDir = new File(params.rfd_scaffold_dir)
+            def scaffoldsDir = file(params.rfd_scaffold_dir)
             if (!scaffoldsDir.exists() || !scaffoldsDir.isDirectory()) {
                 throw new IllegalArgumentException("rfd_scaffold_dir does not exist or is not a directory")
             }
             
-            def ss_files = scaffoldsDir.listFiles().findAll { it.name.endsWith('_ss.pt') }
-            def adj_files = scaffoldsDir.listFiles().findAll { it.name.endsWith('_adj.pt') }
+            def ss_files = files(scaffoldsDir.resolve('*_ss.pt'))
+            def adj_files = files(scaffoldsDir.resolve('*_adj.pt'))
             if (!ss_files || !adj_files) {
                 throw new IllegalArgumentException("rfd_scaffold_dir does not contain required _ss.pt and _adj.pt files")
             }
@@ -956,10 +965,10 @@ def validateBindCraftParams(bc_chains,hotspot_residues,design_length,num_designs
 
     // Validate optional BindCraft advanced settings JSON
     if (bc_advanced_json) {
-    def advancedFile = new File(bc_advanced_json)
-    if (!advancedFile.exists()) {
-        throw new FileNotFoundException("Advanced settings JSON file not found at path: ${bc_advanced_json}. Please ensure the file exists and the path is correct.")
-    }
+        def advancedFile = file(bc_advanced_json)
+        if (!advancedFile.exists()) {
+            throw new FileNotFoundException("Advanced settings JSON file not found at path: ${bc_advanced_json}. Please ensure the file exists and the path is correct.")
+        }
     }
 }
 

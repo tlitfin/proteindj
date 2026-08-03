@@ -7,21 +7,21 @@
 ProteinDJ is a Nextflow pipeline for protein design that installs and utilises multiple external software packages, including:
 
 - AlphaFold2 Initial Guess (from https://github.com/nrbennet/dl_binder_design)
+- Arpeggia (from https://github.com/y1zhou/arpeggia)
 - BindCraft (from https://github.com/martinpacesa/BindCraft) and FreeBindCraft (https://github.com/cytokineking/FreeBindCraft)
 - BioPython (from https://biopython.org/)
 - Boltz-2 (from https://github.com/jwohlwend/boltz)
 - BoltzGen (from https://github.com/HannesStark/boltzgen)
 - Full-Atom MPNN (from https://github.com/richardshuai/fampnn)
 - HyperMPNN (from https://github.com/meilerlab/HyperMPNN)
+- OpenMM (from https://openmm.org/) and PDBFixer (from https://github.com/openmm/pdbfixer)
+- PRODIGY (from https://github.com/haddocking/prodigy)
 - ProteinMPNN-FastRelax (from https://github.com/nrbennet/dl_binder_design)
 - RFdiffusion (from https://github.com/RosettaCommons/RFdiffusion)
-- PyRosetta (from https://www.pyrosetta.org/)
 
 BindSweeper provides a convenient wrapper for ProteinDJ, enabling sweeping of different parameters for binder design.
 
 If you find ProteinDJ or BindSweeper useful in your research, please [cite us](https://onlinelibrary.wiley.com/doi/10.1002/pro.70464) and the developers of the software listed above that make protein design pipelines like this possible. We have provided a list of citations [here](#citations).
-
-> Please note: PyRosetta requires a license for commercial projects and is used extensively within ProteinDJ, AlphaFold2 Initial Guess, and ProteinMPNN-FastRelax.
 
 <sup>_Logo image credit: Lyn Deng, Joshua Hardy_</sup>
 
@@ -66,7 +66,7 @@ The ProteinDJ consists of four stages:
 1. Fold Design - Using RFdiffusion, BindCraft, or BoltzGen
 2. Sequence Design - Using ProteinMPNN or Full-Atom MPNN
 3. Structure Prediction - Using AlphaFold2 Initial Guess or Boltz-2
-4. Analysis and Reporting - Using PyRosetta and BioPython
+4. Analysis and Reporting - Using PDBFixer/OpenMM, arpeggia, PRODIGY, and BioPython
 
 <img src="img/pipelineoverview.png" height="200">
 
@@ -158,7 +158,7 @@ Due to the inherently stochastic nature of protein design, often we see problema
 - **Fold Filtering** - Filters designs according to the number of secondary structure elements and radius of gyration.
 - **Sequence Filtering** - Filters designs according to the score of the generated sequence
 - **AlphaFold2/Boltz-2 Filtering** - Filters designs according to the quality of the structure prediction
-- **Analysis Filtering** - Filters designs according to detailed biophysical metrics calculated by PyRosetta and BioPython, including interface quality, energy, and sequence properties
+- **Analysis Filtering** - Filters designs according to detailed biophysical metrics calculated by arpeggia, PRODIGY, and BioPython on the energy-minimized structure, including interface quality, energy, and sequence properties
 
 The most powerful predictors of experimental success are structure prediction metrics, but some metrics are more effective than others. Here are some recommended filters for binder design from the literature and their corresponding parameters in ProteinDJ:
 
@@ -240,6 +240,12 @@ BindCraft - Pacesa, M., Nickel, L., Schellhaas, C. et al. One-shot design of fun
 
 BioPython - Cock, P. J., Antao, T. et al. Biopython: freely available Python tools for computational molecular biology and bioinformatics. Bioinformatics 25, 1422-1423, (2009). https://doi.org/10.1093/bioinformatics/btp163
 
+Arpeggia - Zhou, Y. Arpeggia: calculation of interatomic interactions in molecular structures. https://github.com/y1zhou/arpeggia
+
+OpenMM and PDBFixer - Eastman, P., Swails, J., Chodera, J.D. et al. OpenMM 7: Rapid development of high performance algorithms for molecular dynamics. PLOS Comput Biol 13(7), e1005659 (2017). https://doi.org/10.1371/journal.pcbi.1005659
+
+PRODIGY - Xue, L.C., Rodrigues, J.P., Kastritis, P.L., Bonvin, A.M.J.J., Vangone, A. PRODIGY: a web server for predicting the binding affinity of protein-protein complexes. Bioinformatics 32(23), 3676-3678 (2016). https://doi.org/10.1093/bioinformatics/btw514
+
 Boltz-2 - Wohlwend, J., et al. Boltz-2 Democratizing Biomolecular Interaction Modeling, bioRxiv 2024.11.19.624167 (2024). https://doi.org/10.1101/2024.11.19.624167
 
 Full-Atom MPNN - Shuai, R.W., et al. Sidechain conditioning and modeling for full-atom protein sequence design with FAMPNN, bioRxiv 2025.02.13.637498 (2025). https://doi.org/10.1101/2025.02.13.637498
@@ -249,7 +255,5 @@ HyperMPNN - Ertelt, M., Schlegel, P., Beining, M. et al. HyperMPNN-A general str
 RFdiffusion - Watson, J.L., Juergens, D., Bennett, N.R. et al. De novo design of protein structure and function with RFdiffusion. Nature 620, 1089–1100 (2023). https://doi.org/10.1038/s41586-023-06415-8
 
 ProteinMPNN - Dauparas, J., et al. Robust deep learning–based protein sequence design using ProteinMPNN. Science 378, 49-56 (2022). https://doi.org/10.1126/science.add2187
-
-PyRosetta - S. Chaudhury, S. Lyskov & J. J. Gray, "PyRosetta: a script-based interface for implementing molecular modeling algorithms using Rosetta," Bioinformatics, 26(5), 689-691 (2010)
 
 iPSAE score scripts - Digital Biotechnology Lab. (2025). Overath, M. D., Rygaard, A., Jacobsen, C. P., Brasas, V., Morell, O., Sormanni, P., & Jenkins, T. P. (2025). Predicting Experimental Success in De Novo Binder Design: A Meta-Analysis of 3,766 Experimentally Characterised Binders. bioRxiv. https://doi.org/10.1101/2025.08.14.670059v1

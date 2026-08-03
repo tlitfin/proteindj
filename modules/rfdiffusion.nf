@@ -18,7 +18,7 @@ process GenerateRFDContigs {
     """
 }
 process GenerateRFDFoldCond {
-    label 'pyrosetta_tools' //TODO: Replace with BioPython/DSSP in python_tools container
+    label 'python_tools'
 
     input:
     path(input_pdb)
