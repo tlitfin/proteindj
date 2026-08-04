@@ -54,8 +54,8 @@ class SweepConfig:
         if schema_path and os.path.exists(schema_path):
             validate_params_against_schema(data, schema_path)
         else:
-            # Use binder validator for binder modes as fallback
-            if mode.startswith("binder_"):
+            # Use binder validator for binder, bindcraft, and boltzgen modes as fallback
+            if mode.startswith("binder_") or mode.startswith("bindcraft_") or mode.startswith("boltzgen_"):
                 try:
                     validator = BinderValidator()
                     validator.validate_config(

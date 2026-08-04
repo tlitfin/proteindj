@@ -136,8 +136,13 @@ results_config:
 
 ### Supported Modes
 
-1. **`binder_denovo`**: De novo binder design
-2. **`binder_foldcond`**: Fold-conditioned binder design
+1. **`binder_denovo`**: De novo binder design (RFdiffusion)
+2. **`binder_foldcond`**: Fold-conditioned binder design (RFdiffusion)
+3. **`binder_motifscaff`**: Motif scaffolding binder design (RFdiffusion)
+4. **`binder_partialdiff`**: Partial diffusion binder design (RFdiffusion)
+5. **`bindcraft_denovo`**: De novo binder design (FreeBindCraft)
+6. **`boltzgen_denovo`**: De novo binder design (BoltzGen)
+7. **`boltzgen_redesign`**: Redesign of an existing binder's architecture/sequence/structure (BoltzGen)
 
 ### Parameter Types
 
@@ -300,6 +305,25 @@ sweep_params:
         - "input/msas/protein1.a3m"
         - "input/msas/protein2.a3m"
         - "input/msas/protein3.a3m"
+```
+
+### 5. BoltzGen De Novo Hotspots Sweep
+Test different hotspot combinations using BoltzGen for fold design. Note that BoltzGen `hotspot_residues` (and `bg_not_binding_residues`/`bg_flexible_residues`) require an explicit chain identifier for every residue/range, e.g. `A56` rather than `56`:
+
+```yaml
+mode: boltzgen_denovo
+profile: milton
+
+fixed_params:
+  design_length: "60-100"
+  input_pdb: "./benchmarkdata/5o45_pd-l1.pdb"
+
+sweep_params:
+  hotspot_residues:
+    values:
+      - null
+      - "A56"
+      - "A56,A115,A123"
 ```
 
 ## Command Line Options

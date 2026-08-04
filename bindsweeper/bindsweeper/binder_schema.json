@@ -125,5 +125,75 @@
       "pattern": "^[A-Z]\\d+(,[A-Z]\\d+)*$",
       "example": "A56,A115,A123 or null"
     }
+  },
+  "boltzgen_denovo": {
+    "input_pdb": {
+      "type": "string",
+      "description": "Input PDB file path for target protein",
+      "pattern": ".*\\.pdb$",
+      "example": "/path/to/target.pdb"
+    },
+    "design_length": {
+      "type": "string",
+      "description": "Design length. One or two dash separated values for min-max design length e.g. '60', '60-70'. Pipeline will randomly sample different sizes between these values.",
+      "pattern": "^\\d+(-\\d+)?$",
+      "example": "60-100"
+    },
+    "hotspot_residues": {
+      "type": ["string", "null"],
+      "description": "Hotspot residues on target chain(s) for binder design. Chain identifier is required for BoltzGen modes. Use null for no hotspots",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+      "example": "A56,A115-120,B or null"
+    },
+    "bg_not_binding_residues": {
+      "type": ["string", "null"],
+      "description": "Target residues the binder should NOT contact. Use null for none",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+      "example": "A200,A210-215,B or null"
+    },
+    "bg_flexible_residues": {
+      "type": ["string", "null"],
+      "description": "Residues whose structure should NOT be conditioned on (useful for disordered/flexible regions). Use null for none",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+      "example": "B10-13,B16,C or null"
+    }
+  },
+  "boltzgen_redesign": {
+    "input_pdb": {
+      "type": "string",
+      "description": "Input PDB file path for existing binder (chain A) + target complex",
+      "pattern": ".*\\.pdb$",
+      "example": "/path/to/complex.pdb"
+    },
+    "hotspot_residues": {
+      "type": ["string", "null"],
+      "description": "Hotspot residues on target chain(s) for binder redesign. Chain identifier is required for BoltzGen modes. Use null for no hotspots",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+      "example": "A56,A115-120,B or null"
+    },
+    "bg_not_binding_residues": {
+      "type": ["string", "null"],
+      "description": "Target residues the binder should NOT contact. Use null for none",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+      "example": "A200,A210-215,B or null"
+    },
+    "bg_redesign_spec": {
+      "type": ["string", "null"],
+      "description": "Chain A (binder) architecture spec: ordered comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' or '7-10'). Any original chain A residue not covered by a keep token is deleted. Use null to leave architecture (length) unchanged",
+      "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$",
+      "example": "7-10,A1-60,5,A70-100,10 or null"
+    },
+    "bg_redesign_inpaint_seq": {
+      "type": ["string", "null"],
+      "description": "Chain A (binder) residues, within those kept by bg_redesign_spec, whose sequence is allowed to change while structure stays fixed. Use null for none",
+      "pattern": "^(A(\\d+(-\\d+)?)?)(,A(\\d+(-\\d+)?)?)*$",
+      "example": "A10-50,A60 or null"
+    },
+    "bg_flexible_residues": {
+      "type": ["string", "null"],
+      "description": "Residues whose structure should NOT be conditioned on (useful for disordered/flexible regions). May reference chain A residues kept by bg_redesign_spec. Use null for none",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+      "example": "B10-13,B16,C or null"
+    }
   }
 }
