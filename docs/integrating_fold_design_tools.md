@@ -27,7 +27,7 @@ graph LR
 - **Fold Design** — generates backbone/fold structures (RFdiffusion *or* BindCraft today).
 - **Sequence Design** — ProteinMPNN or FAMPNN assign sequences to the fold(s).
 - **Structure Prediction** — AlphaFold2-Initial-Guess or Boltz-2 re-predicts structure for validation.
-- **Analysis** — PyRosetta/BioPython-based metric calculation, ranking, filtering.
+- **Analysis** — PDBFixer/OpenMM/arpeggia/PRODIGY/BioPython-based metric calculation, ranking, filtering.
 
 Each stage is swappable via a top-level `params` switch (`design_mode` chooses the fold-design
 engine implicitly, `seq_method` chooses MPNN/FAMPNN, `pred_method` chooses AF2/Boltz). This means
@@ -224,8 +224,8 @@ value (e.g. `x_denovo`):
    - [ ] Add a `withLabel: X { container = ...; containerOptions = ... }` block to
      [nextflow.config](../nextflow.config)'s `process {}` scope. Reuse existing model-weight binds
      (`af2_models`, etc.) if the tool genuinely needs the same weights; otherwise add a new
-     `x_models` param + bind (see the already-scaffolded-but-unused `boltzgen_models` param and `BG`
-     label in nextflow.config as a real in-progress example of this exact step).
+     `x_models` param + bind (see the `bg_models` param and `BG` label in nextflow.config as a
+     completed real-world example of this exact step, from the BoltzGen integration).
    - [ ] Add build/download entries to `apptainer/build_containers.sh` / `download_containers.sh`.
 
 2. **Nextflow module** (`modules/x.nf`)
@@ -302,8 +302,8 @@ value (e.g. `x_denovo`):
   fold-design engine.
 - **Reuse existing params for genuinely shared resources** (e.g. BindCraft reusing `af2_models`)
   rather than creating redundant `x_models` params — but do create a new dedicated params/bind pair
-  when the resource truly differs (see `boltzgen_models`/`BG` label, already scaffolded in
-  `nextflow.config` for a future integration, but not yet wired into `main.nf`/`modules/`).
+  when the resource truly differs (see `bg_models`/`BG` label in `nextflow.config`, wired into
+  `main.nf`/`modules/boltzgen.nf` as part of the BoltzGen integration).
 - **Cap unbounded tools with a batch-size ceiling.** BindCraft's hallucination loop can run
   indefinitely searching for designs that pass its internal filters; ProteinDJ bounds this by
   setting `max_trajectories = batch_size` so a batch can't run forever.

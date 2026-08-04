@@ -306,6 +306,8 @@ The cluster parameters may need adjusting depending on your HPC setup and availa
 | `rfd_models`   | `"${projectDir}/models/rfd"`   | Path to the RFdiffusion model checkpoints.  |
 | `af2_models `  | `"${projectDir}/models/af2"`   | Path to the AlphaFold2 models.              |
 | `boltz_models` | `"${projectDir}/models/boltz"` | Path to the Boltz-2 models.                 |
+| `mpnn_models`  | `"${projectDir}/models/mpnn"`  | Path to the ProteinMPNN model checkpoints.  |
+| `bg_models`    | `"${projectDir}/models/boltzgen"` | Path to the BoltzGen model checkpoints.  |
 | `gpu_model`    | `'A30'`                        | GPU model to request, e.g., 'A30'.          |
 | `gpus`         | `1`, `2`, `4`, `8`             | Number of GPUs to request                   |
 | `cpus_per_gpu` | `8`, `12`                      | Number of CPUs to request per GPU           |

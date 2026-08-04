@@ -4,6 +4,8 @@
 
 This guide will walk you through installing ProteinDJ and all its dependencies and is intended for system admins. The installation process involves several steps that need to be completed once per cluster or system.
 
+> **Upgrading from v2?** v3 is not backwards compatible — containers and models have been updated (e.g. FreeBindCraft replaces BindCraft, and new `mpnn_models`/`bg_models` paths are required), so a fresh installation following this guide is required rather than reusing an existing v2 setup.
+
 ## Prerequisites
 
 Before starting, ensure you have:
@@ -141,7 +143,7 @@ cd ../..
 
 ### BoltzGen Models (~4 GB)
 
-ProteinDJ only runs BoltzGen's design step (sequences are re-designed downstream via MPNN/FAMPNN), so only the diffusion checkpoints and the molecule/CCD dataset need to be downloaded — not the inverse-folding, folding, or affinity checkpoints that `boltzgen run` would otherwise also fetch. Update the `boltzgen_models` variable in `nextflow.config` to the location of the model directory (e.g. `'./models/boltzgen'`):
+ProteinDJ only runs BoltzGen's design step (sequences are re-designed downstream via MPNN/FAMPNN), so only the diffusion checkpoints and the molecule/CCD dataset need to be downloaded — not the inverse-folding, folding, or affinity checkpoints that `boltzgen run` would otherwise also fetch. Update the `bg_models` variable in `nextflow.config` to the location of the model directory (e.g. `'./models/boltzgen'`):
 
 ```bash
 mkdir -p models/boltzgen
