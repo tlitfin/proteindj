@@ -4,25 +4,14 @@ import json
 import copy
 from pathlib import Path
 
-# Define required parameters for each mode based on the table in parameters.md
-MODE_REQUIRED_PARAMS = {
-    'monomer_denovo': ['design_length'],
-    'monomer_foldcond': ['rfd_scaffold_dir'],
-    'monomer_motifscaff': ['input_pdb', 'rfd_contigs'],
-    'monomer_partialdiff': ['input_pdb', 'rfd_partial_diffusion_timesteps'],
-    'binder_denovo': ['input_pdb', 'design_length'],
-    'binder_foldcond': ['input_pdb', 'rfd_scaffold_dir'],
-    'binder_motifscaff': ['input_pdb', 'rfd_contigs'],
-    'binder_partialdiff': ['input_pdb', 'rfd_partial_diffusion_timesteps'],
-    'bindcraft_denovo': ['input_pdb', 'design_length'],
-    'boltzgen_denovo': ['input_pdb', 'design_length'],
-    'boltzgen_redesign': ['input_pdb'],
-    'custom': []  # Custom mode has no required mode-specific parameters
-}
+# Sentinel param name marking the row whose <mode>_values cell holds that mode's
+# comma-separated list of required mode-specific parameters (see mode_parameters.csv).
+REQUIRED_MARKER = '__required__'
 
 def parse_csv(csv_file):
     """
-    Parse the CSV into a dict of {mode: {param: value or None}}
+    Parse the CSV into a dict of {mode: {param: value or None}} plus a dict of
+    {mode: [required_param, ...]} read from the '__required__' sentinel row.
     Only parameters with a value in the <mode>_values column will override the schema default.
     """
     with open(csv_file, newline='', encoding='utf-8-sig') as f:
@@ -36,14 +25,19 @@ def parse_csv(csv_file):
                 value_col = i + 1
                 mode_cols[mode] = (i, value_col)
         param_overrides = {mode: {} for mode in mode_cols}
+        required_params = {mode: [] for mode in mode_cols}
         for row in reader:
             for mode, (p_col, v_col) in mode_cols.items():
                 param = row[p_col].strip()
                 value = row[v_col].strip() if v_col < len(row) else ''
-                if param:
+                if not param:
+                    continue
+                if param == REQUIRED_MARKER:
+                    required_params[mode] = [p.strip() for p in value.split(',') if p.strip()]
+                else:
                     # Only set override if value is non-empty
                     param_overrides[mode][param] = value if value else None
-    return param_overrides
+    return param_overrides, required_params
 
 def convert_value(value, schema_param):
     """
@@ -71,9 +65,11 @@ def convert_value(value, schema_param):
     except Exception:
         return value
 
-def build_mode_schema(main_schema, mode, overrides):
+def build_mode_schema(main_schema, mode, overrides, required):
     """
     Build a mode-specific schema, applying parameter overrides only where specified.
+    `required` is the mode's list of required mode-specific parameter names, from the
+    CSV's '__required__' sentinel row.
     """
     schema = copy.deepcopy(main_schema)
     schema['title'] = f"{mode} pipeline parameters"
@@ -96,15 +92,11 @@ def build_mode_schema(main_schema, mode, overrides):
         
         # Update required list
         if defn_name == 'mode_specific_parameters':
-            # Set required parameters based on mode
-            if mode in MODE_REQUIRED_PARAMS:
-                required = [p for p in MODE_REQUIRED_PARAMS[mode] if p in filtered]
-                if required:
-                    defn['required'] = required
-                elif 'required' in defn:
-                    del defn['required']
+            # Set required parameters based on the CSV's '__required__' row for this mode
+            filtered_required = [p for p in required if p in filtered]
+            if filtered_required:
+                defn['required'] = filtered_required
             elif 'required' in defn:
-                # For modes not in mapping, remove required
                 del defn['required']
         else:
             # For other definitions, keep existing required list filtering
@@ -123,16 +115,12 @@ def build_mode_schema(main_schema, mode, overrides):
                 # Set full enum list for custom mode
                 prop['enum'] = [
                     "bindcraft_denovo",
-                    "binder_denovo",
-                    "binder_foldcond",
-                    "binder_motifscaff",
-                    "binder_partialdiff",
-                    "monomer_denovo",
-                    "monomer_foldcond",
-                    "monomer_motifscaff",
-                    "monomer_partialdiff",
                     "boltzgen_denovo",
-                    "boltzgen_redesign"
+                    "boltzgen_redesign",
+                    "rfd_denovo",
+                    "rfd_foldcond",
+                    "rfd_motifscaff",
+                    "rfd_partialdiff"
                 ]
                 # Preserve default if specified in CSV
                 if 'design_mode' in overrides and overrides['design_mode'] is not None:
@@ -142,6 +130,20 @@ def build_mode_schema(main_schema, mode, overrides):
                 val = convert_value(overrides.get('design_mode', mode), prop)
                 prop['enum'] = [val]
                 prop['default'] = val
+
+    # Drop definitions left with no properties (e.g. an engine's advanced
+    # parameters group when that engine isn't used by this mode) and their
+    # corresponding allOf $ref, so the Seqera launch form doesn't show empty groups.
+    empty_defns = {
+        name for name, defn in schema['definitions'].items()
+        if not defn.get('properties')
+    }
+    for name in empty_defns:
+        del schema['definitions'][name]
+    schema['allOf'] = [
+        ref for ref in schema['allOf']
+        if ref.get('$ref', '').rsplit('/', 1)[-1] not in empty_defns
+    ]
 
     return schema
 
@@ -175,7 +177,7 @@ def main():
     # Load files
     with open(args.schema) as f:
         main_schema = json.load(f)
-    param_overrides = parse_csv(args.csv)
+    param_overrides, required_params = parse_csv(args.csv)
 
     # Filter modes if requested
     modes = args.modes if args.modes else list(param_overrides.keys())
@@ -186,7 +188,7 @@ def main():
         if mode not in param_overrides:
             print(f"Warning: mode '{mode}' not found in CSV, skipping.")
             continue
-        schema = build_mode_schema(main_schema, mode, param_overrides[mode])
+        schema = build_mode_schema(main_schema, mode, param_overrides[mode], required_params.get(mode, []))
         out_file = output_dir / f"nextflow_schema_{mode}.json"
         with open(out_file, "w") as f:
             json.dump(schema, f, indent=2)

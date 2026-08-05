@@ -4,6 +4,7 @@ process GenerateRFDContigs {
     input:
     path(input_pdb)
     val(design_mode)
+    val(is_binder_mode)
     
     output:
     env CONTIGS
@@ -12,7 +13,8 @@ process GenerateRFDContigs {
     """
     CONTIGS=\$(python /scripts/generate_contigs.py ${input_pdb} \
         ${params.design_length ? "--design_length ${params.design_length}" : ''} \
-        --design_mode ${design_mode})
+        --design_mode ${design_mode} \
+        ${is_binder_mode ? '--is_binder' : ''})
     echo "Generated contigs: \$CONTIGS"
     export CONTIGS
     """

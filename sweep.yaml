@@ -1,5 +1,5 @@
 # Example sweep configuration for binder design
-mode: binder_denovo
+mode: rfd_denovo
 profile: milton
 
 # Fixed parameters that override nextflow.config defaults

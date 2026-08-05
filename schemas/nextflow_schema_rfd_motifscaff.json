@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_binder_denovo.json",
-  "title": "binder_denovo pipeline parameters",
-  "description": "Parameters for binder_denovo mode",
+  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_rfd_motifscaff.json",
+  "title": "rfd_motifscaff pipeline parameters",
+  "description": "Parameters for rfd_motifscaff mode",
   "type": "object",
   "definitions": {
     "essential_parameters": {
@@ -14,9 +14,9 @@
         "design_mode": {
           "type": "string",
           "description": "Pipeline mode.",
-          "default": "binder_denovo",
+          "default": "rfd_motifscaff",
           "enum": [
-            "binder_denovo"
+            "rfd_motifscaff"
           ]
         },
         "num_designs": {
@@ -31,7 +31,7 @@
         },
         "out_dir": {
           "type": "string",
-          "default": "${projectDir}/pdj_binder_denovo",
+          "default": "${projectDir}/pdj_rfd_motifscaff",
           "description": "Output directory for results.",
           "format": "directory-path"
         }
@@ -49,34 +49,35 @@
       "description": "These parameters are used for some of the ProteinDJ modes.",
       "default": "",
       "properties": {
-        "design_length": {
-          "type": "string",
-          "description": "Design length. One or two dash separated values for min-max design length e.g. '60', '60-70'. Pipeline will randomly sample different sizes between these values.",
-          "pattern": "^\\d+(-\\d+)?$",
-          "default": "60-80"
-        },
         "input_pdb": {
           "type": "string",
           "pattern": ".*\\.pdb$",
           "format": "file-path",
           "description": "Path to an input PDB file. e.g. 'target.pdb'",
-          "default": "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
-        },
-        "hotspot_residues": {
-          "type": "string",
-          "description": "Specifies hotspot residues for binding. e.g. 'A56,A115,A123'",
-          "pattern": "^[A-Z]\\d+(,[A-Z]\\d+)*$",
-          "default": "A56,A115,A123"
+          "default": "${projectDir}/lib/examplebinder.pdb"
         },
         "rfd_contigs": {
           "type": "string",
-          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `binder_motifscaff` and `monomer_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-          "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
+          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
+          "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$",
+          "default": "[5-10/A1-88/10-20/0 B89-203]"
+        },
+        "rfd_inpaint_seq": {
+          "type": "string",
+          "description": "Residues that will have their sequence masked when diffusing. e.g. '[A17-19/A143-145]'",
+          "pattern": "^\\[([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?)(?:\\/([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?))*\\]$",
+          "default": "[A17-19/A129-131]"
+        },
+        "rfd_length": {
+          "type": "string",
+          "description": "Length of diffused chain when performing motif scaffolding e.g. 100-120",
+          "pattern": "^\\d+-\\d+$",
+          "default": "110-110"
         }
       },
       "required": [
         "input_pdb",
-        "design_length"
+        "rfd_contigs"
       ]
     },
     "workflow_advanced_parameters": {
@@ -159,20 +160,6 @@
         }
       }
     },
-    "bindcraft_advanced_parameters": {
-      "title": "BindCraft Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BindCraft.",
-      "default": "",
-      "properties": {}
-    },
-    "boltzgen_advanced_parameters": {
-      "title": "BoltzGen Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BoltzGen.",
-      "default": "",
-      "properties": {}
-    },
     "rfdiffusion_advanced_parameters": {
       "title": "RFdiffusion Advanced Parameters",
       "type": "object",
@@ -181,7 +168,7 @@
       "properties": {
         "rfd_ckpt_override": {
           "type": "string",
-          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'binder_denovo' mode i.e. 'complex_beta'",
+          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
           "enum": [
             "active_site",
             "base",
@@ -192,7 +179,8 @@
             "inpaint_seq",
             "inpaint_seq_fold"
           ],
-          "hidden": true
+          "hidden": true,
+          "default": "complex_base"
         },
         "rfd_noise_scale": {
           "type": "number",
@@ -346,7 +334,7 @@
           "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
           "hidden": true,
           "format": "file-path",
-          "pattern": "\\.pdb$"
+          "pattern": ".*\\.pdb$"
         },
         "af2_initial_guess": {
           "type": "boolean",
@@ -788,12 +776,6 @@
     },
     {
       "$ref": "#/definitions/workflow_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/bindcraft_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/boltzgen_advanced_parameters"
     },
     {
       "$ref": "#/definitions/rfdiffusion_advanced_parameters"

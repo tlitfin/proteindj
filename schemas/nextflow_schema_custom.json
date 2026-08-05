@@ -16,16 +16,12 @@
           "description": "Pipeline mode.",
           "enum": [
             "bindcraft_denovo",
-            "binder_denovo",
-            "binder_foldcond",
-            "binder_motifscaff",
-            "binder_partialdiff",
-            "monomer_denovo",
-            "monomer_foldcond",
-            "monomer_motifscaff",
-            "monomer_partialdiff",
             "boltzgen_denovo",
-            "boltzgen_redesign"
+            "boltzgen_redesign",
+            "rfd_denovo",
+            "rfd_foldcond",
+            "rfd_motifscaff",
+            "rfd_partialdiff"
           ]
         },
         "num_designs": {
@@ -73,13 +69,13 @@
         },
         "hotspot_residues": {
           "type": "string",
-          "description": "Specifies hotspot residues for binding. e.g. 'A56,A115,A123'",
-          "pattern": "^[A-Z]\\d+(,[A-Z]\\d+)*$",
+          "description": "Specifies hotspot residues for binding. Comma-separated tokens, each a chain-qualified residue e.g. 'A56', a chain-qualified range e.g. 'A115-120', or a bare chain ID meaning the whole chain e.g. 'B'. e.g. 'A56,A115,A123'",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
           "default": null
         },
         "rfd_contigs": {
           "type": "string",
-          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `binder_motifscaff` and `monomer_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
+          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
           "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$",
           "default": null
         },
@@ -302,7 +298,7 @@
       "properties": {
         "rfd_ckpt_override": {
           "type": "string",
-          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'binder_denovo' mode i.e. 'complex_beta'",
+          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
           "enum": [
             "active_site",
             "base",
@@ -473,7 +469,7 @@
           "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
           "hidden": true,
           "format": "file-path",
-          "pattern": "\\.pdb$",
+          "pattern": ".*\\.pdb$",
           "default": null
         },
         "af2_initial_guess": {

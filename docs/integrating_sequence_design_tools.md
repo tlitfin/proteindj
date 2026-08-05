@@ -27,7 +27,7 @@ graph LR
 ```
 
 The key architectural difference from Fold Design is **how the engine is selected**. Fold-design
-tools are selected via `params.design_mode` (e.g. `bindcraft_denovo` vs `binder_denovo`), because
+tools are selected via `params.design_mode` (e.g. `bindcraft_denovo` vs `rfd_denovo`), because
 each tool has its own mode-specific required parameters (contigs, hotspots, target PDBs, etc.).
 Sequence design tools, by contrast, are selected via a single dedicated switch,
 `params.seq_method` (`'mpnn'` or `'fampnn'`), which is **orthogonal to `design_mode`** — any
@@ -179,12 +179,10 @@ else if (params.seq_method == "fampnn") {
     Utils.rebatchGPU(PrepFAMPNN.out.pdbs, params.gpus).set { fampnn_pdbs }
     fampnn_pdbs.combine(mega_csv).set { fampnn_input }
 
-    if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign',
-                                'binder_denovo', 'binder_foldcond', 'binder_motifscaff',
-                                'binder_partialdiff']) {
-        RunFAMPNN(fampnn_input, 'A')          // binder modes: score/design chain A only
+    if (is_binder_mode) {
+        RunFAMPNN(fampnn_input, 'A')          // binder mode: score/design chain A only
     } else {
-        RunFAMPNN(fampnn_input, 'all_chains') // monomer modes: score/design all chains
+        RunFAMPNN(fampnn_input, 'all_chains') // monomer mode: score/design all chains
     }
 
     CompressFAMPNN("fampnn", RunFAMPNN.out.pdbs_jsons.flatten().collect())
@@ -224,7 +222,10 @@ appear in every mode column) rather than being mode-specific.
 3. **Every `schemas/nextflow_schema_<mode>.json` file** — since `seq_method` applies to all modes,
    a new tool's params need to be added, under their own `<tool>_advanced_parameters` group, to
    *every* per-mode schema file (contrast with a new fold-design tool, which only needs its own new
-   `schemas/nextflow_schema_<mode>.json` file).
+   `schemas/nextflow_schema_<mode>.json` file). Don't hand-edit these — run
+   `./scripts/regenerate_schemas.sh` from the repo root after updating `nextflow_schema.json` and
+   `mode_parameters.csv`; it regenerates every per-mode schema plus bindsweeper's
+   `binder_schema.json` in one step.
 4. **[docs/parameters.md](parameters.md)** — add a `## <Tool> Advanced Parameters` table (see the
    existing `## ProteinMPNN-FastRelax Advanced Parameters` / `## Full-Atom MPNN (FAMPNN) Advanced
    Parameters` sections) and a row for the new score-threshold param under `### Sequence Filtering
@@ -307,9 +308,9 @@ two templates. Concretely, to add tool `X` (prefix `x_`) as a new `seq_method` v
      in the Filtering Parameters section.
    - [ ] Add new **rows** (not new columns) to [schemas/mode_parameters.csv](../schemas/mode_parameters.csv)
      for every new `x_*` param, since sequence design params apply to every mode.
-   - [ ] Add the new params, under an `x_advanced_parameters` group, to **every**
-     `schemas/nextflow_schema_<mode>.json` file (there is one per `design_mode`, not per
-     `seq_method`).
+   - [ ] Run `./scripts/regenerate_schemas.sh` to add the new params, under an
+     `x_advanced_parameters` group, to **every** `schemas/nextflow_schema_<mode>.json` file (there
+     is one per `design_mode`, not per `seq_method`).
 
 5. **Metadata & filtering**
    - [ ] Add `XMetadataConverter` to [scripts/metadata_converter.py](../scripts/metadata_converter.py),

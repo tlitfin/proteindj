@@ -92,7 +92,7 @@ uv run ruff check --fix
 
 ### Basic Structure
 ```yaml
-mode: binder_denovo  # Pipeline mode
+mode: rfd_denovo  # Pipeline mode
 
 # Optional: additional profile to include (e.g., cluster profile)
 profile: milton
@@ -170,13 +170,13 @@ With profile:
 ```yaml
 profile: milton
 ```
-Generated command: `nextflow run main.nf -profile milton,bindsweeper_binder_denovo_param1_value1`
+Generated command: `nextflow run main.nf -profile milton,bindsweeper_rfd_denovo_param1_value1`
 
 Without profile:
 ```yaml
 # profile parameter omitted or null
 ```
-Generated command: `nextflow run main.nf -profile bindsweeper_binder_denovo_param1_value1`
+Generated command: `nextflow run main.nf -profile bindsweeper_rfd_denovo_param1_value1`
 
 **Common use cases:**
 - Cluster-specific profiles (e.g., `mitlon`, `slurm`, `pbs`)

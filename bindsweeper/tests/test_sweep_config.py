@@ -43,7 +43,7 @@ class TestSweepConfig:
         """Test loading basic YAML configuration."""
         config = SweepConfig.from_yaml(config_files["sweep_yaml"])
 
-        assert config.mode == "binder_denovo"
+        assert config.mode == "rfd_denovo"
         assert "design_length" in config.fixed_params
         assert "input_pdb" in config.fixed_params
         assert "rfd_noise_scale" in config.sweep_params
