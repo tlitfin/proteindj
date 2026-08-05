@@ -4,16 +4,18 @@ Generate a BoltzGen design-spec YAML for ProteinDJ's boltzgen_denovo/boltzgen_re
 
 - boltzgen_denovo: designs a new binder (entity 1, chain A) against a fixed target
   (entity 2, taken from input_pdb), with optional hotspot/anti-hotspot residues and/or
-  target structural flexibility.
-- boltzgen_redesign: reworks an existing chain A binder against the remaining fixed
-  chain(s) of input_pdb - optionally changing its architecture (keeping/deleting/
-  inserting residues via bg_redesign_spec), redesigning the sequence of kept residues
-  (bg_redesign_inpaint_seq), and/or freeing up the structure of residues on any chain
-  (bg_flexible_residues).
+  target structural flexibility. If input_pdb is omitted, designs a standalone monomer
+  (chain A only, no target entity).
+- boltzgen_redesign: reworks an existing chain A binder/monomer against the remaining
+  fixed chain(s) of input_pdb (if any) - optionally changing its architecture (keeping/
+  deleting/inserting residues via bg_redesign_spec), redesigning the sequence of kept
+  residues (bg_redesign_inpaint_seq), and/or freeing up the structure of residues on any
+  chain (bg_flexible_residues).
 
 Entities are emitted binder-then-target so BoltzGen's generated CIF naturally places
 the binder as chain A (matches ProteinDJ's chain A=binder/chain B=target convention).
 """
+
 
 import argparse
 import re
@@ -306,6 +308,15 @@ def build_denovo_spec(args, target_chains, rank_map):
         }
     }
 
+    if not args.input_pdb:
+        # Monomer design - no target to bind, so no 'file' entity at all.
+        if args.hotspot_residues or args.bg_not_binding_residues or args.bg_flexible_residues:
+            raise ValueError(
+                "hotspot_residues/bg_not_binding_residues/bg_flexible_residues require a target - "
+                "provide input_pdb, or leave them unset for monomer design."
+            )
+        return {'entities': [design_entity]}
+
     target_file_entity = {
         'path': Path(args.input_pdb).name,
         'include': [{'chain': {'id': chain}} for chain in target_chains],
@@ -409,7 +420,10 @@ def build_redesign_spec(args, all_chains, rank_map):
 
 def main():
     parser = argparse.ArgumentParser(description='Generate a BoltzGen design-spec YAML')
-    parser.add_argument('--input_pdb', required=True, help='Path to input PDB file')
+    parser.add_argument(
+        '--input_pdb', default='',
+        help='Path to input PDB file. Optional for boltzgen_denovo (omit for monomer design); always required for boltzgen_redesign.',
+    )
     parser.add_argument('--design_mode', required=True, choices=['boltzgen_denovo', 'boltzgen_redesign'])
     parser.add_argument('--design_length', default='', help="Binder length, e.g. '80' or '60-100' (denovo only)")
     parser.add_argument('--hotspot_residues', default='', help="Target hotspot residues, e.g. 'A56,A115-120'")
@@ -430,25 +444,41 @@ def main():
     parser.add_argument('--output', required=True, help='Output YAML file path')
     args = parser.parse_args()
 
-    rank_map = get_residue_rank_map(args.input_pdb)
+    if args.design_mode == 'boltzgen_redesign' and not args.input_pdb:
+        raise ValueError("input_pdb is required for boltzgen_redesign mode.")
+
+    rank_map = get_residue_rank_map(args.input_pdb) if args.input_pdb else {}
 
     if args.design_mode == 'boltzgen_denovo':
-        target_chains = get_protein_chains(args.input_pdb)
-        if not target_chains:
-            raise ValueError(
-                "No protein chains found in input_pdb. Please crop input_pdb to only the desired target chain(s)."
-            )
+        if args.input_pdb:
+            target_chains = get_protein_chains(args.input_pdb)
+            if not target_chains:
+                raise ValueError(
+                    "No protein chains found in input_pdb. Please crop input_pdb to only the desired target chain(s)."
+                )
+            print(f"Designing a new binder of length {args.design_length} against target chain(s): {target_chains}")
+        else:
+            target_chains = []
+            print(f"Designing a new monomer of length {args.design_length} (no target)")
         spec = build_denovo_spec(args, target_chains, rank_map)
-        print(f"Designing a new binder of length {args.design_length} against target chain(s): {target_chains}")
     else:
         all_chains = get_protein_chains(args.input_pdb)
         spec = build_redesign_spec(args, all_chains, rank_map)
-        print(f"Redesigning residues in chain A against fixed chain(s): {[c for c in all_chains if c != 'A']}")
+        other_chains = [c for c in all_chains if c != 'A']
+        if other_chains:
+            print(f"Redesigning residues in chain A against fixed chain(s): {other_chains}")
+        else:
+            print("Redesigning residues in chain A (monomer, no fixed target chains)")
 
     # Write a cleaned copy of the input PDB (stripped of stale sequence/molecule header
-    # records) and point the spec at it instead of the raw input_pdb.
-    cleaned_pdb_path = Path(args.output).parent / f"{Path(args.input_pdb).stem}_boltzgen.pdb"
-    clean_pdb_for_boltzgen(args.input_pdb, cleaned_pdb_path)
+    # records) and point the spec at it instead of the raw input_pdb. Monomer denovo design has
+    # no input_pdb at all, so write an empty placeholder instead to satisfy Nextflow output
+    output_stem = Path(args.input_pdb).stem if args.input_pdb else 'placeholder'
+    cleaned_pdb_path = Path(args.output).parent / f"{output_stem}_boltzgen.pdb"
+    if args.input_pdb:
+        clean_pdb_for_boltzgen(args.input_pdb, cleaned_pdb_path)
+    else:
+        cleaned_pdb_path.touch()
     for entity in spec['entities']:
         if 'file' in entity:
             entity['file']['path'] = cleaned_pdb_path.name

@@ -57,13 +57,13 @@ workflow {
         throw new IllegalArgumentException("Invalid design mode: ${params.design_mode}. Must be one of: ${VALID_MODES.join(', ')}")
     }
 
-    // Auto-detect monomer vs binder behavior for RFdiffusion modes (computed once, used throughout)
+    // Auto-detect monomer vs binder behavior for RFdiffusion/BoltzGen modes (computed once, used throughout)
     def running_fold_design = !params.skip_fold && !params.skip_fold_seq && !params.skip_fold_seq_pred
     def is_binder_mode
-    if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign']) {
+    if (params.design_mode == 'bindcraft_denovo') {
         is_binder_mode = true
     } else if (running_fold_design) {
-        // Fold design will run this invocation - detect from RFdiffusion input parameters
+        // Fold design will run this invocation - detect from RFdiffusion/BoltzGen input parameters
         is_binder_mode = detectIsBinderModeFromParams(params.design_mode, params)
     } else {
         // Fold design is being skipped this invocation - derive binder/monomer status from
@@ -163,7 +163,7 @@ workflow {
             error("Please provide the number of designs to generate")
         }
         // Validate input PDB file
-        if (params.design_mode in ['bindcraft_denovo','boltzgen_denovo','boltzgen_redesign','rfd_motifscaff','rfd_partialdiff'] || (params.design_mode in ['rfd_denovo', 'rfd_foldcond'] && is_binder_mode)) {
+        if (params.design_mode in ['bindcraft_denovo','boltzgen_redesign','rfd_motifscaff','rfd_partialdiff'] || (params.design_mode in ['rfd_denovo', 'rfd_foldcond', 'boltzgen_denovo'] && is_binder_mode)) {
             if (!params.input_pdb) {
                 throw new IllegalArgumentException("Please provide input PDB file path required by $params.design_mode mode")
             }
@@ -213,7 +213,7 @@ workflow {
             def bc_filters_json = file("${projectDir}/lib/bindcraft/settings_filters/no_filters.json")
 
             // Collect input files
-            def inputFiles = collectInputFiles(params)
+            def inputFiles = collectInputFiles(params, is_binder_mode)
 
             // Copy input files to output directory
             inputFiles.each { inputFile ->
@@ -254,10 +254,10 @@ workflow {
                 params.input_pdb)
 
             if (params.design_mode == 'boltzgen_denovo') {
-                log.info("Using BoltzGen to diffuse binders with the following design parameters:")
+                log.info(is_binder_mode ? "Using BoltzGen to diffuse binders with the following design parameters:" : "Using BoltzGen to diffuse monomers with the following design parameters:")
                 log.info("* Design length = ${params.design_length}")
             } else {
-                log.info("Using BoltzGen to redesign an existing binder with the following design parameters:")
+                log.info(is_binder_mode ? "Using BoltzGen to redesign an existing binder with the following design parameters:" : "Using BoltzGen to redesign an existing monomer with the following design parameters:")
             }
             if (params.hotspot_residues){
                 log.info("* Target hotspots = ${params.hotspot_residues}")
@@ -276,7 +276,7 @@ workflow {
             }
 
             // Collect input files
-            def inputFiles = collectInputFiles(params)
+            def inputFiles = collectInputFiles(params, is_binder_mode)
 
             // Copy input files to output directory
             inputFiles.each { inputFile ->
@@ -287,7 +287,9 @@ workflow {
             bg_ch = Channel
                 .fromList((0..<num_batches))
 
-            PrepBG(bg_ch, file(params.input_pdb), params.design_mode)
+            // No target for monomer denovo design - use the NO_FILE placeholder
+            def bg_input_pdb = params.input_pdb ? file(params.input_pdb) : file("${projectDir}/lib/NO_FILE")
+            PrepBG(bg_ch, bg_input_pdb, params.design_mode)
 
             // Run BoltzGen for each batch (PrepBG emits a cleaned copy of input_pdb alongside the design spec)
             RunBG(PrepBG.out, batch_size)
@@ -1029,13 +1031,13 @@ def validateranking_metric(ranking_metric, pred_method) {
     return ranking_metric
 }
 
-// Auto-detect binder vs monomer behavior for RFdiffusion modes when fold design will actually run
-// this invocation. Uses params.input_pdb / params.rfd_contigs to determine chain count.
+// Auto-detect binder vs monomer behavior for RFdiffusion/BoltzGen modes when fold design will
+// actually run this invocation. Uses params.input_pdb / params.rfd_contigs to determine chain count.
 def detectIsBinderModeFromParams(design_mode, params) {
-    if (design_mode in ['rfd_denovo', 'rfd_foldcond']) {
+    if (design_mode in ['rfd_denovo', 'rfd_foldcond', 'boltzgen_denovo']) {
         return params.input_pdb as boolean
     }
-    // rfd_motifscaff / rfd_partialdiff always require an input PDB
+    // rfd_motifscaff / rfd_partialdiff / boltzgen_redesign always require an input PDB
     if (!params.input_pdb) {
         throw new IllegalArgumentException("input_pdb is required for '${design_mode}' mode.")
     }
@@ -1223,6 +1225,9 @@ def validateBoltzGenParams(design_mode, hotspot_residues, bg_not_binding_residue
     }
     if (bg_not_binding_residues && !bg_not_binding_residues.matches(residueSpecRegex)) {
         throw new IllegalArgumentException("bg_not_binding_residues format invalid. Acceptable: 'A200,A210-215,B'.")
+    }
+    if (design_mode == 'boltzgen_denovo' && !input_pdb && (hotspot_residues || bg_not_binding_residues)) {
+        throw new IllegalArgumentException("hotspot_residues/bg_not_binding_residues require a target - please provide input_pdb, or leave them null for monomer design.")
     }
     if (bg_flexible_residues && !bg_flexible_residues.matches(residueSpecRegex)) {
         throw new IllegalArgumentException("bg_flexible_residues format invalid. Acceptable: 'A10-13,A16,B'.")

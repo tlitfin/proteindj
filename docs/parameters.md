@@ -26,8 +26,8 @@ These parameters are used for some of the ProteinDJ modes.
 | Parameter                         | Default | Description                                                                                                                                                                                                                                                                                                                       | Required for Modes                                                                                                         |
 | --------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `design_length`                   | null    | Design length of binder or monomer. e.g. `'60'` or `'60-70'`. Pipeline will randomly sample different sizes between these values.                                                                                                                                                                                                 | `bindcraft_denovo`, `rfd_denovo`, `boltzgen_denovo`                                                                      |
-| `input_pdb`                       | null    | Path to input PDB file (e.g. target for binders, `'./target.pdb'`). Required for all binder modes.                                                                                                                                                                                                                                   | `rfd_motifscaff`, `rfd_partialdiff`, `boltzgen_denovo`, `boltzgen_redesign` |
-| `hotspot_residues`                | null    | Hotspot residues for binder design, e.g. `A56,A115,A123`. Optional for `rfd_denovo` and `rfd_foldcond`  modes.                                                                                                                                                                                                                     |                                                                                                                            |
+| `input_pdb`                       | null    | Path to input PDB file (e.g. target for binders, `'./target.pdb'`). Required for all binder modes.                                                                                                                                                                                                                                   | `bindcraft_denovo`, `boltzgen_redesign`, `rfd_motifscaff`, `rfd_partialdiff` |
+| `hotspot_residues`                | null    | Hotspot residues for binder design, e.g. `A56,A115,A123`. Optional for `rfd_denovo`/`rfd_foldcond`, `boltzgen_denovo`/`boltzgen_redesign` binder design modes.                                                                                                                                                                                                                     |                                                                                                                            |
 | `rfd_contigs`                     | null    | Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`. | `rfd_motifscaff`                                                                                  |
 | `rfd_scaffold_dir`                | null    | Directory containing scaffold secondary structure and block adjacency files (e.g. `'./binderscaffolds/scaffolds_assorted'`). Required for fold conditioning modes.                                                                                                                                                                | `rfd_foldcond`                                                                                      |
 | `rfd_mask_loops`                  | true    | Whether to ignore loops during scaffold secondary structure constraints. Optional for `rfd_foldcond` mode.                                                                                                                                                                                             |                                                                                                                            |
@@ -39,17 +39,47 @@ These parameters are used for some of the ProteinDJ modes.
 
 `-` = ignored
 
-| Parameter                       | monomer denovo | monomer foldcond | monomer motifscaff | monomer partialdiff | binder denovo | binder foldcond | binder motifscaff | binder partialdiff | bindcraft_denovo |
-| ------------------------------- | -------------- | ---------------- | ------------------ | ------------------- | ------------- | --------------- | ----------------- | ------------------ | ---------------- |
-| design_length                   | Required       | -                | -                  | -                   | Required      | -               | -                 | -                  | Required         |
-| input_pdb                       | -              | -                | Required           | Required            | Required      | Required        | Required          | Required           | Required         |
-| hotspot_residues                | -              | -                | -                  | -                   | _Optional_    | _Optional_      | -                 | -                  | _Optional_       |
-| rfd_contigs                     | _Optional_     | -                | Required           | _Optional_          | _Optional_    | -               | Required          | _Optional_         | -                |
-| rfd_scaffold_dir                | -              | Required         | -                  | -                   | -             | Required        | -                 | -                  | -                |
-| rfd_mask_loops                  | -              | _Optional_       | -                  | -                   | -             | _Optional_      | -                 | -                  | -                |
-| rfd_inpaint_seq                 | -              | -                | _Optional_         | -                   | -             | -               | _Optional_        | -                  | -                |
-| rfd_length                      | -              | -                | _Optional_         | -                   | -             | -               | _Optional_        | -                  | -                |
-| rfd_partial_diffusion_timesteps | -              | -                | -                  | Required            | -             | -               | -                 | Required           | -                |
+#### Monomer design
+
+| Parameter                       | rfd_denovo | rfd_foldcond | rfd_motifscaff | rfd_partialdiff | boltzgen_denovo | boltzgen_redesign |
+| -------------------------------- | ---------- | ------------ | --------------- | ---------------- | ---------------- | ------------------- |
+| design_length                    | Required   | -            | -               | -                 | Required          | -                   |
+| input_pdb                        | -          | -            | Required        | Required          | -                 | Required            |
+| hotspot_residues                 | -          | -            | -               | -                 | -                 | -                   |
+| bg_not_binding_residues          | -          | -            | -               | -                 | -                 | -                   |
+| bg_redesign_spec                 | -          | -            | -               | -                 | -                 | _Optional_          |
+| bg_redesign_inpaint_seq          | -          | -            | -               | -                 | -                 | _Optional_          |
+| bg_flexible_residues             | -          | -            | -               | -                 | -                 | _Optional_          |
+| rfd_contigs                      | _Optional_ | -            | Required        | _Optional_        | -                 | -                   |
+| rfd_scaffold_dir                 | -          | Required     | -               | -                 | -                 | -                   |
+| rfd_mask_loops                   | -          | _Optional_   | -               | -                 | -                 | -                   |
+| rfd_inpaint_seq                  | -          | -            | _Optional_      | -                 | -                 | -                   |
+| rfd_length                       | -          | -            | _Optional_      | -                 | -                 | -                   |
+| rfd_partial_diffusion_timesteps  | -          | -            | -               | Required          | -                 | -                   |
+
+#### Binder design
+
+| Parameter                       | rfd_denovo | rfd_foldcond | rfd_motifscaff | rfd_partialdiff | bindcraft_denovo | boltzgen_denovo | boltzgen_redesign |
+| -------------------------------- | ---------- | ------------ | --------------- | ---------------- | ----------------- | ----------------- | ------------------- |
+| design_length                    | Required   | -            | -               | -                 | Required           | Required           | -                   |
+| input_pdb                        | Required   | Required     | Required        | Required          | Required           | Required           | Required            |
+| hotspot_residues                 | _Optional_ | _Optional_   | -               | -                 | _Optional_         | _Optional_         | _Optional_          |
+| bc_chains                        | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_design_protocol               | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_template_protocol             | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_omit_AAs                      | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_fix_interface_residues        | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_advanced_json                 | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bg_not_binding_residues          | -          | -            | -               | -                 | -                  | _Optional_         | _Optional_          |
+| bg_redesign_spec                 | -          | -            | -               | -                 | -                  | -                  | _Optional_          |
+| bg_redesign_inpaint_seq          | -          | -            | -               | -                 | -                  | -                  | _Optional_          |
+| bg_flexible_residues             | -          | -            | -               | -                 | -                  | _Optional_         | _Optional_          |
+| rfd_contigs                      | _Optional_ | -            | Required        | _Optional_        | -                  | -                  | -                   |
+| rfd_scaffold_dir                 | -          | Required     | -               | -                 | -                  | -                  | -                   |
+| rfd_mask_loops                   | -          | _Optional_   | -               | -                 | -                  | -                  | -                   |
+| rfd_inpaint_seq                  | -          | -            | _Optional_      | -                 | -                  | -                  | -                   |
+| rfd_length                       | -          | -            | _Optional_      | -                 | -                  | -                  | -                   |
+| rfd_partial_diffusion_timesteps  | -          | -            | -               | Required          | -                  | -                  | -                   |
 
 ---
 
