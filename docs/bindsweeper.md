@@ -103,7 +103,7 @@ BindSweeper uses YAML configuration files to define parameter sweeps. Here are t
 ### Basic Structure
 
 ```yaml
-mode: binder_denovo  # or binder_foldcond
+mode: rfd_denovo  # or rfd_foldcond
 profile: milton      # Nextflow profile to use
 
 # Parameters that remain constant across all runs
@@ -136,10 +136,10 @@ results_config:
 
 ### Supported Modes
 
-1. **`binder_denovo`**: De novo binder design (RFdiffusion)
-2. **`binder_foldcond`**: Fold-conditioned binder design (RFdiffusion)
-3. **`binder_motifscaff`**: Motif scaffolding binder design (RFdiffusion)
-4. **`binder_partialdiff`**: Partial diffusion binder design (RFdiffusion)
+1. **`rfd_denovo`**: De novo binder design (RFdiffusion)
+2. **`rfd_foldcond`**: Fold-conditioned binder design (RFdiffusion)
+3. **`rfd_motifscaff`**: Motif scaffolding binder design (RFdiffusion)
+4. **`rfd_partialdiff`**: Partial diffusion binder design (RFdiffusion)
 5. **`bindcraft_denovo`**: De novo binder design (FreeBindCraft)
 6. **`boltzgen_denovo`**: De novo binder design (BoltzGen)
 7. **`boltzgen_redesign`**: Redesign of an existing binder's architecture/sequence/structure (BoltzGen)
@@ -220,7 +220,7 @@ This produces:
 Test different hotspot combinations for binder design:
 
 ```yaml
-mode: binder_denovo
+mode: rfd_denovo
 profile: milton
 
 fixed_params:
@@ -245,7 +245,7 @@ sweep_params:
 Explore different noise levels:
 
 ```yaml
-mode: binder_denovo
+mode: rfd_denovo
 profile: milton
 
 fixed_params:
@@ -266,7 +266,7 @@ sweep_params:
 Test different scaffold sets:
 
 ```yaml
-mode: binder_foldcond
+mode: rfd_foldcond
 profile: milton
 
 fixed_params:

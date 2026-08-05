@@ -308,7 +308,7 @@ Before running production workloads, verify your installation works correctly.
 
 ```bash
 # From the proteindj root directory
-nextflow run main.nf -profile test,monomer_denovo
+nextflow run main.nf -profile test,rfd_denovo_monomer
 ```
 
 **Expected output:**
@@ -320,7 +320,7 @@ nextflow run main.nf -profile test,monomer_denovo
 ### Test 2: Binder Design (5-10 minutes)
 
 ```bash
-nextflow run main.nf -profile test,binder_denovo
+nextflow run main.nf -profile test,rfd_denovo_binder
 ```
 
 **Expected output:**

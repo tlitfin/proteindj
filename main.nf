@@ -52,9 +52,23 @@ workflow {
 
     def outputDirectory = params.out_dir
 
-    VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'monomer_denovo', 'monomer_foldcond', 'monomer_motifscaff', 'monomer_partialdiff']
+    VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff']
     if (!(params.design_mode in VALID_MODES)) {
         throw new IllegalArgumentException("Invalid design mode: ${params.design_mode}. Must be one of: ${VALID_MODES.join(', ')}")
+    }
+
+    // Auto-detect monomer vs binder behavior for RFdiffusion modes (computed once, used throughout)
+    def running_fold_design = !params.skip_fold && !params.skip_fold_seq && !params.skip_fold_seq_pred
+    def is_binder_mode
+    if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign']) {
+        is_binder_mode = true
+    } else if (running_fold_design) {
+        // Fold design will run this invocation - detect from RFdiffusion input parameters
+        is_binder_mode = detectIsBinderModeFromParams(params.design_mode, params)
+    } else {
+        // Fold design is being skipped this invocation - derive binder/monomer status from
+        // the chain count of an actual resumed PDB in params.skip_input_dir.
+        is_binder_mode = detectIsBinderModeFromResumedPdb(params.skip_input_dir)
     }
 
     if (params.run_fold_only && (params.skip_fold_seq || params.skip_fold_seq_pred )) {
@@ -78,9 +92,8 @@ workflow {
         ranking_metric = validateranking_metric(params.ranking_metric, params.pred_method)
     } else if (params.rank_designs && !params.ranking_metric) {
         // Use default ranking metrics based on mode and prediction method
-        def is_monomer = params.design_mode.startsWith('monomer_')
         // 'af2_boltz' defaults to boltz_* metrics since Boltz is the final/most-refined stage
-        if (is_monomer) {
+        if (!is_binder_mode) {
             // For monomer modes, use overall quality metrics (no interface)
             ranking_metric = params.pred_method in ['boltz', 'af2_boltz'] ? 'boltz_ptm' : 'af2_plddt_overall'
         } else {
@@ -150,7 +163,7 @@ workflow {
             error("Please provide the number of designs to generate")
         }
         // Validate input PDB file
-        if (params.design_mode in ['bindcraft_denovo','boltzgen_denovo','boltzgen_redesign','binder_denovo', 'binder_motifscaff', 'binder_partialdiff', 'binder_foldcond', 'monomer_motifscaff', 'monomer_partialdiff']) {
+        if (params.design_mode in ['bindcraft_denovo','boltzgen_denovo','boltzgen_redesign','rfd_motifscaff','rfd_partialdiff'] || (params.design_mode in ['rfd_denovo', 'rfd_foldcond'] && is_binder_mode)) {
             if (!params.input_pdb) {
                 throw new IllegalArgumentException("Please provide input PDB file path required by $params.design_mode mode")
             }
@@ -160,10 +173,10 @@ workflow {
             }
         }
         // Validate design length
-        // For binder_denovo and monomer_denovo, skip validation when rfd_contigs is provided as it contains the design length
+        // For rfd_denovo, skip validation when rfd_contigs is provided as it contains the design length
         if (params.design_mode in ['bindcraft_denovo','boltzgen_denovo']){
             validateDesignLength(params.design_length)
-        } else if (params.design_mode in ['binder_denovo', 'monomer_denovo'] && !params.rfd_contigs){
+        } else if (params.design_mode == 'rfd_denovo' && !params.rfd_contigs){
             validateDesignLength(params.design_length)
         }
         
@@ -294,26 +307,26 @@ workflow {
         } else { // Use RFdiffusion for fold design
             validateRFDParameters(params)
             // Check for user-provided contigs or whether to automatically generate them
-            if (params.design_mode in ['binder_foldcond', 'monomer_foldcond']){
+            if (params.design_mode == 'rfd_foldcond'){
                Channel.value('NoContigsNeededForFoldConditioning').set{rfdContigs}
-            } else if (params.rfd_contigs && params.design_mode in ['binder_denovo', 'binder_partialdiff', 'binder_motifscaff', 'monomer_denovo','monomer_motifscaff', 'monomer_partialdiff']){
+            } else if (params.rfd_contigs){
                // Use provided value
                description=generateContigDescription("$params.rfd_contigs")
                println description
                Channel.value(params.rfd_contigs).set{rfdContigs}
-            } else if (!params.rfd_contigs && params.design_mode in ['binder_motifscaff', 'monomer_motifscaff']){
-                error("rfd_contigs is required for $params.design_mode mode.")
-            } else if (!params.rfd_contigs && params.design_mode in ['binder_denovo', 'binder_partialdiff', 'monomer_partialdiff']){
-                // Auto-generate contigs for RFdiffusion if not provided
-                println("Automatically generating RFdiffusion contigs from input PDB. Will include all residues.")
-                GenerateRFDContigs(file(params.input_pdb),params.design_mode)
-                GenerateRFDContigs.out.view({ contigs -> "Generated the RFdiffusion contigs: $contigs" }).set{rfdContigs}
-            } else if (!params.rfd_contigs && params.design_mode == 'monomer_denovo'){
-                // Contigs for monomer_denovo are equivalent to design_length
+            } else if (params.design_mode == 'rfd_motifscaff'){
+                error("rfd_contigs is required for rfd_motifscaff mode.")
+            } else if (params.design_mode == 'rfd_denovo' && !is_binder_mode){
+                // Contigs for monomer rfd_denovo are equivalent to design_length
                 Channel.value("[$params.design_length]").set{rfdContigs}
+            } else {
+                // Auto-generate contigs for RFdiffusion if not provided (rfd_denovo binder, or rfd_partialdiff monomer/binder)
+                println("Automatically generating RFdiffusion contigs from input PDB. Will include all residues.")
+                GenerateRFDContigs(file(params.input_pdb), params.design_mode, is_binder_mode)
+                GenerateRFDContigs.out.view({ contigs -> "Generated the RFdiffusion contigs: $contigs" }).set{rfdContigs}
             }
 
-            if(params.design_mode == 'binder_foldcond'){
+            if(params.design_mode == 'rfd_foldcond' && is_binder_mode){
                 GenerateRFDFoldCond(file(params.input_pdb))
                 GenerateRFDFoldCond.out.target_adj.set{target_adj}
                 GenerateRFDFoldCond.out.target_ss.set{target_ss}
@@ -323,7 +336,7 @@ workflow {
             }
 
             // Collect input files
-            def inputFiles = collectInputFiles(params)
+            def inputFiles = collectInputFiles(params, is_binder_mode)
 
             // Copy input files to output directory
             inputFiles.each { inputFile ->
@@ -347,7 +360,7 @@ workflow {
                 .combine(target_adj)
                 .combine(target_ss)
                 .map { batchId, batchSizeVal, designStartnum, mode, files, contigs, adj, ss ->
-                    def rfdParams = new RFDiffusionParams(params)
+                    def rfdParams = new RFDiffusionParams(params + [is_binder_mode: is_binder_mode])
                     def rfdCommand = rfdParams.generateCommandString(contigs)
                     tuple(batchId, batchSizeVal, designStartnum, mode, files, rfdCommand, adj, ss)
                 }
@@ -473,7 +486,7 @@ workflow {
                 .combine(mega_csv)
                 .set { fampnn_input }
 
-            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (is_binder_mode) {
                 // Perform design and scoring on binder (chain A)
                 RunFAMPNN(fampnn_input, 'A')
             }
@@ -541,7 +554,7 @@ workflow {
     // Run Structure Prediction if not skipped
     if (!params.skip_fold_seq_pred & !params.run_fold_only) {
         // Optional uncropped target PDB merge for binder design
-        if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+        if (is_binder_mode) {
             // if uncropped target PDB file is provided, merge with designs
             if (params.uncropped_target_pdb) {
                 def uncroppedPDBfile = file(params.uncropped_target_pdb)
@@ -578,7 +591,7 @@ workflow {
             // Filtering of AF2 results
             FilterAF2(pred_tuple, af2_filter_params)
 
-            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (is_binder_mode) {
                 // Alignment of PDBs to target chain(s). Only need one reference file
                 AlignAF2(FilterAF2.out.pdbs.flatten().collect(), pred_input_pdbs.flatten().last())
                 AlignAF2.out.pdbs
@@ -601,7 +614,7 @@ workflow {
             }
 
             // Prep yaml files for Boltz-2
-            PrepBoltz(pred_input_pdbs, msa_input)
+            PrepBoltz(pred_input_pdbs, msa_input, is_binder_mode)
 
             // Handle templates - use empty channel if not present
             PrepBoltz.out.templates
@@ -635,7 +648,7 @@ workflow {
             pred_input_pdbs.collect().set { designs_for_alignment }
 
             // Calculate Boltz-2 interface scores for binders only
-            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (is_binder_mode) {
                 AnalyseBoltz(pred_tuple, npz_files_for_analysis)
                 AnalyseBoltz.out.pdbs_jsons
                     .set { boltz_with_metrics }
@@ -644,7 +657,7 @@ workflow {
             }
 
             // Align Boltz Predictions to FAMPNN output and calculate RMSD
-            if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (is_binder_mode) {
                 AlignBoltz(boltz_with_metrics, designs_for_alignment, 'binder')
             }
             else {
@@ -685,7 +698,7 @@ workflow {
             // Filtering of AF2 results
             FilterAF2(af2c_pred_tuple, af2_filter_params)
 
-            if (params.design_mode in ['bindcraft_denovo', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (is_binder_mode) {
                 // Alignment of PDBs to target chain(s). Only need one reference file
                 AlignAF2(FilterAF2.out.pdbs.flatten().collect(), pred_input_pdbs.flatten().last())
                 AlignAF2.out.pdbs
@@ -724,7 +737,7 @@ workflow {
             }
 
             // Prep yaml files for Boltz-2
-            PrepBoltz(boltz_input_pdbs, msa_input)
+            PrepBoltz(boltz_input_pdbs, msa_input, is_binder_mode)
 
             // Handle templates - use empty channel if not present
             PrepBoltz.out.templates
@@ -758,7 +771,7 @@ workflow {
             boltz_input_pdbs.collect().set { designs_for_alignment }
 
             // Calculate Boltz-2 interface scores for binders only
-            if (params.design_mode in ['binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff' , 'bindcraft_denovo' ]) {
+            if (is_binder_mode) {
                 AnalyseBoltz(pred_tuple, npz_files_for_analysis)
                 AnalyseBoltz.out.pdbs_jsons
                     .set { boltz_with_metrics }
@@ -767,7 +780,7 @@ workflow {
             }
 
             // Align Boltz Predictions to FAMPNN output and calculate RMSD
-            if (params.design_mode in ['bindcraft_denovo','binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff']) {
+            if (is_binder_mode) {
                 AlignBoltz(boltz_with_metrics, designs_for_alignment, 'binder')
             }
             else {
@@ -959,7 +972,8 @@ workflow {
         af2_count,
         af2_filter_count,
         boltz_count,
-        boltz_filter_count
+        boltz_filter_count,
+        is_binder_mode
     )
     
     // Save log file on completion
@@ -1015,15 +1029,56 @@ def validateranking_metric(ranking_metric, pred_method) {
     return ranking_metric
 }
 
+// Auto-detect binder vs monomer behavior for RFdiffusion modes when fold design will actually run
+// this invocation. Uses params.input_pdb / params.rfd_contigs to determine chain count.
+def detectIsBinderModeFromParams(design_mode, params) {
+    if (design_mode in ['rfd_denovo', 'rfd_foldcond']) {
+        return params.input_pdb as boolean
+    }
+    // rfd_motifscaff / rfd_partialdiff always require an input PDB
+    if (!params.input_pdb) {
+        throw new IllegalArgumentException("input_pdb is required for '${design_mode}' mode.")
+    }
+    def inputFile = file(params.input_pdb)
+    if (!inputFile.exists()) {
+        throw new FileNotFoundException("Input PDB file not found at path: ${params.input_pdb}. Please ensure the file exists and the path is correct.")
+    }
+    if (params.rfd_contigs) {
+        // Chain-break token count is robust to newly-diffused chains that have no chain letter
+        // (e.g. partial diffusion / denovo binder chains)
+        return Utils.countContigChains(params.rfd_contigs) >= 2
+    }
+    Set chainIds = Utils.getPdbChainIds(inputFile)
+    if (chainIds.isEmpty()) {
+        throw new IllegalArgumentException("Could not determine chain(s) from input_pdb for '${design_mode}' mode.")
+    }
+    return chainIds.size() >= 2
+}
+
+// Auto-detect binder vs monomer behavior when fold design is being skipped this invocation.
+// Derived from the chain count of an actual resumed PDB in params.skip_input_dir, without
+// requiring/validating RFdiffusion-specific input parameters (input_pdb, rfd_contigs).
+def detectIsBinderModeFromResumedPdb(skip_input_dir) {
+    if (!skip_input_dir || !file(skip_input_dir).exists()) {
+        throw new FileNotFoundException("skip_input_dir not found at path: ${skip_input_dir}. Please ensure the path is correct.")
+    }
+    def pdbs = files(file(skip_input_dir).resolve('*.pdb'))
+    if (!pdbs) {
+        throw new FileNotFoundException("No PDB files found in directory: ${skip_input_dir}. Cannot auto-detect monomer/binder design mode.")
+    }
+    def firstPdb = pdbs instanceof List ? pdbs[0] : pdbs
+    return Utils.getPdbChainIds(firstPdb).size() >= 2
+}
+
 def validateRFDParameters(params) {
     // Validate Parameters for RFdiffusion including  mode required parameters
     switch (params.design_mode) {
-        case 'binder_partialdiff':
+        case 'rfd_partialdiff':
             if (!params.rfd_partial_diffusion_timesteps) {
-                throw new IllegalArgumentException("rfd_partial_diffusion_timesteps is required when mode is 'binder_partialdiff'")
+                throw new IllegalArgumentException("rfd_partial_diffusion_timesteps is required when mode is 'rfd_partialdiff'")
             }
-            break            
-        case 'binder_foldcond':
+            break
+        case 'rfd_foldcond':
             // Validate scaffold directory and contents
             if (!params.rfd_scaffold_dir) {
                 throw new IllegalArgumentException("Please provide path to directory containing scaffold files for fold conditioning (rfd_scaffold_dir)")
@@ -1038,33 +1093,12 @@ def validateRFDParameters(params) {
             if (!ss_files || !adj_files) {
                 throw new IllegalArgumentException("rfd_scaffold_dir does not contain required _ss.pt and _adj.pt files")
             }
-            break
-        case 'monomer_foldcond':
-            if (!params.rfd_scaffold_dir) {
-                throw new IllegalArgumentException("Please provide path to directory containing scaffold files for fold conditioning (rfd_scaffold_dir)")
-            }
-
-            def scaffoldsDir = file(params.rfd_scaffold_dir)
-            if (!scaffoldsDir.exists() || !scaffoldsDir.isDirectory()) {
-                throw new IllegalArgumentException("rfd_scaffold_dir does not exist or is not a directory")
-            }
-            
-            def ss_files = files(scaffoldsDir.resolve('*_ss.pt'))
-            def adj_files = files(scaffoldsDir.resolve('*_adj.pt'))
-            if (!ss_files || !adj_files) {
-                throw new IllegalArgumentException("rfd_scaffold_dir does not contain required _ss.pt and _adj.pt files")
-            }
-            break                
-        case 'monomer_partialdiff':
-            if (!params.rfd_partial_diffusion_timesteps) {
-                throw new IllegalArgumentException("rfd_partial_diffusion_timesteps is required when mode is 'monomer_partialdiff'")
-            }
             break                
     }
 }
 
 // Collect required input files
-def collectInputFiles(params) {
+def collectInputFiles(params, is_binder_mode) {
     def inputs = []
 
     // Add required input files
@@ -1072,13 +1106,9 @@ def collectInputFiles(params) {
         'bindcraft_denovo',
         'boltzgen_denovo',
         'boltzgen_redesign',
-        'binder_denovo',
-        'binder_foldcond',
-        'binder_motifscaff',
-        'binder_partialdiff',
-        'monomer_motifscaff',
-        'monomer_partialdiff',
-    ]) {
+        'rfd_motifscaff',
+        'rfd_partialdiff',
+    ] || (params.design_mode in ['rfd_denovo', 'rfd_foldcond'] && is_binder_mode)) {
         if (params.input_pdb) {
             inputs << file(params.input_pdb)
         }
@@ -1088,11 +1118,11 @@ def collectInputFiles(params) {
         inputs << file(params.bc_advanced_json)
     }
 
-    if (params.design_mode in ['monomer_denovo', 'monomer_foldcond']) {
+    if (params.design_mode in ['rfd_denovo', 'rfd_foldcond'] && !is_binder_mode) {
         // Add 'placeholder' PDB file, since RFdiffusion requires xyz coordinates
         inputs << file("${projectDir}/lib/placeholder.pdb")
     }
-    if (params.design_mode in ['binder_foldcond', 'monomer_foldcond']) {
+    if (params.design_mode == 'rfd_foldcond') {
         if (params.rfd_scaffold_dir) {
             // Add scaffolds_dir and contents
             inputs << file(params.rfd_scaffold_dir)

@@ -1,5 +1,5 @@
 name: gpu_scaling_performance_test
-mode: 'binder_denovo'
+mode: 'rfd_denovo'
 profile: milton
 
 sweep_params:

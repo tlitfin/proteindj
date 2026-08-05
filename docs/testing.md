@@ -40,19 +40,20 @@ module load nextflow/24.10.5
 
 ## Pipeline Modes Tested
 
-The script tests the following ProteinDJ pipeline modes:
+The script tests the following ProteinDJ pipeline profiles:
 
-### Monomer Modes
-- `monomer_denovo` - De novo protein design
-- `monomer_foldcond` - Conditional folding design
-- `monomer_motifscaff` - Motif-based scaffolding
-- `monomer_partialdiff` - Partial diffusion design
+### Monomer Profiles
+- `rfd_denovo_monomer` - De novo protein design
+- `rfd_foldcond_monomer` - Conditional folding design
+- `rfd_motifscaff_monomer` - Motif-based scaffolding
+- `rfd_partialdiff_monomer` - Partial diffusion design
 
-### Binder-Specific Modes
-- `binder_denovo` - De novo binder design
-- `binder_foldcond` - Conditional binder folding
-- `binder_motifscaff` - Binder motif scaffolding
-- `binder_partialdiff` - Partial diffusion binder design
+### Binder Profiles
+- `bindcraft_denovo` - De novo binder design (BindCraft)
+- `rfd_denovo_binder` - De novo binder design (RFdiffusion)
+- `rfd_foldcond_binder` - Conditional binder folding
+- `rfd_motifscaff_binder` - Binder motif scaffolding
+- `rfd_partialdiff_binder` - Partial diffusion binder design
 
 ## Command Line Arguments
 
@@ -74,8 +75,8 @@ The script creates a timestamped directory with the following structure:
 test_results_YYYYMMDD_HHMMSS/
 ├── logs/
 │   ├── test_execution.log          # Main execution log
-│   ├── denovo.log                  # Individual mode logs
-│   ├── binder_denovo.log
+│   ├── rfd_denovo_monomer.log       # Individual mode logs
+│   ├── rfd_denovo_binder.log
 │   └── ...
 └── analysis.txt                    # Comprehensive analysis and summary
 ```

@@ -74,14 +74,10 @@ The ProteinDJ consists of four stages:
 
 Due to the creative nature of protein design and the complexity of RFdiffusion there are many ways you can use ProteinDJ. To help with delineating this, we have created design modes for ProteinDJ. Each mode is described in detail in our [Guide to Design Modes](docs/modes.md), but for now, here's a quick summary of each one with a simple illustration of each mode in action:
 
-- **monomer_denovo** – diffusion of new monomers from noise
-- **monomer_foldcond** – diffusion of new monomers with fold-conditioning on scaffolds/templates
-- **monomer_motifscaff** – inpainting/extension of input monomers
-- **monomer_partialdiff** – partial diffusion of input monomers
-- **binder_denovo** – diffusion of new binders from noise
-- **binder_foldcond** – diffusion of new binders with fold-conditioning on scaffolds/templates
-- **binder_motifscaff** – diffusion of binding motifs in input scaffolds
-- **binder_partialdiff** – partial diffusion of a binder from an input PDB
+- **rfd_denovo** – diffusion of new monomers/binders from noise
+- **rfd_foldcond** – diffusion of new monomers/binders with fold-conditioning on scaffolds/templates
+- **rfd_motifscaff** – inpainting/extension of input monomers, or diffusion of binding motifs in input scaffolds / diffusion of binding motifs in scaffolds
+- **rfd_partialdiff** – partial diffusion of an input monomer or binder
 - **bindcraft_denovo** - hallucination of new binders using BindCraft
 - **boltzgen_denovo** – generative design of new binders against a target using BoltzGen
 - **boltzgen_redesign** – redesign/rediffusion of an existing binder using BoltzGen
@@ -92,7 +88,7 @@ All the settings and parameters for ProteinDJ can be found in the `nextflow.conf
 
 | Parameter         | Example Value      | Description                                                                                                                                                                                     |
 | ----------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design_mode`        | `'monomer_denovo'` | Pipeline mode. Choose from 'monomer_denovo', 'monomer_foldcond', 'monomer_motifscaff', 'monomer_partialdiff', 'binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'bindcraft_denovo', 'boltzgen_denovo', or 'boltzgen_redesign'. |
+| `design_mode`        | `'rfd_denovo'` | Pipeline mode. Choose from 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff' (each automatically runs as monomer or binder design depending on whether `input_pdb` is provided), 'bindcraft_denovo', 'boltzgen_denovo', or 'boltzgen_redesign'. |
 | `num_designs` | `8`                | Number of designs to generate using RFdiffusion or Bindcraft.                                                                                                                                                |
 | `seqs_per_design` | `8`                | Number of sequences to generate per design.                                                                                                                                         |
 | `out_dir`         | `'./pdj_results'`  | Output directory for results. Existing results in this directory will be overwritten.                                                                                                           |
@@ -110,12 +106,12 @@ Note that by default, this will use the parameters in `nextflow.config` file in 
 `nextflow run main.nf -c CONFIGFILE`
 
 A helpful feature of the nextflow.config file is profiles. Profiles can be used to override parameters but are easier to edit. e.g. the
-profile for the monomer_denovo mode looks like this. We recommend using the existing profiles as a reference for each mode.
+profile for the rfd_denovo monomer mode looks like this. We recommend using the existing profiles as a reference for each mode.
 
 ```
-monomer_denovo {
+rfd_denovo_monomer {
     params {
-        design_mode = 'monomer_denovo'
+        design_mode = 'rfd_denovo'
         design_length = "60-80"
         seq_method = 'fampnn'
         pred_method = 'boltz'
@@ -125,11 +121,11 @@ monomer_denovo {
 
 In this example, Nextflow will use all of the default parameter values from the params section except for `design_mode`, `design_length`, `seq_method` and `pred_method` (in this case to generate a de novo monomer 60-80 residues in length with RFdiffusion, Full-Atom MPNN and Boltz-2). You can use profiles by adding the `-profile` flag. e.g.
 
-`nextflow run main.nf -profile monomer_denovo`
+`nextflow run main.nf -profile rfd_denovo_monomer`
 
 You can specify multiple profiles, for example, to combine a profile for your HPC environment (e.g. Milton at WEHI) with a design mode profile:
 
-`nextflow run main.nf -profile milton,binder_denovo`
+`nextflow run main.nf -profile milton,rfd_denovo_binder`
 
 After running the pipeline, you can find all the results as well as intermediate files and logs in your specified `out_dir` organised as below:
 
@@ -147,7 +143,7 @@ out_dir/
 └── nextflow.log            # Copy of Nextflow log from run
 ```
 
-> Tip: If your run gets interrupted you can resume from the last completed step by using the -resume flag e.g. `nextflow run main.nf -profile monomer_denovo -resume`
+> Tip: If your run gets interrupted you can resume from the last completed step by using the -resume flag e.g. `nextflow run main.nf -profile rfd_denovo_monomer -resume`
 
 ## Advanced Parameters <a name="params"></a>
 

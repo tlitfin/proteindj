@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_monomer_motifscaff.json",
-  "title": "monomer_motifscaff pipeline parameters",
-  "description": "Parameters for monomer_motifscaff mode",
+  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_rfd_partialdiff.json",
+  "title": "rfd_partialdiff pipeline parameters",
+  "description": "Parameters for rfd_partialdiff mode",
   "type": "object",
   "definitions": {
     "essential_parameters": {
@@ -14,9 +14,9 @@
         "design_mode": {
           "type": "string",
           "description": "Pipeline mode.",
-          "default": "monomer_motifscaff",
+          "default": "rfd_partialdiff",
           "enum": [
-            "monomer_motifscaff"
+            "rfd_partialdiff"
           ]
         },
         "num_designs": {
@@ -31,7 +31,7 @@
         },
         "out_dir": {
           "type": "string",
-          "default": "${projectDir}/pdj_monomer_motifscaff",
+          "default": "${projectDir}/pdj_rfd_partialdiff",
           "description": "Output directory for results.",
           "format": "directory-path"
         }
@@ -54,29 +54,22 @@
           "pattern": ".*\\.pdb$",
           "format": "file-path",
           "description": "Path to an input PDB file. e.g. 'target.pdb'",
-          "default": "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
+          "default": "${projectDir}/lib/examplebinder.pdb"
         },
         "rfd_contigs": {
           "type": "string",
-          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `binder_motifscaff` and `monomer_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-          "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$",
-          "default": "[A17-43/9-15/A53-117/3-6/A121-131]"
+          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
+          "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
         },
-        "rfd_inpaint_seq": {
-          "type": "string",
-          "description": "Residues that will have their sequence masked when diffusing. e.g. '[A17-19/A143-145]'",
-          "pattern": "^\\[([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?)(?:\\/([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?))*\\]$",
-          "default": "[A17-19/A129-131]"
-        },
-        "rfd_length": {
-          "type": "string",
-          "description": "Length of diffused chain when performing motif scaffolding e.g. 100-120",
-          "pattern": "^\\d+-\\d+$"
+        "rfd_partial_diffusion_timesteps": {
+          "type": "integer",
+          "description": "Number of timesteps for partial diffusion. e.g. 20",
+          "default": 20
         }
       },
       "required": [
         "input_pdb",
-        "rfd_contigs"
+        "rfd_partial_diffusion_timesteps"
       ]
     },
     "workflow_advanced_parameters": {
@@ -181,7 +174,7 @@
       "properties": {
         "rfd_ckpt_override": {
           "type": "string",
-          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'binder_denovo' mode i.e. 'complex_beta'",
+          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
           "enum": [
             "active_site",
             "base",
@@ -341,6 +334,19 @@
       "description": "Parameters for AlphaFold2 Initial-Guess and Boltz-2",
       "default": "",
       "properties": {
+        "uncropped_target_pdb": {
+          "type": "string",
+          "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
+          "hidden": true,
+          "format": "file-path",
+          "pattern": "\\.pdb$"
+        },
+        "af2_initial_guess": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use an initial-guess of the target chain(s) when performing binder structure prediction. When false, AF2 will not use an initial guess. Default = true",
+          "hidden": true
+        },
         "af2_extra_config": {
           "type": "string",
           "hidden": true,
@@ -466,9 +472,24 @@
           "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence.",
           "hidden": true
         },
+        "af2_max_pae_interaction": {
+          "type": "number",
+          "description": "Max predicted aligned error for interactions e.g. 10",
+          "hidden": true
+        },
         "af2_max_pae_overall": {
           "type": "number",
           "description": "Max predicted aligned error for all chains e.g. 10",
+          "hidden": true
+        },
+        "af2_max_pae_binder": {
+          "type": "number",
+          "description": "Max predicted aligned error for binder e.g. 5",
+          "hidden": true
+        },
+        "af2_max_pae_target": {
+          "type": "number",
+          "description": "Max predicted aligned error for target e.g. 5",
           "hidden": true
         },
         "af2_min_plddt_overall": {
@@ -476,14 +497,49 @@
           "description": "Min average pLDDT score for target and binder chains e.g. 90",
           "hidden": true
         },
+        "af2_min_plddt_binder": {
+          "type": "number",
+          "description": "Min pLDDT score required for binder e.g. 85",
+          "hidden": true
+        },
+        "af2_min_plddt_target": {
+          "type": "number",
+          "description": "Min pLDDT score required for target e.g 90",
+          "hidden": true
+        },
         "af2_max_rmsd_overall": {
           "type": "number",
           "description": "Max RMSD when all chains are aligned e.g. 2",
           "hidden": true
         },
+        "af2_max_rmsd_binder_bndaln": {
+          "type": "number",
+          "description": "Max binder RMSD when binder chains are aligned e.g. 1",
+          "hidden": true
+        },
+        "af2_max_rmsd_binder_tgtaln": {
+          "type": "number",
+          "description": "Max binder RMSD when target chains are aligned e.g. 2",
+          "hidden": true
+        },
+        "af2_max_rmsd_target": {
+          "type": "number",
+          "description": "Max target RMSD when target chains are aligned e.g. 2",
+          "hidden": true
+        },
         "boltz_max_rmsd_overall": {
           "type": "number",
           "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2",
+          "hidden": true
+        },
+        "boltz_max_rmsd_binder": {
+          "type": "number",
+          "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1",
+          "hidden": true
+        },
+        "boltz_max_rmsd_target": {
+          "type": "number",
+          "description": "Max RMSD between target chains of Boltz-2 prediction and input design. e.g. 1",
           "hidden": true
         },
         "boltz_min_conf_score": {
@@ -494,6 +550,16 @@
         "boltz_min_ptm": {
           "type": "number",
           "description": "Minimum predicted TM-score e.g. 0.7",
+          "hidden": true
+        },
+        "boltz_min_ptm_binder": {
+          "type": "number",
+          "description": "Minimum predicted TM-score of binder chain e.g. 0.8",
+          "hidden": true
+        },
+        "boltz_min_ptm_target": {
+          "type": "number",
+          "description": "Minimum predicted TM-score of target chain e.g. 0.9",
           "hidden": true
         },
         "boltz_min_ptm_interface": {
@@ -579,6 +645,36 @@
         "pr_max_rog": {
           "type": "number",
           "description": "Maximum radius of gyration (\u00c5) of predicted structure",
+          "hidden": true
+        },
+        "pr_min_intface_bsa": {
+          "type": "number",
+          "description": "Minimum buried surface area (\u00c5\u00b2) at the binding interface",
+          "hidden": true
+        },
+        "pr_min_intface_shpcomp": {
+          "type": "number",
+          "description": "Minimum shape complementarity of interface (0-1 scale; 1 is optimal)",
+          "hidden": true
+        },
+        "pr_min_intface_hbonds": {
+          "type": "integer",
+          "description": "Minimum number of hydrogen bonds at the interface",
+          "hidden": true
+        },
+        "pr_max_intface_unsat_hbonds": {
+          "type": "integer",
+          "description": "Maximum number of buried, unsatisfied hydrogen bonds at the interface",
+          "hidden": true
+        },
+        "pr_max_intface_deltag": {
+          "type": "number",
+          "description": "Maximum predicted binding free energy at the interface (PRODIGY IC-NIS model, kcal/mol; more negative is better)",
+          "hidden": true
+        },
+        "pr_max_intface_deltagtobsa": {
+          "type": "number",
+          "description": "Maximum ratio of delta-G to buried surface area",
           "hidden": true
         },
         "pr_max_surfhphobics": {

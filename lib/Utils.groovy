@@ -108,4 +108,26 @@ class Utils {
             }
             .ifEmpty(0)
     }
+
+    // Extract distinct protein chain IDs from a PDB's ATOM records (excludes HETATM/ligands/waters)
+    static Set<String> getPdbChainIds(pdbFile) {
+        def chainIds = [] as Set
+        pdbFile.eachLine { line ->
+            if (line.startsWith("ATOM  ") && line.length() >= 22) {
+                chainIds << line.substring(21, 22)
+            }
+        }
+        return chainIds
+    }
+
+    // Count the number of output chains implied by an RFdiffusion contig string, based on
+    // chain-break ('0') tokens. Unlike letter-based counting, this correctly handles newly
+    // diffused chains that have no chain letter of their own (e.g. partial diffusion / denovo
+    // binder chains), since a chain break always separates one output chain from the next.
+    // e.g. '[A1-88/0 B1-116]' -> 2, '[A17-111/20]' -> 1, '[88-88/0 B89-203]' -> 2
+    static int countContigChains(String contigs) {
+        def tokens = contigs.replaceAll(/[\[\]]/, '').split(/[\s\/]+/).findAll { it }
+        def numBreaks = tokens.count { it == '0' }
+        return numBreaks + 1
+    }
 }

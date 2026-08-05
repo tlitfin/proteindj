@@ -31,7 +31,7 @@
         },
         "out_dir": {
           "type": "string",
-          "default": "${projectDir}/pdj_monomer_partialdiff",
+          "default": "${projectDir}/pdj_bindcraft_denovo",
           "description": "Output directory for results.",
           "format": "directory-path"
         }
