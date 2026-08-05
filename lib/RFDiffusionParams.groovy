@@ -49,6 +49,33 @@ public class RFDiffusionParams extends HashMap<String, Object> {
         }
     }
     
+    // Expand a hotspot_residues spec (individual residues, ranges, and/or bare chain IDs) into a
+    // flat, comma-separated list of individual chain+residue tokens, as required by RFdiffusion's
+    // ppi.hotspot_res. A chain identifier is required per token (consistent with BindCraft/BoltzGen).
+    private String expandHotspots(String hotspots) {
+        if (!hotspots.matches(Utils.RESIDUE_SPEC_REGEX)) {
+            throw new IllegalArgumentException("hotspot_residues format invalid. Acceptable: 'A56,A115-120,B' (chain identifier is required).")
+        }
+        def pdbFile = new File(this.input_pdb.toString())
+        def expanded = []
+        hotspots.split(',').each { token ->
+            def matcher = (token =~ /^([A-Za-z]+)(\d+)?(?:-(\d+))?$/)
+            matcher.matches()
+            def (chain, start, end) = [matcher.group(1), matcher.group(2), matcher.group(3)]
+            if (!start) {
+                // Bare chain ID - expand to every residue present for that chain in the input PDB
+                Utils.getPdbChainResidueNumbers(pdbFile, chain).each { resNum -> expanded << "${chain}${resNum}" }
+            } else if (end) {
+                // Range - expand to every residue number in the range (inclusive)
+                (start.toInteger()..end.toInteger()).each { resNum -> expanded << "${chain}${resNum}" }
+            } else {
+                // Individual residue - keep as-is
+                expanded << token
+            }
+        }
+        return expanded.join(',')
+    }
+
     private String getSimpleFileName(String filePath) {
         return Paths.get(filePath).getFileName().toString()
     }
@@ -95,11 +122,12 @@ public class RFDiffusionParams extends HashMap<String, Object> {
     private void addBinderDenovoParameters(List<String> cmd) {
         // Add hotspots validation and parameter in rfd_denovo binder mode
         if (this.hotspot_residues) {
+            def expandedHotspots = expandHotspots(this.hotspot_residues)
             // Validate hotspots before adding to command
             if (this.rfd_contigs) {
-                validateHotspots(this.rfd_contigs, this.hotspot_residues)
+                validateHotspots(this.rfd_contigs, expandedHotspots)
             }
-            cmd << "\'ppi.hotspot_res=[${this.hotspot_residues}]\'"
+            cmd << "\'ppi.hotspot_res=[${expandedHotspots}]\'"
         }
     }
     
@@ -125,7 +153,7 @@ public class RFDiffusionParams extends HashMap<String, Object> {
         
         // Add hotspots for rfd_foldcond binder mode
         if (this.hotspot_residues) {
-            cmd << "\'ppi.hotspot_res=[${this.hotspot_residues}]\'"
+            cmd << "\'ppi.hotspot_res=[${expandHotspots(this.hotspot_residues)}]\'"
         }
     }
 

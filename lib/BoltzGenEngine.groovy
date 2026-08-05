@@ -1,10 +1,5 @@
 class BoltzGenEngine extends DesignEngine {
 
-    // Shared residue-spec grammar for hotspot_residues/bg_not_binding_residues/bg_flexible_residues:
-    // comma-separated tokens, each a chain-qualified single residue ('A56'), a chain-qualified
-    // range ('A115-120'), or a bare chain ID meaning the whole chain ('B').
-    private static final String RESIDUE_SPEC_REGEX = /^([A-Za-z]+(\d+(-\d+)?)?)(,[A-Za-z]+(\d+(-\d+)?)?)*$/
-
     // bg_redesign_spec grammar: an ordered comma-separated list of chain-A 'keep' tokens
     // ('A<start>-<end>' or 'A<n>') and bare-digit 'insert' tokens ('<n>' or '<min>-<max>'),
     // e.g. '7-10,A1-60,5,A70-100,10'. Residues not covered by a keep token are deleted.
@@ -26,16 +21,16 @@ class BoltzGenEngine extends DesignEngine {
             Utils.validateDesignLength(params.design_length)
         }
 
-        if (params.hotspot_residues && !params.hotspot_residues.matches(RESIDUE_SPEC_REGEX)) {
-            throw new IllegalArgumentException("hotspot_residues format invalid. Acceptable: 'A56,A115-120,B' (chain identifier is required for BoltzGen modes).")
+        if (params.hotspot_residues && !params.hotspot_residues.matches(Utils.RESIDUE_SPEC_REGEX)) {
+            throw new IllegalArgumentException("hotspot_residues format invalid. Acceptable: 'A56,A115-120,B' (chain identifier is required).")
         }
-        if (params.bg_not_binding_residues && !params.bg_not_binding_residues.matches(RESIDUE_SPEC_REGEX)) {
+        if (params.bg_not_binding_residues && !params.bg_not_binding_residues.matches(Utils.RESIDUE_SPEC_REGEX)) {
             throw new IllegalArgumentException("bg_not_binding_residues format invalid. Acceptable: 'A200,A210-215,B'.")
         }
         if (params.design_mode == 'boltzgen_denovo' && !params.input_pdb && (params.hotspot_residues || params.bg_not_binding_residues)) {
             throw new IllegalArgumentException("hotspot_residues/bg_not_binding_residues require a target - please provide input_pdb, or leave them null for monomer design.")
         }
-        if (params.bg_flexible_residues && !params.bg_flexible_residues.matches(RESIDUE_SPEC_REGEX)) {
+        if (params.bg_flexible_residues && !params.bg_flexible_residues.matches(Utils.RESIDUE_SPEC_REGEX)) {
             throw new IllegalArgumentException("bg_flexible_residues format invalid. Acceptable: 'A10-13,A16,B'.")
         }
         if (params.bg_redesign_spec) {

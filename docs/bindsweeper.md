@@ -308,7 +308,7 @@ sweep_params:
 ```
 
 ### 5. BoltzGen De Novo Hotspots Sweep
-Test different hotspot combinations using BoltzGen for fold design. Note that BoltzGen `hotspot_residues` (and `bg_not_binding_residues`/`bg_flexible_residues`) require an explicit chain identifier for every residue/range, e.g. `A56` rather than `56`:
+Test different hotspot combinations using BoltzGen for fold design. Note that `hotspot_residues` (and BoltzGen's `bg_not_binding_residues`/`bg_flexible_residues`) require an explicit chain identifier for every residue/range across all three Fold Design engines (RFdiffusion, BindCraft, BoltzGen), e.g. `A56` rather than `56`:
 
 ```yaml
 mode: boltzgen_denovo

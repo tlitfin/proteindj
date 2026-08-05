@@ -255,4 +255,58 @@ nextflow_function {
             new RFDEngine([design_mode: "rfd_denovo", design_length: "65-150"], false).validateParams()
         }
     }
+
+    test("RFDiffusionParams expands a chain-qualified range hotspot for rfd_denovo binder mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_denovo", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", hotspot_residues: "A1-3"]
+            def cmd = new RFDiffusionParams(params).generateCommandString()
+            assert cmd.contains("ppi.hotspot_res=[A1,A2,A3]")
+        }
+    }
+
+    test("RFDiffusionParams expands a bare chain ID hotspot to every residue present in that chain") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_denovo", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", hotspot_residues: "A"]
+            def cmd = new RFDiffusionParams(params).generateCommandString()
+            assert cmd.contains("ppi.hotspot_res=[A1,A2,A3,A4,A5")
+            assert cmd.contains("A87,A88]")
+        }
+    }
+
+    test("RFDiffusionParams rejects a hotspot token without a chain identifier") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                def params = [design_mode: "rfd_denovo", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", hotspot_residues: "10-15"]
+                new RFDiffusionParams(params).generateCommandString()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
 }

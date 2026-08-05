@@ -58,8 +58,8 @@
         },
         "hotspot_residues": {
           "type": "string",
-          "description": "Specifies hotspot residues for binding. e.g. 'A56,A115,A123'",
-          "pattern": "^[A-Z]\\d+(,[A-Z]\\d+)*$",
+          "description": "Specifies hotspot residues for binding. Comma-separated tokens, each a chain-qualified residue e.g. 'A56', a chain-qualified range e.g. 'A115-120', or a bare chain ID meaning the whole chain e.g. 'B'. e.g. 'A56,A115,A123'",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
           "default": "A56,A115,A123"
         },
         "rfd_scaffold_dir": {
@@ -157,20 +157,6 @@
           "hidden": true
         }
       }
-    },
-    "bindcraft_advanced_parameters": {
-      "title": "BindCraft Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BindCraft.",
-      "default": "",
-      "properties": {}
-    },
-    "boltzgen_advanced_parameters": {
-      "title": "BoltzGen Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BoltzGen.",
-      "default": "",
-      "properties": {}
     },
     "rfdiffusion_advanced_parameters": {
       "title": "RFdiffusion Advanced Parameters",
@@ -345,7 +331,7 @@
           "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
           "hidden": true,
           "format": "file-path",
-          "pattern": "\\.pdb$"
+          "pattern": ".*\\.pdb$"
         },
         "af2_initial_guess": {
           "type": "boolean",
@@ -787,12 +773,6 @@
     },
     {
       "$ref": "#/definitions/workflow_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/bindcraft_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/boltzgen_advanced_parameters"
     },
     {
       "$ref": "#/definitions/rfdiffusion_advanced_parameters"

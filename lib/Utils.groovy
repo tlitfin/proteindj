@@ -1,4 +1,10 @@
 class Utils {
+    // Shared residue-spec grammar for hotspot_residues/bg_not_binding_residues/bg_flexible_residues
+    // etc: comma-separated tokens, each a chain-qualified single residue ('A56'), a chain-qualified
+    // range ('A115-120'), or a bare chain ID meaning the whole chain ('B'). A chain identifier is
+    // always required, for consistency across RFdiffusion, BindCraft, and BoltzGen.
+    static final String RESIDUE_SPEC_REGEX = /^([A-Za-z]+(\d+(-\d+)?)?)(,[A-Za-z]+(\d+(-\d+)?)?)*$/
+
     // Method to rebatch channels of tuples of PDBs and JSON files
     static def rebatchTuples(input_channel, batch_size = 50) {
         return input_channel 
@@ -118,6 +124,18 @@ class Utils {
             }
         }
         return chainIds
+    }
+
+    // Extract the sorted, distinct residue numbers present for a given chain in a PDB's ATOM
+    // records. Used to expand a bare chain ID hotspot token (e.g. 'B') into individual residues.
+    static List<Integer> getPdbChainResidueNumbers(pdbFile, String chainId) {
+        def resNums = [] as Set
+        pdbFile.eachLine { line ->
+            if (line.startsWith("ATOM  ") && line.length() >= 26 && line.substring(21, 22) == chainId) {
+                resNums << line.substring(22, 26).trim().toInteger()
+            }
+        }
+        return resNums.sort()
     }
 
     // Validate design length (required, one or two comma-separated integers, min<=max)

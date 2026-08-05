@@ -16,8 +16,8 @@ class BindCraftEngine extends DesignEngine {
         }
 
         def hotspot = params.hotspot_residues
-        if (hotspot && !hotspot.matches(/^([A-Za-z]*[0-9]+([\-][0-9]+)?)(,[A-Za-z]*[0-9]+([\-][0-9]+)?)*$|^([A-Za-z]+,?)*$/)) {
-            throw new IllegalArgumentException("hotspot_residues format invalid. Acceptable: '1,2-10', 'A10,A12,B2-10', or chains 'A,B'.")
+        if (hotspot && !hotspot.matches(Utils.RESIDUE_SPEC_REGEX)) {
+            throw new IllegalArgumentException("hotspot_residues format invalid. Acceptable: 'A10,A12-15,B' (chain identifier is required).")
         }
 
         if (params.bc_advanced_json && !new File(params.bc_advanced_json.toString()).exists()) {

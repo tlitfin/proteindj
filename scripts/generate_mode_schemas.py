@@ -135,6 +135,20 @@ def build_mode_schema(main_schema, mode, overrides):
                 prop['enum'] = [val]
                 prop['default'] = val
 
+    # Drop definitions left with no properties (e.g. an engine's advanced
+    # parameters group when that engine isn't used by this mode) and their
+    # corresponding allOf $ref, so the Seqera launch form doesn't show empty groups.
+    empty_defns = {
+        name for name, defn in schema['definitions'].items()
+        if not defn.get('properties')
+    }
+    for name in empty_defns:
+        del schema['definitions'][name]
+    schema['allOf'] = [
+        ref for ref in schema['allOf']
+        if ref.get('$ref', '').rsplit('/', 1)[-1] not in empty_defns
+    ]
+
     return schema
 
 

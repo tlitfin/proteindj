@@ -25,6 +25,10 @@ To design binders with ProteinDJ, it is important to prepare your target structu
 
 If you want to test your binder designs in the context of a larger structure or complex, you can provide a separate PDB file to AlphaFold2 Initial-Guess/Boltz-2 using the `uncropped_target_pdb` parameter. This is more computationally efficient - about 6x faster than using the same larger structure as an input model for RFdiffusion/BindCraft/BoltzGen. Note that if the binder has been designed to an interface that is no longer available in the full context, this will be reflected by poor AlphaFold2/Boltz2 metrics, especially af2_rmsd_binder_tgtaln/boltz_rmsd_overall and af2_pae_interaction/boltz_ptm_interface.
 
+### Specifying Hotspot / Target Residues <a name="specifying-hotspot--target-residues"></a>
+
+`hotspot_residues` (RFdiffusion, BindCraft, BoltzGen) and BoltzGen's `bg_not_binding_residues` both share the same residue-spec grammar: a comma-separated list of tokens, where each token is a chain-qualified single residue (e.g. `A56`), a chain-qualified range (e.g. `A115-120`), or a bare chain ID meaning every residue in that chain (e.g. `B`). A chain identifier is always required, e.g. `hotspot_residues = 'A56,A115-120,B'`.
+
 ## RFdiffusion Design <a name="rfddesign"></a>
 
 Each of the four RFdiffusion modes (`rfd_denovo`, `rfd_foldcond`, `rfd_motifscaff`, `rfd_partialdiff`) automatically runs as **monomer design** or **binder design** depending on whether a target `input_pdb` is provided (and, where relevant, whether `rfd_contigs`/the input PDB describe a single chain or multiple chains). You do not need to select monomer vs. binder explicitly - ProteinDJ detects this automatically at runtime.
@@ -83,7 +87,7 @@ rfd_denovo_binder {
 }
 ```
 
-Alternatively, you can use contigs to specify residues to include and the design length e.g. `rfd_contigs = "[A17-131/0 60-100]"` will give the same result as above i.e. use the residues 17-131 from chain A and diffuse binders of variable length between 60-100 residues. Note the '/0' after the chain A residues that tells RFdiffusion to insert a new chain for the following residue range (the binder). We can also specify three hotspot residues to guide binder positioning (`hotspot_residues = "A56,A115,A123"`).
+Alternatively, you can use contigs to specify residues to include and the design length e.g. `rfd_contigs = "[A17-131/0 60-100]"` will give the same result as above i.e. use the residues 17-131 from chain A and diffuse binders of variable length between 60-100 residues. Note the '/0' after the chain A residues that tells RFdiffusion to insert a new chain for the following residue range (the binder). We can also specify three hotspot residues to guide binder positioning (`hotspot_residues = "A56,A115,A123"`). Hotspot residues can also include ranges (e.g. `A115-120`) and whole chains (e.g. `B`).
 
 ```
 rfd_denovo_binder {
@@ -391,7 +395,7 @@ bindcraft_denovo {
         }
 }
 ```
-As with RFdiffusion modes, there are optional parameters we can use to guide BindCraft. You can provide hotspot residues (comma-separated with chain IDs e.g. `hotspot_residues = 'A56,A123'`). Hotspot residues may be ignored if BindCraft identifies a better binding site (as hotspots are only part of a larger composite loss function, see more details [here](https://github.com/martinpacesa/BindCraft/wiki/De-novo-binder-design-with-BindCraft#target-preparation--hotspot-selection)). BindCraft does not utilise contigs but you can optionally provide chain IDs to include from the input PDB e.g. `bc_chains = 'A,B'` If `bc_chains` is not provided, BindCraft will automatically include all protein chains from the input PDB.
+As with RFdiffusion modes, there are optional parameters we can use to guide BindCraft. You can provide hotspot residues (see [Specifying Hotspot / Target Residues](#specifying-hotspot--target-residues) for the accepted format, e.g. `hotspot_residues = 'A56,A115-120,B'`). Hotspot residues may be ignored if BindCraft identifies a better binding site (as hotspots are only part of a larger composite loss function, see more details [here](https://github.com/martinpacesa/BindCraft/wiki/De-novo-binder-design-with-BindCraft#target-preparation--hotspot-selection)). BindCraft does not utilise contigs but you can optionally provide chain IDs to include from the input PDB e.g. `bc_chains = 'A,B'` If `bc_chains` is not provided, BindCraft will automatically include all protein chains from the input PDB.
 ```
 bindcraft_denovo {
         params {
@@ -463,7 +467,7 @@ boltzgen_denovo {
 }
 ```
 
-By default, all chains in `input_pdb` are treated as the target. Guide binding location with `hotspot_residues` (comma-separated, chain-qualified, e.g. `'A56,A115,A123'`) and/or mark residues the binder should avoid with `bg_not_binding_residues` (comma-separated, chain-qualified ranges, e.g. `'A200,A210-215'`):
+By default, all chains in `input_pdb` are treated as the target. Guide binding location with `hotspot_residues` and/or mark residues the binder should avoid with `bg_not_binding_residues` - both use the same [chain-qualified residue/range/whole-chain format](#specifying-hotspot--target-residues), e.g. `hotspot_residues = 'A56,A115-120,B'` and `bg_not_binding_residues = 'A200,A210-215'`:
 
 ```
 boltzgen_denovo {

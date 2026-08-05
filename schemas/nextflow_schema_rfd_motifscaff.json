@@ -160,20 +160,6 @@
         }
       }
     },
-    "bindcraft_advanced_parameters": {
-      "title": "BindCraft Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BindCraft.",
-      "default": "",
-      "properties": {}
-    },
-    "boltzgen_advanced_parameters": {
-      "title": "BoltzGen Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BoltzGen.",
-      "default": "",
-      "properties": {}
-    },
     "rfdiffusion_advanced_parameters": {
       "title": "RFdiffusion Advanced Parameters",
       "type": "object",
@@ -348,7 +334,7 @@
           "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
           "hidden": true,
           "format": "file-path",
-          "pattern": "\\.pdb$"
+          "pattern": ".*\\.pdb$"
         },
         "af2_initial_guess": {
           "type": "boolean",
@@ -790,12 +776,6 @@
     },
     {
       "$ref": "#/definitions/workflow_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/bindcraft_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/boltzgen_advanced_parameters"
     },
     {
       "$ref": "#/definitions/rfdiffusion_advanced_parameters"
