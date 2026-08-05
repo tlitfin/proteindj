@@ -1,0 +1,60 @@
+nextflow_function {
+
+    name "Test detectIsBinderModeFromResumedPdb"
+    script "main.nf"
+    function "detectIsBinderModeFromResumedPdb"
+
+    test("missing skip_input_dir throws") {
+        when {
+            function {
+                """
+                input[0] = "${projectDir}/tests/unit/no_such_dir"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("directory with no PDB files throws") {
+        when {
+            function {
+                """
+                input[0] = "${projectDir}/tests/unit"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("directory with single-chain PDB is monomer") {
+        when {
+            function {
+                """
+                input[0] = "${projectDir}/tests/fixtures/resume_monomer"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == false
+        }
+    }
+
+    test("directory with two-chain PDB is binder") {
+        when {
+            function {
+                """
+                input[0] = "${projectDir}/tests/fixtures/resume_binder"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == true
+        }
+    }
+}

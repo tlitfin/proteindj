@@ -1,0 +1,141 @@
+nextflow_function {
+
+    name "Test validateFileNaming"
+    script "main.nf"
+    function "validateFileNaming"
+
+    test("fold_seq accepts valid fold_x_seq_y.pdb names") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0_seq_1.pdb"), file("fold_10_seq_25.pdb")]
+                input[1] = null
+                input[2] = "fold_seq"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("fold_seq rejects a misnamed pdb") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0_seq_1.pdb"), file("bad_name.pdb")]
+                input[1] = null
+                input[2] = "fold_seq"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("fold_seq_pred accepts valid fold_x_seq_y_*.pdb names") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0_seq_1_af2pred.pdb"), file("fold_10_seq_25_boltzpred.pdb")]
+                input[1] = null
+                input[2] = "fold_seq_pred"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("fold_seq_pred rejects a name missing the prediction suffix") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0_seq_1.pdb")]
+                input[1] = null
+                input[2] = "fold_seq_pred"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("fold_only accepts properly paired pdb/json files") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0.pdb"), file("fold_1.pdb")]
+                input[1] = [file("fold_0.json"), file("fold_1.json")]
+                input[2] = "fold_only"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("fold_only rejects a misnamed pdb") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0.pdb"), file("bad_name.pdb")]
+                input[1] = [file("fold_0.json")]
+                input[2] = "fold_only"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("fold_only rejects a pdb with no matching json") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0.pdb"), file("fold_1.pdb")]
+                input[1] = [file("fold_0.json")]
+                input[2] = "fold_only"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("fold_only rejects a json with no matching pdb") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0.pdb")]
+                input[1] = [file("fold_0.json"), file("fold_1.json")]
+                input[2] = "fold_only"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("invalid validationType throws") {
+        when {
+            function {
+                """
+                input[0] = [file("fold_0_seq_1.pdb")]
+                input[1] = null
+                input[2] = "not_a_real_type"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+}

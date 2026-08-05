@@ -6,6 +6,7 @@ work
 pdj_results/
 models/
 test/
+.nf-test*
 
 # Bindsweeper
 bindsweeper.config
