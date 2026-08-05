@@ -42,6 +42,8 @@ If you find ProteinDJ or BindSweeper useful in your research, please [cite us](h
 
 ## Installation <a name="install"></a>
 
+> **Note: v3 is not backwards compatible with v2.** Containers and models have been updated, so a fresh installation is required.
+
 ProteinDJ requires that [Apptainer](https://apptainer.org/docs/admin/main/installation.html) and [Nextflow](https://www.nextflow.io/docs/latest/install.html) (≥ v24.04) are installed and accessible to your environment. For v26 of Nextflow onwards, you will need to export NXF_SYNTAX_PARSER=v1 to your shell environment, as ProteinDJ does not yet follow the strict syntax enforced in recent Nextflow versions.
 
 First, clone the repo for ProteinDJ:
@@ -201,8 +203,7 @@ BindSweeper is a python-based tool that can launch multiple instances of Protein
 
 ### Known limitations and planned improvements <a name="limitations"></a>
 
-- Boltz-2:
-  - Currently concatenates target chain sequences, meaning predictions of targets with chain-breaks or multiple chains is problematic
+- Ligands / non-natural amino acids (e.g. PTMs) are not compatible with ProteinDJ
 
 ### Seqera Support <a name="seqera"></a>
 

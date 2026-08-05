@@ -124,8 +124,11 @@ class BinderValidator:
                 f"Unknown mode: {mode}. Supported modes: {list(self.schema.keys())}"
             )
 
-        # Validate sweep parameters
+        # Validate sweep parameters (skip params not covered by the schema, same as fixed_params below)
         for param_name, param_def in sweep_params.items():
+            if param_name not in self.schema[mode]:
+                continue
+
             # We need to generate values from the sweep definition to validate them
             from .sweep_types import create_sweep, PairedSweep
 

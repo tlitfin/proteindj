@@ -830,6 +830,18 @@
                     "description": "Path to the Boltz-2 models.",
                     "hidden": true
                 },
+                "mpnn_models": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Path to the ProteinMPNN model checkpoints.",
+                    "hidden": true
+                },
+                "bg_models": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Path to the BoltzGen model checkpoints.",
+                    "hidden": true
+                },
                 "gpu_model": {
                     "type": "string",
                     "default": "A30",
