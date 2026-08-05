@@ -120,6 +120,24 @@ class Utils {
         return chainIds
     }
 
+    // Validate design length (required, one or two comma-separated integers, min<=max)
+    static void validateDesignLength(design_length) {
+        if (!design_length) {
+            throw new IllegalArgumentException("Please provide a value for design_length, e.g. '65', '65-150'.")
+        }
+        def designLengthVals = design_length.split('-')
+        if (designLengthVals.size() > 2 || !designLengthVals.every { it.isInteger() }) {
+            throw new IllegalArgumentException("design_length parameter must contain one or two integers (dash-separated) e.g. '65' '65-150'.")
+        }
+        if (designLengthVals.size() == 2) {
+            def minLength = Integer.parseInt(designLengthVals[0])
+            def maxLength = Integer.parseInt(designLengthVals[1])
+            if (minLength > maxLength || minLength < 1) {
+                throw new IllegalArgumentException("design_length values must be valid: min ≤ max and min ≥ 1.")
+            }
+        }
+    }
+
     // Count the number of output chains implied by an RFdiffusion contig string, based on
     // chain-break ('0') tokens. Unlike letter-based counting, this correctly handles newly
     // diffused chains that have no chain letter of their own (e.g. partial diffusion / denovo
