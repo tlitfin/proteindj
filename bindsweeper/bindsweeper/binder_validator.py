@@ -54,6 +54,9 @@ class BinderValidator:
             elif expected_type == "integer" and isinstance(value, int):
                 type_valid = True
                 break
+            elif expected_type == "boolean" and isinstance(value, bool):
+                type_valid = True
+                break
                 
         if not type_valid:
             type_names = [t if t != "null" else "None" for t in expected_types]
