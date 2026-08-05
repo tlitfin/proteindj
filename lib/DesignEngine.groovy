@@ -11,8 +11,11 @@ abstract class DesignEngine {
         this.isBinderMode = isBinderMode
     }
 
-    // Whether this mode/monomer-binder combination requires params.input_pdb to be set
-    abstract boolean requiresInputPdb()
+    // Whether this mode/monomer-binder combination requires params.input_pdb to be set.
+    // Defaults to true; override for engines/modes that support monomer design without a target.
+    boolean requiresInputPdb() {
+        return true
+    }
 
     // Validate engine-specific parameters, throwing IllegalArgumentException/FileNotFoundException on failure
     abstract void validateParams()

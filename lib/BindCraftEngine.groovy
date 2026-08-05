@@ -4,10 +4,6 @@ class BindCraftEngine extends DesignEngine {
         super(params, isBinderMode)
     }
 
-    boolean requiresInputPdb() {
-        return true
-    }
-
     void validateParams() {
         Utils.validateDesignLength(params.design_length)
 
