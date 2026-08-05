@@ -203,8 +203,7 @@ BindSweeper is a python-based tool that can launch multiple instances of Protein
 
 ### Known limitations and planned improvements <a name="limitations"></a>
 
-- Boltz-2:
-  - Currently concatenates target chain sequences, meaning predictions of targets with chain-breaks or multiple chains is problematic
+- Ligands / non-natural amino acids (e.g. PTMs) are not compatible with ProteinDJ
 
 ### Seqera Support <a name="seqera"></a>
 
