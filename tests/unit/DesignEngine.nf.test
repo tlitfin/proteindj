@@ -1,0 +1,258 @@
+// DesignEngine/BindCraftEngine/BoltzGenEngine/RFDEngine are plain Groovy classes (not Nextflow
+// script functions), so these tests call them directly from 'then' blocks rather than via the
+// function-under-test input/output mechanism (nf-test can't round-trip custom object results -
+// see nf-test.config's libDir comment for why "lib" must be on the classpath for this to resolve).
+nextflow_function {
+
+    name "Test DesignEngine dispatch and engine validateParams()"
+    function "Utils.countContigChains"
+
+    test("forMode dispatches bindcraft_denovo to BindCraftEngine") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert DesignEngine.forMode([design_mode: "bindcraft_denovo"], false).class.simpleName == 'BindCraftEngine'
+        }
+    }
+
+    test("forMode dispatches boltzgen_denovo and boltzgen_redesign to BoltzGenEngine") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert DesignEngine.forMode([design_mode: "boltzgen_denovo"], false).class.simpleName == 'BoltzGenEngine'
+            assert DesignEngine.forMode([design_mode: "boltzgen_redesign"], false).class.simpleName == 'BoltzGenEngine'
+        }
+    }
+
+    test("forMode dispatches all rfd_* modes to RFDEngine") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            ['rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff'].each { mode ->
+                assert DesignEngine.forMode([design_mode: mode], false).class.simpleName == 'RFDEngine'
+            }
+        }
+    }
+
+    test("BindCraftEngine.validateParams accepts valid bc_chains and hotspot_residues") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_length: "65-150", bc_chains: "A,B", hotspot_residues: "A10,A12-15"]
+            new BindCraftEngine(params, false).validateParams()
+        }
+    }
+
+    test("BindCraftEngine.validateParams rejects invalid bc_chains format") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new BindCraftEngine([design_length: "65-150", bc_chains: "1,2"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("BindCraftEngine.validateParams rejects a missing bc_advanced_json file") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new BindCraftEngine([design_length: "65-150", bc_advanced_json: "/no/such/file.json"], false).validateParams()
+            } catch (FileNotFoundException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("BoltzGenEngine.validateParams rejects hotspot_residues without a chain identifier") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new BoltzGenEngine([design_mode: "boltzgen_denovo", design_length: "65-150", input_pdb: "some.pdb", hotspot_residues: "10-15"], true).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("BoltzGenEngine.validateParams rejects boltzgen_redesign with no redesign directive set") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new BoltzGenEngine([design_mode: "boltzgen_redesign", input_pdb: "some.pdb"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("BoltzGenEngine.validateParams rejects bg_redesign_spec set on boltzgen_denovo") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new BoltzGenEngine([design_mode: "boltzgen_denovo", design_length: "65-150", bg_redesign_spec: "A1-60,10"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("BoltzGenEngine.validateParams accepts a valid boltzgen_redesign spec") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "boltzgen_redesign", input_pdb: "some.pdb", bg_redesign_spec: "7-10,A1-60,5,A70-100,10"]
+            new BoltzGenEngine(params, false).validateParams()
+        }
+    }
+
+    test("RFDEngine.validateParams requires rfd_partial_diffusion_timesteps for rfd_partialdiff") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new RFDEngine([design_mode: "rfd_partialdiff", input_pdb: "some.pdb"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("RFDEngine.validateParams requires rfd_contigs for rfd_motifscaff") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new RFDEngine([design_mode: "rfd_motifscaff", input_pdb: "some.pdb"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("RFDEngine.validateParams rejects an rfd_scaffold_dir missing required _ss.pt/_adj.pt files") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new RFDEngine([design_mode: "rfd_foldcond", rfd_scaffold_dir: "${projectDir}/tests/fixtures/resume_monomer"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("RFDEngine.validateParams accepts rfd_denovo with a valid design_length") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            new RFDEngine([design_mode: "rfd_denovo", design_length: "65-150"], false).validateParams()
+        }
+    }
+}
