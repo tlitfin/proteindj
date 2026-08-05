@@ -13,9 +13,9 @@ Due to the creative nature of protein design and the complexity of RFdiffusion t
 [**BindCraft design**](#bindcraftdesign)
 - [**bindcraft_denovo**](#mode-bindcraft) - hallucination of a binder using BindCraft
 
-[**BoltzGen design**](#boltzgendesign)
-- [**boltzgen_denovo**](#mode-boltzgendenovo) – generative design of new binders against a target using BoltzGen
-- [**boltzgen_redesign**](#mode-boltzgenredesign) – redesign/rediffusion of an existing binder using BoltzGen
+[**BoltzGen design**](#boltzgendesign) - each mode below automatically runs as either monomer or binder design, depending on whether a target `input_pdb` is provided
+- [**boltzgen_denovo**](#mode-boltzgendenovo) – generative design of new monomers/binders using BoltzGen
+- [**boltzgen_redesign**](#mode-boltzgenredesign) – redesign/rediffusion of an existing monomer/binder using BoltzGen
 
 ## Preparing Target Structures for Binder Design <a name="binderdesign"></a>
 
@@ -426,11 +426,30 @@ For more details on BindCraft, see the official BindCraft [GitHub](https://githu
 
 ## BoltzGen Design <a name="boltzgendesign"></a>
 
-[BoltzGen](https://github.com/HannesStark/boltzgen) is an all-atom generative model that can design binders directly against a target structure (`boltzgen_denovo`), or redesign/rediffuse part of an existing binder (`boltzgen_redesign`). Like BindCraft, BoltzGen's design step produces both backbone and an initial sequence together, which ProteinDJ passes through sequence design, structure prediction, and analysis stages.
+[BoltzGen](https://github.com/HannesStark/boltzgen) is an all-atom generative model that can design a new monomer or binder (`boltzgen_denovo`), or redesign/rediffuse part of an existing monomer or binder (`boltzgen_redesign`). Like BindCraft, BoltzGen's design step produces both backbone and an initial sequence together, which ProteinDJ passes through sequence design, structure prediction, and analysis stages. As with RFdiffusion, both modes automatically run as **monomer design** or **binder design** depending on whether a target `input_pdb` is provided (for `boltzgen_redesign`, monomer vs. binder is instead determined by whether `input_pdb` contains only chain A or additional target chain(s)) - you do not need to select monomer vs. binder explicitly.
 
 ### BoltzGen De Novo Mode (boltzgen_denovo) <a name="mode-boltzgendenovo"></a>
 
-BoltzGen de novo mode designs a new binder (chain A) against a fixed target taken from your input PDB.
+BoltzGen de novo mode designs a new monomer, or a new binder (chain A) against a fixed target taken from your input PDB.
+
+**Monomer design**
+
+<img src="../img/monomer_denovo.png" width="400">
+
+To design a standalone monomer, provide only a design length and omit `input_pdb`:
+
+```
+boltzgen_denovo_monomer {
+    params {
+        design_mode = 'boltzgen_denovo'
+        design_length = '60-100'
+    }
+}
+```
+
+**Binder design**
+
+<img src="../img/binder_denovo.png" width="400">
 
 At minimum, you need to provide an input PDB and a design length for the binder:
 
@@ -474,7 +493,9 @@ boltzgen_denovo {
 
 ### BoltzGen Redesign Mode (boltzgen_redesign) <a name="mode-boltzgenredesign"></a>
 
-BoltzGen redesign mode reworks an existing chain A binder while keeping the remaining target chain(s) of `input_pdb` fixed. This is useful for improving or diversifying an existing binder without starting from scratch, and can optionally change the binder's architecture (inserting/deleting residues) as well as its sequence and/or structural flexibility.
+<img src="../img/boltzgen_redesign.png" width="400">
+
+BoltzGen redesign mode reworks an existing chain A monomer or binder while keeping any remaining target chain(s) of `input_pdb` fixed (a monomer `input_pdb`, i.e. chain A only, has no target chains to keep fixed). This is useful for improving or diversifying an existing design without starting from scratch, and can optionally change chain A's architecture (inserting/deleting residues) as well as its sequence and/or structural flexibility.
 
 At least one of `bg_redesign_spec`, `bg_redesign_inpaint_seq`, or `bg_flexible_residues` must be set in this mode - otherwise chain A would be left completely unchanged, which is a hard error (wasted computation).
 
@@ -539,7 +560,7 @@ boltzgen_redesign {
 }
 ```
 
-As with `boltzgen_denovo`, `hotspot_residues`/`bg_not_binding_residues` can be used to guide/restrict binding location - these apply to the fixed non-A target chain(s):
+As with `boltzgen_denovo`, `hotspot_residues`/`bg_not_binding_residues` can be used to guide/restrict binding location - these apply to the fixed non-A target chain(s), and are therefore only valid when `input_pdb` contains target chain(s) beyond chain A (i.e. binder redesign, not monomer redesign):
 
 ```
 boltzgen_redesign {
