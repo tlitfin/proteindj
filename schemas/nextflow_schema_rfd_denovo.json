@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_binder_denovo.json",
-  "title": "binder_denovo pipeline parameters",
-  "description": "Parameters for binder_denovo mode",
+  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_rfd_denovo.json",
+  "title": "rfd_denovo pipeline parameters",
+  "description": "Parameters for rfd_denovo mode",
   "type": "object",
   "definitions": {
     "essential_parameters": {
@@ -14,9 +14,9 @@
         "design_mode": {
           "type": "string",
           "description": "Pipeline mode.",
-          "default": "binder_denovo",
+          "default": "rfd_denovo",
           "enum": [
-            "binder_denovo"
+            "rfd_denovo"
           ]
         },
         "num_designs": {
@@ -31,7 +31,7 @@
         },
         "out_dir": {
           "type": "string",
-          "default": "${projectDir}/pdj_binder_denovo",
+          "default": "${projectDir}/pdj_rfd_denovo",
           "description": "Output directory for results.",
           "format": "directory-path"
         }
@@ -70,12 +70,11 @@
         },
         "rfd_contigs": {
           "type": "string",
-          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `binder_motifscaff` and `monomer_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
+          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
           "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
         }
       },
       "required": [
-        "input_pdb",
         "design_length"
       ]
     },
@@ -181,7 +180,7 @@
       "properties": {
         "rfd_ckpt_override": {
           "type": "string",
-          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'binder_denovo' mode i.e. 'complex_beta'",
+          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
           "enum": [
             "active_site",
             "base",

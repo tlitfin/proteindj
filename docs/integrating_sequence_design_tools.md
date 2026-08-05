@@ -27,7 +27,7 @@ graph LR
 ```
 
 The key architectural difference from Fold Design is **how the engine is selected**. Fold-design
-tools are selected via `params.design_mode` (e.g. `bindcraft_denovo` vs `binder_denovo`), because
+tools are selected via `params.design_mode` (e.g. `bindcraft_denovo` vs `rfd_denovo`), because
 each tool has its own mode-specific required parameters (contigs, hotspots, target PDBs, etc.).
 Sequence design tools, by contrast, are selected via a single dedicated switch,
 `params.seq_method` (`'mpnn'` or `'fampnn'`), which is **orthogonal to `design_mode`** — any
@@ -179,12 +179,10 @@ else if (params.seq_method == "fampnn") {
     Utils.rebatchGPU(PrepFAMPNN.out.pdbs, params.gpus).set { fampnn_pdbs }
     fampnn_pdbs.combine(mega_csv).set { fampnn_input }
 
-    if (params.design_mode in ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign',
-                                'binder_denovo', 'binder_foldcond', 'binder_motifscaff',
-                                'binder_partialdiff']) {
-        RunFAMPNN(fampnn_input, 'A')          // binder modes: score/design chain A only
+    if (is_binder_mode) {
+        RunFAMPNN(fampnn_input, 'A')          // binder mode: score/design chain A only
     } else {
-        RunFAMPNN(fampnn_input, 'all_chains') // monomer modes: score/design all chains
+        RunFAMPNN(fampnn_input, 'all_chains') // monomer mode: score/design all chains
     }
 
     CompressFAMPNN("fampnn", RunFAMPNN.out.pdbs_jsons.flatten().collect())

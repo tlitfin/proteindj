@@ -4,6 +4,7 @@ process PrepBoltz {
     input:
     path pdb_files
     path msa_file, stageAs: 'target_msa.a3m'
+    val(is_binder_mode)
 
     output:
     path ("output/*.yaml"), emit: yamls
@@ -11,8 +12,8 @@ process PrepBoltz {
     path ("output/*.a3m"), emit: msa_file, optional: true
 
     script:
-    // Determine template chain based on design mode
-    def templateChain = params.design_mode in ['binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'bindcraft_denovo'] ? 'B' : 'A'
+    // Determine template chain based on auto-detected binder/monomer status
+    def templateChain = is_binder_mode ? 'B' : 'A'
     
     // Determine MSA chain based on design mode (same as template chain)
     def msaChain = templateChain

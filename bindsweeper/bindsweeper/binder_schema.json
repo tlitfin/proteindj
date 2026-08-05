@@ -1,5 +1,5 @@
 {
-  "binder_denovo": {
+  "rfd_denovo": {
     "input_pdb": {
       "type": "string",
       "description": "Input PDB file path for target protein",
@@ -27,12 +27,12 @@
     },
     "rfd_ckpt_override": {
       "type": "string",
-      "description": "Override the diffusion model checkpoint used by RFdiffusion. For binder_denovo mode, complex_beta is recommended",
+      "description": "Override the diffusion model checkpoint used by RFdiffusion. For rfd_denovo binder mode, complex_beta is recommended",
       "enum": ["complex_base", "complex_beta"],
       "example": "complex_beta"
     }
   },
-  "binder_foldcond": {
+  "rfd_foldcond": {
     "input_pdb": {
       "type": "string",
       "description": "Input PDB file path for target protein",
@@ -58,7 +58,7 @@
       "example": 0.0
     }
   },
-  "binder_partialdiff": {
+  "rfd_partialdiff": {
     "input_pdb": {
       "type": "string",
       "description": "Input PDB file path for target protein",
@@ -79,7 +79,7 @@
       "example": 20
     }
   },
-  "binder_motifscaff": {
+  "rfd_motifscaff": {
     "input_pdb": {
       "type": "string",
       "description": "Input PDB file path for target protein",

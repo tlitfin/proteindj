@@ -79,10 +79,11 @@
         "pred_method": {
           "type": "string",
           "default": "af2",
-          "description": "Structure prediction method. Choose from 'af2' (AlphaFold2 Initial-Guess) or 'boltz' (Boltz-2).",
+          "description": "Structure prediction method. Choose from 'af2' (AlphaFold2 Initial-Guess), 'boltz' (Boltz-2), or 'af2_boltz' (run AF2 first, filter, then run Boltz-2 on the survivors).",
           "enum": [
             "af2",
-            "boltz"
+            "boltz",
+            "af2_boltz"
           ]
         },
         "zip_pdbs": {

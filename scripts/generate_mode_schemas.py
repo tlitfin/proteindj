@@ -6,14 +6,10 @@ from pathlib import Path
 
 # Define required parameters for each mode based on the table in parameters.md
 MODE_REQUIRED_PARAMS = {
-    'monomer_denovo': ['design_length'],
-    'monomer_foldcond': ['rfd_scaffold_dir'],
-    'monomer_motifscaff': ['input_pdb', 'rfd_contigs'],
-    'monomer_partialdiff': ['input_pdb', 'rfd_partial_diffusion_timesteps'],
-    'binder_denovo': ['input_pdb', 'design_length'],
-    'binder_foldcond': ['input_pdb', 'rfd_scaffold_dir'],
-    'binder_motifscaff': ['input_pdb', 'rfd_contigs'],
-    'binder_partialdiff': ['input_pdb', 'rfd_partial_diffusion_timesteps'],
+    'rfd_denovo': ['design_length'],
+    'rfd_foldcond': ['rfd_scaffold_dir'],
+    'rfd_motifscaff': ['input_pdb', 'rfd_contigs'],
+    'rfd_partialdiff': ['input_pdb', 'rfd_partial_diffusion_timesteps'],
     'bindcraft_denovo': ['input_pdb', 'design_length'],
     'boltzgen_denovo': ['input_pdb', 'design_length'],
     'boltzgen_redesign': ['input_pdb'],
@@ -123,16 +119,12 @@ def build_mode_schema(main_schema, mode, overrides):
                 # Set full enum list for custom mode
                 prop['enum'] = [
                     "bindcraft_denovo",
-                    "binder_denovo",
-                    "binder_foldcond",
-                    "binder_motifscaff",
-                    "binder_partialdiff",
-                    "monomer_denovo",
-                    "monomer_foldcond",
-                    "monomer_motifscaff",
-                    "monomer_partialdiff",
                     "boltzgen_denovo",
-                    "boltzgen_redesign"
+                    "boltzgen_redesign",
+                    "rfd_denovo",
+                    "rfd_foldcond",
+                    "rfd_motifscaff",
+                    "rfd_partialdiff"
                 ]
                 # Preserve default if specified in CSV
                 if 'design_mode' in overrides and overrides['design_mode'] is not None:

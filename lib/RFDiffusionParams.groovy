@@ -56,14 +56,17 @@ public class RFDiffusionParams extends HashMap<String, Object> {
     private void addCommonParameters(List<String> cmd) {
         cmd << "inference.write_trajectory=False"
         cmd << "inference.output_prefix=./rfd_results/fold"
-        
-        // Add contigs if applicable to this mode
-        if (this.design_mode in ['binder_denovo', 'binder_partialdiff', 'binder_motifscaff', 'monomer_denovo', 'monomer_motifscaff', 'monomer_partialdiff'] && this.rfd_contigs) {
+
+        def variant = this.design_mode - 'rfd_'  // 'denovo' | 'foldcond' | 'motifscaff' | 'partialdiff'
+        boolean isBinder = this.is_binder_mode
+
+        // Contigs apply to every variant except foldcond (which uses scaffoldguided.* instead)
+        if (variant != 'foldcond' && this.rfd_contigs) {
             cmd << "\'contigmap.contigs=${this.rfd_contigs}\'"
         }
-        
-        // Use just filename, will be in the process working directory
-        if (this.design_mode in ['binder_denovo', 'binder_foldcond', 'binder_partialdiff', 'binder_motifscaff', 'monomer_motifscaff', 'monomer_partialdiff'] && this.input_pdb) {
+
+        // input_pdb is always required for motifscaff/partialdiff; only for denovo/foldcond in binder mode
+        if ((isBinder || variant in ['motifscaff', 'partialdiff']) && this.input_pdb) {
             cmd << "inference.input_pdb=${getSimpleFileName(this.input_pdb)}"
         }
         
@@ -90,7 +93,7 @@ public class RFDiffusionParams extends HashMap<String, Object> {
     }
     
     private void addBinderDenovoParameters(List<String> cmd) {
-        // Add hotspots validation and parameter in binder_denovo mode
+        // Add hotspots validation and parameter in rfd_denovo binder mode
         if (this.hotspot_residues) {
             // Validate hotspots before adding to command
             if (this.rfd_contigs) {
@@ -120,7 +123,7 @@ public class RFDiffusionParams extends HashMap<String, Object> {
             cmd << "scaffoldguided.scaffold_dir=${getSimpleFileName(this.rfd_scaffold_dir)}"
         }
         
-        // Add hotspots for binder_foldcond mode
+        // Add hotspots for rfd_foldcond binder mode
         if (this.hotspot_residues) {
             cmd << "\'ppi.hotspot_res=[${this.hotspot_residues}]\'"
         }
@@ -188,32 +191,21 @@ public class RFDiffusionParams extends HashMap<String, Object> {
         // Add common parameters
         addCommonParameters(cmd)
         
-        // Add mode-specific parameters
-        switch (this.design_mode) {
-            case 'binder_denovo':
-                addBinderDenovoParameters(cmd)
+        // Add mode-specific parameters, dispatching on variant + auto-detected monomer/binder status
+        def variant = this.design_mode - 'rfd_'
+        switch (variant) {
+            case 'denovo':
+                this.is_binder_mode ? addBinderDenovoParameters(cmd) : addMonomerDenovoParameters(cmd)
                 break
-            case 'binder_foldcond':
-                addBinderFoldConditioningParameters(cmd)
+            case 'foldcond':
+                this.is_binder_mode ? addBinderFoldConditioningParameters(cmd) : addMonomerFoldConditioningParameters(cmd)
                 break
-            case 'binder_motifscaff':
-                addBinderMotifScaffoldingParameters(cmd)
+            case 'motifscaff':
+                this.is_binder_mode ? addBinderMotifScaffoldingParameters(cmd) : addMonomerMotifScaffoldingParameters(cmd)
                 break
-            case 'binder_partialdiff':
-                addBinderPartialDiffusionParameters(cmd)
+            case 'partialdiff':
+                this.is_binder_mode ? addBinderPartialDiffusionParameters(cmd) : addMonomerPartialDiffusionParameters(cmd)
                 break
-            case 'monomer_denovo':
-                addMonomerDenovoParameters(cmd)
-                break  
-            case 'monomer_foldcond':
-                addMonomerFoldConditioningParameters(cmd)
-                break  
-            case 'monomer_motifscaff':
-                addMonomerMotifScaffoldingParameters(cmd)
-                break  
-            case 'monomer_partialdiff':
-                addMonomerPartialDiffusionParameters(cmd)
-                break                
         }
         return cmd.join(' ')
     }

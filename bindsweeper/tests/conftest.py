@@ -17,7 +17,7 @@ def temp_dir():
 def sample_sweep_yaml():
     """Sample sweep.yaml content."""
     return """
-mode: binder_denovo
+mode: rfd_denovo
 
 fixed_params:
   design_length: "50-100"
@@ -97,7 +97,7 @@ def sample_nextflow_schema():
                 "properties": {
                     "design_mode": {
                         "type": "string",
-                        "enum": ["denovo", "binder_denovo", "foldconditioning"],
+                        "enum": ["denovo", "rfd_denovo", "foldconditioning"],
                     },
                     "num_designs": {
                         "type": "integer",
