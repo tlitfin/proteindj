@@ -4495,7 +4495,10 @@
       "example": "60-100"
     },
     "input_pdb": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Path to an input PDB file. e.g. 'target.pdb'",
       "pattern": ".*\\.pdb$",
       "example": "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
