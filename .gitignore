@@ -24,4 +24,4 @@ bindsweeper/test_output/**
 bindsweeper/**/.nextflow/**
 
 *.sif
-lib/**/__pycache__/
+**/__pycache__/
