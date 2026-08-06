@@ -39,14 +39,6 @@
       "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
       "example": "A56,A115,A123"
     },
-    "rfd_contigs": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
-    },
     "seq_method": {
       "type": [
         "string",
@@ -107,7 +99,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -143,6 +135,14 @@
         "null"
       ],
       "description": "Path to input files when skipping stages e.g. './rfd_results'"
+    },
+    "rfd_contigs": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
+      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
     },
     "rfd_ckpt_override": {
       "type": [
@@ -235,7 +235,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -458,7 +458,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -577,14 +577,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -626,7 +626,7 @@
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -928,19 +928,6 @@
       "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
       "example": "A56,A115,A123"
     },
-    "rfd_scaffold_dir": {
-      "type": "string",
-      "description": "Path to directory containing scaffold files. e.g. 'binderscaffolds/scaffolds_assorted'",
-      "example": "${projectDir}/binderscaffolds/scaffolds_assorted"
-    },
-    "rfd_mask_loops": {
-      "type": [
-        "boolean",
-        "null"
-      ],
-      "description": "Whether to ignore loop regions when applying secondary structure constraints from scaffolds (default=true). Recommended to set to false for binder design as the scaffold sets have enough diversity",
-      "example": false
-    },
     "seq_method": {
       "type": [
         "string",
@@ -1001,7 +988,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -1037,6 +1024,19 @@
         "null"
       ],
       "description": "Path to input files when skipping stages e.g. './rfd_results'"
+    },
+    "rfd_scaffold_dir": {
+      "type": "string",
+      "description": "Path to directory containing scaffold files. e.g. 'binderscaffolds/scaffolds_assorted'",
+      "example": "${projectDir}/binderscaffolds/scaffolds_assorted"
+    },
+    "rfd_mask_loops": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Whether to ignore loop regions when applying secondary structure constraints from scaffolds (default=true). Recommended to set to false for binder design as the scaffold sets have enough diversity",
+      "example": false
     },
     "rfd_ckpt_override": {
       "type": [
@@ -1129,7 +1129,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -1352,7 +1352,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -1471,14 +1471,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -1520,7 +1520,7 @@
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -1810,30 +1810,6 @@
       "pattern": ".*\\.pdb$",
       "example": "${projectDir}/lib/examplebinder.pdb"
     },
-    "rfd_contigs": {
-      "type": "string",
-      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$",
-      "example": "[5-10/A1-88/10-20/0 B89-203]"
-    },
-    "rfd_inpaint_seq": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Residues that will have their sequence masked when diffusing. e.g. '[A17-19/A143-145]'",
-      "pattern": "^\\[([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?)(?:\\/([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?))*\\]$",
-      "example": "[A17-19/A129-131]"
-    },
-    "rfd_length": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Length of diffused chain when performing motif scaffolding e.g. 100-120",
-      "pattern": "^\\d+-\\d+$",
-      "example": "110-110"
-    },
     "seq_method": {
       "type": [
         "string",
@@ -1894,7 +1870,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -1930,6 +1906,30 @@
         "null"
       ],
       "description": "Path to input files when skipping stages e.g. './rfd_results'"
+    },
+    "rfd_contigs": {
+      "type": "string",
+      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
+      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$",
+      "example": "[5-10/A1-88/10-20/0 B89-203]"
+    },
+    "rfd_inpaint_seq": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Residues that will have their sequence masked when diffusing. e.g. '[A17-19/A143-145]'",
+      "pattern": "^\\[([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?)(?:\\/([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?))*\\]$",
+      "example": "[A17-19/A129-131]"
+    },
+    "rfd_length": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Length of diffused chain when performing motif scaffolding e.g. 100-120",
+      "pattern": "^\\d+-\\d+$",
+      "example": "110-110"
     },
     "rfd_ckpt_override": {
       "type": [
@@ -2023,7 +2023,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -2246,7 +2246,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -2365,14 +2365,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -2414,7 +2414,7 @@
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -2704,19 +2704,6 @@
       "pattern": ".*\\.pdb$",
       "example": "${projectDir}/lib/examplebinder.pdb"
     },
-    "rfd_contigs": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
-    },
-    "rfd_partial_diffusion_timesteps": {
-      "type": "integer",
-      "description": "Number of timesteps for partial diffusion. e.g. 20",
-      "example": 20
-    },
     "seq_method": {
       "type": [
         "string",
@@ -2777,7 +2764,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -2813,6 +2800,19 @@
         "null"
       ],
       "description": "Path to input files when skipping stages e.g. './rfd_results'"
+    },
+    "rfd_contigs": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
+      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
+    },
+    "rfd_partial_diffusion_timesteps": {
+      "type": "integer",
+      "description": "Number of timesteps for partial diffusion. e.g. 20",
+      "example": 20
     },
     "rfd_ckpt_override": {
       "type": [
@@ -2905,7 +2905,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -3128,7 +3128,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -3247,14 +3247,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -3296,7 +3296,7 @@
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -3660,7 +3660,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -3813,7 +3813,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -4036,7 +4036,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -4155,14 +4155,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -4204,7 +4204,7 @@
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -4571,7 +4571,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -4682,7 +4682,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -4898,7 +4898,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -5017,14 +5017,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -5066,7 +5066,7 @@
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -5416,7 +5416,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -5543,7 +5543,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -5759,7 +5759,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -5878,14 +5878,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -5927,7 +5927,7 @@
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [

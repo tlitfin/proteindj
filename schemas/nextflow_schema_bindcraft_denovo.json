@@ -69,12 +69,12 @@
         }
       },
       "required": [
-        "input_pdb",
-        "design_length"
+        "design_length",
+        "input_pdb"
       ]
     },
     "workflow_advanced_parameters": {
-      "title": "Mode-Specific Parameters",
+      "title": "Workflow Advanced Parameters",
       "type": "object",
       "description": "These parameters are used for some of the ProteinDJ modes.",
       "default": "",
@@ -117,13 +117,11 @@
         },
         "max_designs": {
           "type": "integer",
-          "description": "Maximum number of top-ranked designs to output (null = output all ranked designs)",
-          "hidden": true
+          "description": "Maximum number of top-ranked designs to output (null = output all ranked designs)"
         },
         "max_seqs_per_fold": {
           "type": "integer",
-          "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity.",
-          "hidden": true
+          "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
         },
         "run_fold_only": {
           "type": "boolean",
@@ -259,9 +257,8 @@
         },
         "mpnn_relax_max_cycles": {
           "type": "integer",
-          "default": 0,
-          "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-          "hidden": true
+          "default": 1,
+          "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable."
         },
         "mpnn_relax_seqs_per_cycle": {
           "type": "integer",
@@ -345,7 +342,6 @@
         "uncropped_target_pdb": {
           "type": "string",
           "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
-          "hidden": true,
           "format": "file-path",
           "pattern": ".*\\.pdb$"
         },
@@ -452,8 +448,7 @@
         },
         "fold_min_ss": {
           "type": "integer",
-          "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4",
-          "hidden": true
+          "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
         },
         "fold_max_ss": {
           "type": "integer",
@@ -482,8 +477,7 @@
         },
         "af2_max_pae_interaction": {
           "type": "number",
-          "description": "Max predicted aligned error for interactions e.g. 10",
-          "hidden": true
+          "description": "Max predicted aligned error for interactions e.g. 10"
         },
         "af2_max_pae_overall": {
           "type": "number",
@@ -522,13 +516,11 @@
         },
         "af2_max_rmsd_binder_bndaln": {
           "type": "number",
-          "description": "Max binder RMSD when binder chains are aligned e.g. 1",
-          "hidden": true
+          "description": "Max binder RMSD when binder chains are aligned e.g. 1"
         },
         "af2_max_rmsd_binder_tgtaln": {
           "type": "number",
-          "description": "Max binder RMSD when target chains are aligned e.g. 2",
-          "hidden": true
+          "description": "Max binder RMSD when target chains are aligned e.g. 2"
         },
         "af2_max_rmsd_target": {
           "type": "number",
@@ -537,13 +529,11 @@
         },
         "boltz_max_rmsd_overall": {
           "type": "number",
-          "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2",
-          "hidden": true
+          "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
         },
         "boltz_max_rmsd_binder": {
           "type": "number",
-          "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1",
-          "hidden": true
+          "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
         },
         "boltz_max_rmsd_target": {
           "type": "number",
@@ -572,8 +562,7 @@
         },
         "boltz_min_ptm_interface": {
           "type": "number",
-          "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65",
-          "hidden": true
+          "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
         },
         "boltz_min_plddt": {
           "type": "number",
@@ -739,8 +728,7 @@
         "gpu_model": {
           "type": "string",
           "default": "A30",
-          "description": "GPU model to request, e.g., 'A30'.",
-          "hidden": true
+          "description": "GPU model to request, e.g., 'A30'."
         },
         "gpu_queue": {
           "type": "string",
@@ -750,8 +738,7 @@
         "gpus": {
           "type": "integer",
           "default": 4,
-          "description": "Number of GPUs to request.",
-          "hidden": true
+          "description": "Number of GPUs to request."
         },
         "cpus": {
           "type": "integer",

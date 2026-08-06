@@ -89,21 +89,16 @@ def build_mode_schema(main_schema, mode, overrides, required):
                     prop['default'] = convert_value(override_val, prop)
                 filtered[param] = prop
         defn['properties'] = filtered
-        
-        # Update required list
-        if defn_name == 'mode_specific_parameters':
-            # Set required parameters based on the CSV's '__required__' row for this mode
-            filtered_required = [p for p in required if p in filtered]
-            if filtered_required:
-                defn['required'] = filtered_required
-            elif 'required' in defn:
-                del defn['required']
-        else:
-            # For other definitions, keep existing required list filtering
-            if 'required' in defn:
-                defn['required'] = [p for p in defn['required'] if p in filtered]
-                if not defn['required']:
-                    del defn['required']
+
+        # Required params come from this definition's pre-existing required list (e.g.
+        # essential_parameters) plus the CSV's '__required__' row for this mode, wherever
+        # those mode-specific params now live (e.g. rfdiffusion_advanced_parameters).
+        combined_required = set(defn.get('required', [])) | set(required)
+        filtered_required = [p for p in filtered if p in combined_required]
+        if filtered_required:
+            defn['required'] = filtered_required
+        elif 'required' in defn:
+            del defn['required']
 
     # Special handling for design_mode
     for defn in schema['definitions'].values():
