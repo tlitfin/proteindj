@@ -504,6 +504,104 @@ nextflow_function {
         }
     }
 
+    test("RFDiffusionParams defaults rfd_motifscaff binder mode to the complex_base checkpoint") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_motifscaff", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", motifscaff_spec: "5-10,A1-88,10-20"]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert cmd.contains("inference.ckpt_override_path=/app/RFdiffusion/models/Complex_base_ckpt.pt")
+        }
+    }
+
+    test("RFDiffusionParams does not force complex_base for rfd_motifscaff binder mode when motifscaff_inpaint_seq is set") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [
+                design_mode: "rfd_motifscaff",
+                is_binder_mode: true,
+                input_pdb: "${projectDir}/lib/examplebinder.pdb",
+                motifscaff_spec: "5-10,A1-88,10-20",
+                motifscaff_inpaint_seq: "A10-20",
+            ]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert !cmd.contains("inference.ckpt_override_path")
+        }
+    }
+
+    test("RFDiffusionParams does not force complex_base for rfd_motifscaff binder mode when flexible_residues is set") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [
+                design_mode: "rfd_motifscaff",
+                is_binder_mode: true,
+                input_pdb: "${projectDir}/lib/examplebinder.pdb",
+                motifscaff_spec: "5-10,A1-88,10-20",
+                flexible_residues: "B90-95",
+            ]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert !cmd.contains("inference.ckpt_override_path")
+        }
+    }
+
+    test("RFDiffusionParams respects an explicit rfd_ckpt_override for rfd_motifscaff binder mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [
+                design_mode: "rfd_motifscaff",
+                is_binder_mode: true,
+                input_pdb: "${projectDir}/lib/examplebinder.pdb",
+                motifscaff_spec: "5-10,A1-88,10-20",
+                rfd_ckpt_override: "complex_beta",
+            ]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert cmd.contains("inference.ckpt_override_path=/app/RFdiffusion/models/Complex_beta_ckpt.pt")
+        }
+    }
+
+    test("RFDiffusionParams does not default the checkpoint for rfd_motifscaff monomer mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_motifscaff", is_binder_mode: false, input_pdb: "${projectDir}/lib/examplebinder.pdb", motifscaff_spec: "5-10,A1-88,10-20"]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert !cmd.contains("inference.ckpt_override_path")
+        }
+    }
+
     test("RFDiffusionParams auto-generates rfd_motifscaff contigs for monomer mode without a target chain") {
         when {
             function {

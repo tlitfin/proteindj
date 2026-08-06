@@ -243,6 +243,13 @@ public class RFDiffusionParams extends HashMap<String, Object> {
                 // If not in our mapping, use directly with _ckpt.pt suffix
                 cmd << "inference.ckpt_override_path=${MODEL_BASE_PATH}${this.rfd_ckpt_override}_ckpt.pt"
             }
+        } else if (variant == 'motifscaff' && isBinder && !this.motifscaff_inpaint_seq && !this.flexible_residues) {
+            // rfd_motifscaff never sets ppi.hotspot_res, so without this RFdiffusion's own
+            // checkpoint auto-selection would fall back to the monomer-only Base_ckpt.pt even
+            // though a target chain is present. Skipped when inpaint_seq/inpaint_str is used
+            // since there is no checkpoint trained for complex-conditioning + inpainting together,
+            // so RFdiffusion's InpaintSeq_ckpt.pt auto-selection is left in charge instead.
+            cmd << "inference.ckpt_override_path=${MODEL_BASE_PATH}Complex_base_ckpt.pt"
         }
         
         // Add noise scale parameters
