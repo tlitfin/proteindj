@@ -5,7 +5,7 @@
 nextflow_function {
 
     name "Test DesignEngine dispatch and engine validateParams()"
-    function "Utils.countContigChains"
+    function "Utils.getPdbChainIds"
 
     test("forMode dispatches bindcraft_denovo to BindCraftEngine") {
         when {
@@ -182,7 +182,7 @@ nextflow_function {
         }
     }
 
-    test("RFDEngine.validateParams requires rfd_partial_diffusion_timesteps for rfd_partialdiff") {
+    test("RFDEngine.validateParams requires rfd_partialdiff_timesteps for rfd_partialdiff") {
         when {
             function {
                 """
@@ -292,7 +292,7 @@ nextflow_function {
         }
     }
 
-test("RFDEngine.validateParams accepts a valid motifscaff_spec for rfd_motifscaff") {
+    test("RFDEngine.validateParams accepts a valid motifscaff_spec for rfd_motifscaff") {
         when {
             function {
                 """
@@ -319,7 +319,7 @@ test("RFDEngine.validateParams accepts a valid motifscaff_spec for rfd_motifscaf
             assert function.success
             def threw = false
             try {
-                new RFDEngine([design_mode: "rfd_foldcond", rfd_scaffold_dir: "${projectDir}/tests/fixtures/resume_monomer"], false).validateParams()
+                new RFDEngine([design_mode: "rfd_foldcond", rfd_foldcond_scaffold_dir: "${projectDir}/tests/fixtures/resume_monomer"], false).validateParams()
             } catch (IllegalArgumentException e) {
                 threw = true
             }
@@ -449,6 +449,44 @@ test("RFDEngine.validateParams accepts a valid motifscaff_spec for rfd_motifscaf
         }
     }
 
+    test("RFDiffusionParams translates rfd_partialdiff_fixed_seq into flat 0-indexed contigmap.provide_seq") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            // examplebinder.pdb chain A spans residues 1-88, so A1-3 and A5 map to flat indices 0-2 and 4
+            def params = [design_mode: "rfd_partialdiff", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", rfd_partialdiff_timesteps: 20, rfd_partialdiff_fixed_seq: "A1-3,A5"]
+            def cmd = new RFDiffusionParams(params).generateCommandString("[88-88/0 B89-203]")
+            assert cmd.contains("contigmap.provide_seq=[0-2,4-4]")
+        }
+    }
+
+    test("RFDiffusionParams rejects rfd_partialdiff_fixed_seq referencing a non-design chain") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                def params = [design_mode: "rfd_partialdiff", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", rfd_partialdiff_timesteps: 20, rfd_partialdiff_fixed_seq: "B90-92"]
+                new RFDiffusionParams(params).generateCommandString("[88-88/0 B89-203]")
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
     test("RFDiffusionParams auto-generates rfd_motifscaff contigs from motifscaff_spec for binder mode") {
         when {
             function {
@@ -528,6 +566,41 @@ test("RFDEngine.validateParams accepts a valid motifscaff_spec for rfd_motifscaf
             assert cmd.contains("contigmap.inpaint_str=[B89-203]")
         }
     }
+
+    test("RFDiffusionParams auto-generates rfd_partialdiff contigs from rfd_partialdiff_spec for binder mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            // examplebinder.pdb: chain A residues 1-88 (binder), chain B residues 89-203 (target)
+            def params = [design_mode: "rfd_partialdiff", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", rfd_partialdiff_spec: "A1-19,59", rfd_partialdiff_timesteps: 20]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_PARTIALDIFF_SENTINEL)
+            assert cmd.contains("contigmap.contigs=[A1-19 59/0 B89-203]")
+        }
+    }
+
+    test("RFDiffusionParams auto-generates rfd_partialdiff contigs for monomer mode without a target chain") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_partialdiff", is_binder_mode: false, input_pdb: "${projectDir}/lib/examplebinder.pdb", rfd_partialdiff_spec: "A1-19,59", rfd_partialdiff_timesteps: 20]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_PARTIALDIFF_SENTINEL)
+            assert cmd.contains("contigmap.contigs=[A1-19 59]")
+            assert !cmd.contains("/0 B")
+        }
+    }
+
     test("RFDiffusionParams translates flexible_residues into contigmap.inpaint_str for rfd_denovo binder mode") {
         when {
             function {

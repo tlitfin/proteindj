@@ -223,7 +223,7 @@ def generate_contig_string(pdb_file, design_mode='rfd_denovo', design_length=Non
         design_mode: Design mode - 'rfd_denovo' or 'rfd_partialdiff'
         design_length: Optional length specification (e.g., '60' or '70-80')
         is_binder: Whether this is a binder (target + designed chain) or monomer design,
-                   auto-detected upstream from input_pdb/rfd_contigs before this script runs
+                   auto-detected upstream from input_pdb before this script runs
         
     Returns:
         str: Contig string formatted for RFdiffusion with square brackets

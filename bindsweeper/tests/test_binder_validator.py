@@ -183,4 +183,4 @@ class TestBinderValidator:
 
         with pytest.raises(ValueError, match="does not match pattern"):
             # Ranges are not allowed for diffuse tokens (length cannot change)
-            validator.validate_parameter("rfd_partialdiff", "rfd_partialdiff_spec", "B10-50")
+            validator.validate_parameter("rfd_partialdiff", "rfd_partialdiff_spec", "A1-19,50-59")

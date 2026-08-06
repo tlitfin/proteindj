@@ -275,7 +275,7 @@ fixed_params:
   rfd_noise_scale: 0.0
 
 sweep_params:
-  rfd_scaffold_dir:
+  rfd_foldcond_scaffold_dir:
     values:
       - "./binderscaffolds/scaffolds_100_EHEEHE"
       - "./binderscaffolds/scaffolds_100_HEEHE"

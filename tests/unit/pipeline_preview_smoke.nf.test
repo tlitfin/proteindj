@@ -36,7 +36,7 @@ nextflow_pipeline {
         when {
             params {
                 design_mode = "rfd_foldcond"
-                rfd_scaffold_dir = "${projectDir}/binderscaffolds/scaffolds_assorted"
+                rfd_foldcond_scaffold_dir = "${projectDir}/binderscaffolds/scaffolds_assorted"
             }
         }
         then {
@@ -50,7 +50,7 @@ nextflow_pipeline {
                 design_mode = "rfd_foldcond"
                 input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
                 hotspot_residues = "A56,A115,A123"
-                rfd_scaffold_dir = "${projectDir}/binderscaffolds/scaffolds_assorted"
+                rfd_foldcond_scaffold_dir = "${projectDir}/binderscaffolds/scaffolds_assorted"
             }
         }
         then {
@@ -76,7 +76,7 @@ nextflow_pipeline {
             params {
                 design_mode = "rfd_motifscaff"
                 input_pdb = "${projectDir}/lib/examplebinder.pdb"
-motifscaff_spec = "5-10,A1-88,10-20"
+                motifscaff_spec = "5-10,A1-88,10-20"
             }
         }
         then {
@@ -104,8 +104,8 @@ motifscaff_spec = "5-10,A1-88,10-20"
             params {
                 design_mode = "rfd_partialdiff"
                 input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
-                rfd_contigs = "[115-115]"
-                rfd_partial_diffusion_timesteps = 20
+                rfd_partialdiff_spec = "A17-111,20"
+                rfd_partialdiff_timesteps = 20
             }
         }
         then {
@@ -118,8 +118,7 @@ motifscaff_spec = "5-10,A1-88,10-20"
             params {
                 design_mode = "rfd_partialdiff"
                 input_pdb = "${projectDir}/lib/examplebinder.pdb"
-                rfd_contigs = "[88-88/0 B89-203]"
-                rfd_partial_diffusion_timesteps = 20
+                rfd_partialdiff_timesteps = 20
             }
         }
         then {

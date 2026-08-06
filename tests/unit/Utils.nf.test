@@ -2,51 +2,6 @@ nextflow_function {
 
     name "Test Utils.groovy pure functions"
 
-    test("countContigChains counts a single chainbreak as 2 chains") {
-        function "Utils.countContigChains"
-        when {
-            function {
-                """
-                input[0] = "[A1-88/0 B1-116]"
-                """
-            }
-        }
-        then {
-            assert function.success
-            assert function.result == 2
-        }
-    }
-
-    test("countContigChains with no chainbreak is 1 chain") {
-        function "Utils.countContigChains"
-        when {
-            function {
-                """
-                input[0] = "[A17-111/20]"
-                """
-            }
-        }
-        then {
-            assert function.success
-            assert function.result == 1
-        }
-    }
-
-    test("countContigChains counts multiple chainbreaks") {
-        function "Utils.countContigChains"
-        when {
-            function {
-                """
-                input[0] = "[88-88/0 B89-203/0 50-50]"
-                """
-            }
-        }
-        then {
-            assert function.success
-            assert function.result == 3
-        }
-    }
-
     test("getPdbChainIds finds a single chain") {
         function "Utils.getPdbChainIds"
         when {

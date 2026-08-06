@@ -14,6 +14,11 @@ class Utils {
     // tokens only (no insert tokens), e.g. 'A10-50,A60'.
     static final String DESIGN_CHAIN_SPEC_REGEX = /^(A(\d+(-\d+)?)?)(,A(\d+(-\d+)?)?)*$/
 
+    // rfd_partialdiff_spec grammar (rfd_partialdiff): an ordered comma-separated list of chain-A 'keep'
+    // tokens ('A<start>-<end>' or 'A<n>') and bare-digit 'diffuse' tokens ('<n>' only - a fixed count,
+    // no ranges, since partial diffusion cannot change chain A's length), e.g. 'A1-19,59'.
+    static final String PARTIALDIFF_SPEC_REGEX = /^((A\d+(-\d+)?)|(\d+))(,((A\d+(-\d+)?)|(\d+)))*$/
+
     // Method to rebatch channels of tuples of PDBs and JSON files
     static def rebatchTuples(input_channel, batch_size = 50) {
         return input_channel 
@@ -163,16 +168,5 @@ class Utils {
                 throw new IllegalArgumentException("design_length values must be valid: min ≤ max and min ≥ 1.")
             }
         }
-    }
-
-    // Count the number of output chains implied by an RFdiffusion contig string, based on
-    // chain-break ('0') tokens. Unlike letter-based counting, this correctly handles newly
-    // diffused chains that have no chain letter of their own (e.g. partial diffusion / denovo
-    // binder chains), since a chain break always separates one output chain from the next.
-    // e.g. '[A1-88/0 B1-116]' -> 2, '[A17-111/20]' -> 1, '[88-88/0 B89-203]' -> 2
-    static int countContigChains(String contigs) {
-        def tokens = contigs.replaceAll(/[\[\]]/, '').split(/[\s\/]+/).findAll { it }
-        def numBreaks = tokens.count { it == '0' }
-        return numBreaks + 1
     }
 }
