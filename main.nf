@@ -52,7 +52,7 @@ workflow {
 
     def outputDirectory = params.out_dir
 
-    VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff']
+    VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_motifscaff', 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff']
     if (!(params.design_mode in VALID_MODES)) {
         throw new IllegalArgumentException("Invalid design mode: ${params.design_mode}. Must be one of: ${VALID_MODES.join(', ')}")
     }
@@ -225,7 +225,7 @@ workflow {
                 .rebatchTuples(bc_pdbs_jsons, 200)
                 .set { fold_tuples }
 
-        } else if (params.design_mode in ['boltzgen_denovo','boltzgen_redesign']) {
+        } else if (params.design_mode in ['boltzgen_denovo','boltzgen_motifscaff']) {
             // Use BoltzGen for fold design
 
             // Collect input files
@@ -910,7 +910,7 @@ def detectIsBinderModeFromParams(design_mode, params) {
     if (design_mode in ['rfd_denovo', 'rfd_foldcond', 'boltzgen_denovo']) {
         return params.input_pdb as boolean
     }
-    // rfd_motifscaff / rfd_partialdiff / boltzgen_redesign always require an input PDB
+    // rfd_motifscaff / rfd_partialdiff / boltzgen_motifscaff always require an input PDB
     if (!params.input_pdb) {
         throw new IllegalArgumentException("input_pdb is required for '${design_mode}' mode.")
     }

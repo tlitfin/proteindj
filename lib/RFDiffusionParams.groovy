@@ -3,6 +3,16 @@ import java.nio.file.Paths
 public class RFDiffusionParams extends HashMap<String, Object> {
     static final String RFD_SCRIPT_PATH = "/app/RFdiffusion/scripts/run_inference.py"
     
+// Sentinel passed as the contigs channel value for rfd_motifscaff when contigs should be
+    // auto-generated from motifscaff_spec/motifscaff_inpaint_seq/flexible_residues (rather than a real
+    // pre-computed contig string), since RFDiffusionParams has direct access to input_pdb/params
+    // and can resolve them itself at command-generation time - mirrors 'NoContigsNeededForFoldConditioning'.
+    static final String AUTO_CONTIGS_SENTINEL = 'AutoGenerateFromMotifScaffSpec'
+
+    // Sentinel passed as the contigs channel value for rfd_partialdiff when contigs should be
+    // auto-generated from rfd_partialdiff_spec (rather than a real pre-computed contig string).
+    static final String AUTO_PARTIALDIFF_SENTINEL = 'AutoGenerateFromPartialDiffSpec'
+    
     static final String MODEL_BASE_PATH = "/app/RFdiffusion/models/"
     static final Map<String, String> MODEL_NAMES = [
         'base': 'Base',
@@ -80,6 +90,70 @@ public class RFDiffusionParams extends HashMap<String, Object> {
         return Paths.get(filePath).getFileName().toString()
     }
 
+    // Format a chain's residues as RFdiffusion full-chain contig notation with chain-letter prefix
+    // and breaks at gaps, e.g. 'A1-40/A45-88' (single residues without a dash, e.g. 'A50').
+    private String formatChainRanges(File pdbFile, String chainId) {
+        def resNums = Utils.getPdbChainResidueNumbers(pdbFile, chainId)
+        def ranges = []
+        def rangeStart = null
+        def rangeEnd = null
+        resNums.each { resNum ->
+            if (rangeStart == null) {
+                rangeStart = resNum
+                rangeEnd = resNum
+            } else if (resNum == rangeEnd + 1) {
+                rangeEnd = resNum
+            } else {
+                ranges << (rangeStart == rangeEnd ? "${chainId}${rangeStart}" : "${chainId}${rangeStart}-${rangeEnd}")
+                rangeStart = resNum
+                rangeEnd = resNum
+            }
+        }
+        if (rangeStart != null) {
+            ranges << (rangeStart == rangeEnd ? "${chainId}${rangeStart}" : "${chainId}${rangeStart}-${rangeEnd}")
+        }
+        return ranges.join('/')
+    }
+
+    // Auto-generate an rfd_motifscaff contigmap.contigs string from motifscaff_spec (BoltzGen-style
+    // keep/insert grammar, comma-separated) plus the input PDB's chains. motifscaff_spec's grammar is
+    // structurally identical to RFdiffusion's own contig segment syntax (comma vs space separated),
+    // so translation is a simple comma->space substitution. Target chain(s), in binder mode, are
+    // auto-detected and appended with full-range notation joined by '/0', exactly as the existing
+    // rfd_denovo/rfd_partialdiff binder auto-contig generation does.
+    private String resolveMotifScaffContigs() {
+        def pdbFile = new File(this.input_pdb.toString())
+        def designChain = this.is_binder_mode ? 'A' : Utils.getPdbChainIds(pdbFile).sort().first()
+        def chainASegment = this.motifscaff_spec ? this.motifscaff_spec.replace(',', ' ') : formatChainRanges(pdbFile, designChain)
+        if (!this.is_binder_mode) {
+            return "[${chainASegment}]"
+        }
+        def targetSegments = Utils.getPdbChainIds(pdbFile).findAll { it != designChain }.sort().collect { chain ->
+            formatChainRanges(pdbFile, chain)
+        }
+        return "[${([chainASegment] + targetSegments).join('/0 ')}]"
+    }
+
+
+    // Translate a motifscaff_inpaint_seq/flexible_residues comma-token list (RESIDUE_SPEC_REGEX or
+    // DESIGN_CHAIN_SPEC_REGEX grammar) into RFdiffusion's bracket/slash contigmap.inpaint_seq /
+    // contigmap.inpaint_str format, e.g. 'A10-50,A60' -> '[A10-50/A60]'. Bare chain-ID tokens
+    // (whole-chain shorthand) are expanded to that chain's full range in the input PDB.
+    private String resolveInpaintBracket(String spec) {
+        if (!spec) {
+            return null
+        }
+        def pdbFile = new File(this.input_pdb.toString())
+        def tokens = spec.split(',').collect { token ->
+            def matcher = (token =~ /^([A-Za-z]+)(\d+)?(?:-(\d+))?$/)
+            matcher.matches()
+            def (chain, start) = [matcher.group(1), matcher.group(2)]
+            start ? token : formatChainRanges(pdbFile, chain)
+        }
+        return "[${tokens.join('/')}]"
+    }
+
+
     private void addCommonParameters(List<String> cmd) {
         cmd << "inference.write_trajectory=False"
         cmd << "inference.output_prefix=./rfd_results/fold"
@@ -129,6 +203,10 @@ public class RFDiffusionParams extends HashMap<String, Object> {
             }
             cmd << "\'ppi.hotspot_res=[${expandedHotspots}]\'"
         }
+def inpaintStr = resolveInpaintBracket(this.flexible_residues)
+        if (inpaintStr) {
+            cmd << "contigmap.inpaint_str=${inpaintStr}"
+        }
     }
     
     private void addBinderFoldConditioningParameters(List<String> cmd) {
@@ -155,19 +233,35 @@ public class RFDiffusionParams extends HashMap<String, Object> {
         if (this.hotspot_residues) {
             cmd << "\'ppi.hotspot_res=[${expandHotspots(this.hotspot_residues)}]\'"
         }
+def inpaintStr = resolveInpaintBracket(this.flexible_residues)
+        if (inpaintStr) {
+            cmd << "contigmap.inpaint_str=${inpaintStr}"
+        }
     }
 
     private void addBinderMotifScaffoldingParameters(List<String> cmd) {
-        if (this.rfd_length) {
-            cmd << "contigmap.length=${this.rfd_length}"  
+        if (this.rfd_motifscaff_length) {
+            cmd << "contigmap.length=${this.rfd_motifscaff_length}"  
         } 
-        if (this.rfd_inpaint_seq) {
-            cmd << "contigmap.inpaint_seq=${this.rfd_inpaint_seq}" 
+        def inpaintSeq = resolveInpaintBracket(this.motifscaff_inpaint_seq)
+        if (inpaintSeq) {
+            cmd << "contigmap.inpaint_seq=${inpaintSeq}" 
+        }
+        def inpaintStr = resolveInpaintBracket(this.flexible_residues)
+        if (inpaintStr) {
+            cmd << "contigmap.inpaint_str=${inpaintStr}" 
         }
     }
 
     private void addBinderPartialDiffusionParameters(List<String> cmd) {
-        cmd << "diffuser.partial_T=${this.rfd_partial_diffusion_timesteps}"
+        cmd << "diffuser.partial_T=${this.rfd_partialdiff_timesteps}"
+if (this.rfd_partialdiff_fixed_seq) {
+            cmd << "\'contigmap.provide_seq=[${resolveProvideSeq(this.rfd_partialdiff_fixed_seq)}]\'"
+        }
+        def inpaintStr = resolveInpaintBracket(this.flexible_residues)
+        if (inpaintStr) {
+            cmd << "contigmap.inpaint_str=${inpaintStr}"
+        }
     }
 
     private void addMonomerDenovoParameters(List<String> cmd) {
@@ -194,11 +288,16 @@ public class RFDiffusionParams extends HashMap<String, Object> {
     }
 
     private void addMonomerMotifScaffoldingParameters(List<String> cmd) {
-        if (this.rfd_inpaint_seq) {
-            cmd << "contigmap.inpaint_seq=${this.rfd_inpaint_seq}" 
+        def inpaintSeq = resolveInpaintBracket(this.motifscaff_inpaint_seq)
+        if (inpaintSeq) {
+            cmd << "contigmap.inpaint_seq=${inpaintSeq}" 
         }
-        if (this.rfd_length) {
-            cmd << "contigmap.length=${this.rfd_length}"  
+        def inpaintStr = resolveInpaintBracket(this.flexible_residues)
+        if (inpaintStr) {
+            cmd << "contigmap.inpaint_str=${inpaintStr}" 
+        }
+        if (this.rfd_motifscaff_length) {
+            cmd << "contigmap.length=${this.rfd_motifscaff_length}"  
         } 
     }
 

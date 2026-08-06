@@ -142,7 +142,7 @@ results_config:
 4. **`rfd_partialdiff`**: Partial diffusion binder design (RFdiffusion)
 5. **`bindcraft_denovo`**: De novo binder design (FreeBindCraft)
 6. **`boltzgen_denovo`**: De novo binder design (BoltzGen)
-7. **`boltzgen_redesign`**: Redesign of an existing binder's architecture/sequence/structure (BoltzGen)
+7. **`boltzgen_motifscaff`**: Redesign of an existing binder's architecture/sequence/structure (BoltzGen)
 
 ### Parameter Types
 
@@ -308,7 +308,7 @@ sweep_params:
 ```
 
 ### 5. BoltzGen De Novo Hotspots Sweep
-Test different hotspot combinations using BoltzGen for fold design. Note that `hotspot_residues` (and BoltzGen's `bg_not_binding_residues`/`bg_flexible_residues`) require an explicit chain identifier for every residue/range across all three Fold Design engines (RFdiffusion, BindCraft, BoltzGen), e.g. `A56` rather than `56`:
+Test different hotspot combinations using BoltzGen for fold design. Note that `hotspot_residues` (and BoltzGen's `bg_not_binding_residues`/`flexible_residues`) require an explicit chain identifier for every residue/range across all three Fold Design engines (RFdiffusion, BindCraft, BoltzGen), e.g. `A56` rather than `56`:
 
 ```yaml
 mode: boltzgen_denovo

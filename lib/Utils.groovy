@@ -1,9 +1,18 @@
 class Utils {
-    // Shared residue-spec grammar for hotspot_residues/bg_not_binding_residues/bg_flexible_residues
+    // Shared residue-spec grammar for hotspot_residues/bg_not_binding_residues/flexible_residues
     // etc: comma-separated tokens, each a chain-qualified single residue ('A56'), a chain-qualified
     // range ('A115-120'), or a bare chain ID meaning the whole chain ('B'). A chain identifier is
     // always required, for consistency across RFdiffusion, BindCraft, and BoltzGen.
     static final String RESIDUE_SPEC_REGEX = /^([A-Za-z]+(\d+(-\d+)?)?)(,[A-Za-z]+(\d+(-\d+)?)?)*$/
+
+    // motifscaff_spec grammar (rfd_motifscaff/boltzgen_motifscaff): an ordered comma-separated list of
+    // chain-A 'keep' tokens ('A<start>-<end>' or 'A<n>') and bare-digit 'insert' tokens ('<n>' or
+    // '<min>-<max>'), e.g. '7-10,A1-60,5,A70-100,10'. Residues not covered by a keep token are deleted.
+    static final String MOTIFSCAFF_SPEC_REGEX = /^((A\d+(-\d+)?)|(\d+(-\d+)?))(,((A\d+(-\d+)?)|(\d+(-\d+)?)))*$/
+
+    // motifscaff_inpaint_seq grammar (rfd_motifscaff/boltzgen_motifscaff): plain chain-A residue/range
+    // tokens only (no insert tokens), e.g. 'A10-50,A60'.
+    static final String DESIGN_CHAIN_SPEC_REGEX = /^(A(\d+(-\d+)?)?)(,A(\d+(-\d+)?)?)*$/
 
     // Method to rebatch channels of tuples of PDBs and JSON files
     static def rebatchTuples(input_channel, batch_size = 50) {

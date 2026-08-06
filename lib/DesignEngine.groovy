@@ -32,7 +32,7 @@ abstract class DesignEngine {
         if (params.design_mode == 'bindcraft_denovo') {
             return new BindCraftEngine(params, isBinderMode)
         }
-        if (params.design_mode in ['boltzgen_denovo', 'boltzgen_redesign']) {
+        if (params.design_mode in ['boltzgen_denovo', 'boltzgen_motifscaff']) {
             return new BoltzGenEngine(params, isBinderMode)
         }
         return new RFDEngine(params, isBinderMode)

@@ -111,7 +111,7 @@ def build_mode_schema(main_schema, mode, overrides, required):
                 prop['enum'] = [
                     "bindcraft_denovo",
                     "boltzgen_denovo",
-                    "boltzgen_redesign",
+                    "boltzgen_motifscaff",
                     "rfd_denovo",
                     "rfd_foldcond",
                     "rfd_motifscaff",

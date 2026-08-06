@@ -22,7 +22,7 @@ class TestBinderValidator:
         assert "rfd_partialdiff" in modes
         assert "bindcraft_denovo" in modes
         assert "boltzgen_denovo" in modes
-        assert "boltzgen_redesign" in modes
+        assert "boltzgen_motifscaff" in modes
 
     def test_rfd_denovo_hotspot_null(self, validator):
         """Test rfd_denovo with null hotspot_residues."""
@@ -127,7 +127,7 @@ class TestBinderValidator:
         assert "design_length" in params
         assert "hotspot_residues" in params
         assert "bg_not_binding_residues" in params
-        assert "bg_flexible_residues" in params
+        assert "flexible_residues" in params
 
     def test_boltzgen_denovo_hotspot_null(self, validator):
         """Test boltzgen_denovo with null hotspot_residues."""
@@ -141,30 +141,46 @@ class TestBinderValidator:
             # Missing chain identifier is invalid for BoltzGen modes
             validator.validate_parameter("boltzgen_denovo", "hotspot_residues", "56,115")
 
-    def test_boltzgen_redesign_required_params(self, validator):
-        """Test boltzgen_redesign has expected parameters."""
-        params = validator.get_supported_parameters("boltzgen_redesign")
+    def test_boltzgen_motifscaff_required_params(self, validator):
+        """Test boltzgen_motifscaff has expected parameters."""
+        params = validator.get_supported_parameters("boltzgen_motifscaff")
         assert "input_pdb" in params
-        assert "bg_redesign_spec" in params
-        assert "bg_redesign_inpaint_seq" in params
-        assert "bg_flexible_residues" in params
-        assert "design_length" not in params  # architecture length is unchanged unless bg_redesign_spec is set
+        assert "motifscaff_spec" in params
+        assert "motifscaff_inpaint_seq" in params
+        assert "flexible_residues" in params
+        assert "design_length" not in params  # architecture length is unchanged unless motifscaff_spec is set
 
-    def test_boltzgen_redesign_spec_validation(self, validator):
-        """Test boltzgen_redesign bg_redesign_spec validation."""
+    def test_boltzgen_motifscaff_spec_validation(self, validator):
+        """Test boltzgen_motifscaff motifscaff_spec validation."""
         assert validator.validate_parameter(
-            "boltzgen_redesign", "bg_redesign_spec", "7-10,A1-60,5,A70-100,10"
+            "boltzgen_motifscaff", "motifscaff_spec", "7-10,A1-60,5,A70-100,10"
         )
-        assert validator.validate_parameter("boltzgen_redesign", "bg_redesign_spec", None)
+        assert validator.validate_parameter("boltzgen_motifscaff", "motifscaff_spec", None)
 
         with pytest.raises(ValueError, match="does not match pattern"):
-            validator.validate_parameter("boltzgen_redesign", "bg_redesign_spec", "B1-60")
+            validator.validate_parameter("boltzgen_motifscaff", "motifscaff_spec", "B1-60")
 
-    def test_boltzgen_redesign_inpaint_seq_validation(self, validator):
-        """Test boltzgen_redesign bg_redesign_inpaint_seq only accepts chain A tokens."""
+    def test_boltzgen_motifscaff_inpaint_seq_validation(self, validator):
+        """Test boltzgen_motifscaff motifscaff_inpaint_seq only accepts chain A tokens."""
         assert validator.validate_parameter(
-            "boltzgen_redesign", "bg_redesign_inpaint_seq", "A10-50,A60"
+            "boltzgen_motifscaff", "motifscaff_inpaint_seq", "A10-50,A60"
         )
 
         with pytest.raises(ValueError, match="does not match pattern"):
-            validator.validate_parameter("boltzgen_redesign", "bg_redesign_inpaint_seq", "B10-50")
+            validator.validate_parameter("boltzgen_motifscaff", "motifscaff_inpaint_seq", "B10-50")
+
+    def test_rfd_partialdiff_required_params(self, validator):
+        """Test rfd_partialdiff has expected parameters."""
+        params = validator.get_supported_parameters("rfd_partialdiff")
+        assert "input_pdb" in params
+        assert "rfd_partialdiff_timesteps" in params
+        assert "rfd_partialdiff_spec" in params
+
+    def test_rfd_partialdiff_spec_validation(self, validator):
+        """Test rfd_partialdiff_spec validation: keep tokens plus fixed-count diffuse tokens only."""
+        assert validator.validate_parameter("rfd_partialdiff", "rfd_partialdiff_spec", "A1-19,59")
+        assert validator.validate_parameter("rfd_partialdiff", "rfd_partialdiff_spec", None)
+
+        with pytest.raises(ValueError, match="does not match pattern"):
+            # Ranges are not allowed for diffuse tokens (length cannot change)
+            validator.validate_parameter("rfd_partialdiff", "rfd_partialdiff_spec", "B10-50")

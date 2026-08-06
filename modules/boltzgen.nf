@@ -23,9 +23,9 @@ process PrepBG {
         --design_length "${params.design_length}" \
         --hotspot_residues "${params.hotspot_residues ?: ''}" \
         --bg_not_binding_residues "${params.bg_not_binding_residues ?: ''}" \
-        --bg_redesign_spec "${params.bg_redesign_spec ?: ''}" \
-        --bg_redesign_inpaint_seq "${params.bg_redesign_inpaint_seq ?: ''}" \
-        --bg_flexible_residues "${params.bg_flexible_residues ?: ''}" \
+        --motifscaff_spec "${params.motifscaff_spec ?: ''}" \
+        --motifscaff_inpaint_seq "${params.motifscaff_inpaint_seq ?: ''}" \
+        --flexible_residues "${params.flexible_residues ?: ''}" \
         --output batch${batch_id}.yaml
     """
 }
@@ -46,7 +46,7 @@ process RunBG {
 
     script:
     // Denovo diffuses a new binder from scratch; redesign rediffuses residues of an existing chain
-    def protocol = design_mode == 'boltzgen_redesign' ? 'protein-redesign' : 'protein-anything'
+    def protocol = design_mode == 'boltzgen_motifscaff' ? 'protein-redesign' : 'protein-anything'
     """
     # Ensure a failure in the piped boltzgen command below is not masked by tee's own exit code
     set -o pipefail

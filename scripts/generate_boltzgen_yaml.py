@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Generate a BoltzGen design-spec YAML for ProteinDJ's boltzgen_denovo/boltzgen_redesign modes.
+Generate a BoltzGen design-spec YAML for ProteinDJ's boltzgen_denovo/boltzgen_motifscaff modes.
 
 - boltzgen_denovo: designs a new binder (entity 1, chain A) against a fixed target
   (entity 2, taken from input_pdb), with optional hotspot/anti-hotspot residues and/or
   target structural flexibility. If input_pdb is omitted, designs a standalone monomer
   (chain A only, no target entity).
-- boltzgen_redesign: reworks an existing chain A binder/monomer against the remaining
+- boltzgen_motifscaff: reworks an existing chain A binder/monomer against the remaining
   fixed chain(s) of input_pdb (if any) - optionally changing its architecture (keeping/
-  deleting/inserting residues via bg_redesign_spec), redesigning the sequence of kept
-  residues (bg_redesign_inpaint_seq), and/or freeing up the structure of residues on any
-  chain (bg_flexible_residues).
+  deleting/inserting residues via motifscaff_spec), redesigning the sequence of kept
+  residues (motifscaff_inpaint_seq), and/or freeing up the structure of residues on any
+  chain (flexible_residues).
 
 Entities are emitted binder-then-target so BoltzGen's generated CIF naturally places
 the binder as chain A (matches ProteinDJ's chain A=binder/chain B=target convention).
@@ -121,7 +121,7 @@ def parse_residue_ranges(spec_str, rank_map):
     Parse a hotspot/anti-hotspot/inpaint-seq/flexible-residue style string, e.g.
     'A56,A115-120,B10', into {chain: 'res_index string'}. This is the shared token
     grammar for all of ProteinDJ's bg_* residue-spec params (bg_not_binding_residues,
-    bg_redesign_inpaint_seq, bg_flexible_residues) as well as hotspot_residues. PDB
+    motifscaff_inpaint_seq, flexible_residues) as well as hotspot_residues. PDB
     author residue numbers are translated to BoltzGen's 1-based positional rank via
     rank_map (see get_residue_rank_map), and emitted as an explicit comma-separated
     list of positions (not a '..' range) so gaps in PDB numbering don't get
@@ -152,7 +152,7 @@ def parse_residue_ranges(spec_str, rank_map):
 
 def parse_flexible_spec(spec_str, rank_map):
     """
-    Parse a bg_flexible_residues style string, e.g. 'A10-13,A16,B', into
+    Parse a flexible_residues style string, e.g. 'A10-13,A16,B', into
     {chain: 'res_index string' or None}. Uses the same token grammar as
     parse_residue_ranges (see above) - a value of None means the entire chain is
     flexible (res_index omitted), mapped from a bare chain-ID token.
@@ -175,7 +175,7 @@ def _res_index_to_ranks(res_index, chain_length):
 
 def parse_architecture_spec(spec_str, rank_map, chain_a_length):
     """
-    Parse a bg_redesign_spec string, e.g. '7-10,A1-60,5,A70-100,10', describing the
+    Parse a motifscaff_spec string, e.g. '7-10,A1-60,5,A70-100,10', describing the
     new chain A architecture as an ordered sequence of tokens:
       - Keep token 'A<n>' or 'A<start>-<end>': PDB-author-numbered (rank_map-translated)
         contiguous run of ORIGINAL chain A residues to retain as-is (sequence +
@@ -211,12 +211,12 @@ def parse_architecture_spec(spec_str, rank_map, chain_a_length):
             start, end = keep_match.groups()
             start, end = int(start), int(end) if end else int(start)
             if end < start:
-                raise ValueError(f"Invalid bg_redesign_spec keep token '{token}': end before start")
+                raise ValueError(f"Invalid motifscaff_spec keep token '{token}': end before start")
             start_rank = _resolve_rank('A', start, rank_map)
             end_rank = _resolve_rank('A', end, rank_map)
             if start_rank <= last_kept_end_rank:
                 raise ValueError(
-                    f"bg_redesign_spec keep token '{token}' is out of order or overlaps a "
+                    f"motifscaff_spec keep token '{token}' is out of order or overlaps a "
                     "previous keep token - keep tokens must be strictly ascending"
                 )
             if start_rank > last_kept_end_rank + 1:
@@ -226,12 +226,12 @@ def parse_architecture_spec(spec_str, rank_map, chain_a_length):
         elif insert_match:
             count_start, count_end = insert_match.groups()
             if count_end and int(count_end) < int(count_start):
-                raise ValueError(f"Invalid bg_redesign_spec insert token '{token}': end before start")
+                raise ValueError(f"Invalid motifscaff_spec insert token '{token}': end before start")
             num_residues_spec = count_start if not count_end else f"{count_start}..{count_end}"
             insertions.append((last_kept_end_rank + 1, num_residues_spec))
         else:
             raise ValueError(
-                f"Could not parse bg_redesign_spec token: '{token}' "
+                f"Could not parse motifscaff_spec token: '{token}' "
                 "(expected e.g. 'A1-60', 'A56', '10', or '7-10')"
             )
 
@@ -273,7 +273,7 @@ def apply_binding_types(file_entity, hotspot_residues, bg_not_binding_residues, 
     """
     Parse hotspot_residues/bg_not_binding_residues and attach a `binding_types` block to
     file_entity if either is set. context_chains are the chains binding_types may reference:
-    the fixed target in boltzgen_denovo, or the fixed non-A chain(s) in boltzgen_redesign.
+    the fixed target in boltzgen_denovo, or the fixed non-A chain(s) in boltzgen_motifscaff.
     """
     binding_by_chain = parse_residue_ranges(hotspot_residues, rank_map) if hotspot_residues else {}
     not_binding_by_chain = (
@@ -289,14 +289,14 @@ def apply_binding_types(file_entity, hotspot_residues, bg_not_binding_residues, 
     file_entity['binding_types'] = build_binding_types(binding_by_chain, not_binding_by_chain)
 
 
-def apply_structure_groups(file_entity, bg_flexible_residues, context_chains, rank_map):
-    """Parse bg_flexible_residues and attach/extend the `structure_groups` block on file_entity if set."""
-    if not bg_flexible_residues:
+def apply_structure_groups(file_entity, flexible_residues, context_chains, rank_map):
+    """Parse flexible_residues and attach/extend the `structure_groups` block on file_entity if set."""
+    if not flexible_residues:
         return
-    flexible_by_chain = parse_flexible_spec(bg_flexible_residues, rank_map)
+    flexible_by_chain = parse_flexible_spec(flexible_residues, rank_map)
     invalid_chains = set(flexible_by_chain) - set(context_chains)
     if invalid_chains:
-        raise ValueError(f"bg_flexible_residues references chain(s) not in target: {sorted(invalid_chains)}")
+        raise ValueError(f"flexible_residues references chain(s) not in target: {sorted(invalid_chains)}")
     file_entity.setdefault('structure_groups', []).extend(build_structure_groups(flexible_by_chain))
 
 
@@ -310,9 +310,9 @@ def build_denovo_spec(args, target_chains, rank_map):
 
     if not args.input_pdb:
         # Monomer design - no target to bind, so no 'file' entity at all.
-        if args.hotspot_residues or args.bg_not_binding_residues or args.bg_flexible_residues:
+        if args.hotspot_residues or args.bg_not_binding_residues or args.flexible_residues:
             raise ValueError(
-                "hotspot_residues/bg_not_binding_residues/bg_flexible_residues require a target - "
+                "hotspot_residues/bg_not_binding_residues/flexible_residues require a target - "
                 "provide input_pdb, or leave them unset for monomer design."
             )
         return {'entities': [design_entity]}
@@ -325,19 +325,19 @@ def build_denovo_spec(args, target_chains, rank_map):
     apply_binding_types(
         target_file_entity, args.hotspot_residues, args.bg_not_binding_residues, target_chains, rank_map
     )
-    apply_structure_groups(target_file_entity, args.bg_flexible_residues, target_chains, rank_map)
+    apply_structure_groups(target_file_entity, args.flexible_residues, target_chains, rank_map)
 
     return {'entities': [design_entity, {'file': target_file_entity}]}
 
 
-def build_redesign_spec(args, all_chains, rank_map):
+def build_motifscaff_spec(args, all_chains, rank_map):
     if 'A' not in all_chains:
-        raise ValueError("boltzgen_redesign requires input_pdb to contain a chain A (binder)")
+        raise ValueError("boltzgen_motifscaff requires input_pdb to contain a chain A (binder)")
 
-    if not (args.bg_redesign_spec or args.bg_redesign_inpaint_seq or args.bg_flexible_residues):
+    if not (args.motifscaff_spec or args.motifscaff_inpaint_seq or args.flexible_residues):
         raise ValueError(
-            "boltzgen_redesign mode requires at least one of bg_redesign_spec, "
-            "bg_redesign_inpaint_seq, or bg_flexible_residues to be set - otherwise chain A "
+            "boltzgen_motifscaff mode requires at least one of motifscaff_spec, "
+            "motifscaff_inpaint_seq, or flexible_residues to be set - otherwise chain A "
             "would be left completely unchanged (wasted computation)."
         )
 
@@ -347,9 +347,9 @@ def build_redesign_spec(args, all_chains, rank_map):
     if chain_a_length == 0:
         raise ValueError("Chain A in input_pdb has no standard residues")
 
-    if args.bg_redesign_spec:
+    if args.motifscaff_spec:
         exclude_ranks, insertions, kept_ranks = parse_architecture_spec(
-            args.bg_redesign_spec, rank_map, chain_a_length
+            args.motifscaff_spec, rank_map, chain_a_length
         )
     else:
         exclude_ranks, insertions, kept_ranks = [], [], list(range(1, chain_a_length + 1))
@@ -378,42 +378,42 @@ def build_redesign_spec(args, all_chains, rank_map):
         # BoltzGen's output structure.
         file_entity['reset_res_index'] = [{'chain': {'id': 'A'}}]
 
-    if args.bg_redesign_inpaint_seq:
-        inpaint_by_chain = parse_residue_ranges(args.bg_redesign_inpaint_seq, rank_map)
+    if args.motifscaff_inpaint_seq:
+        inpaint_by_chain = parse_residue_ranges(args.motifscaff_inpaint_seq, rank_map)
         invalid_chains = set(inpaint_by_chain) - {'A'}
         if invalid_chains:
             raise ValueError(
-                f"bg_redesign_inpaint_seq must only reference chain A, got: {sorted(invalid_chains)}"
+                f"motifscaff_inpaint_seq must only reference chain A, got: {sorted(invalid_chains)}"
             )
         inpaint_res_index = inpaint_by_chain.get('A', 'all')
         invalid_ranks = _res_index_to_ranks(inpaint_res_index, chain_a_length) - kept_ranks_set
         if invalid_ranks:
             raise ValueError(
-                "bg_redesign_inpaint_seq references chain A residue(s) removed by "
-                f"bg_redesign_spec: {sorted(invalid_ranks)}"
+                "motifscaff_inpaint_seq references chain A residue(s) removed by "
+                f"motifscaff_spec: {sorted(invalid_ranks)}"
             )
         # design:True keeps the residue's original identity/coordinates as a template (BoltzGen's
         # design step only diffuses structure) but marks it for downstream sequence redesign via
         # MPNN/FAMPNN (--skip_inverse_folding); structure_groups visibility stays at the default
-        # (1, conditioned) so the backbone itself is not freed up here - only bg_flexible_residues
+        # (1, conditioned) so the backbone itself is not freed up here - only flexible_residues
         # does that.
         file_entity.setdefault('design', []).append({'chain': {'id': 'A', 'res_index': inpaint_res_index}})
 
-    if args.bg_flexible_residues:
-        flexible_by_chain = parse_flexible_spec(args.bg_flexible_residues, rank_map)
+    if args.flexible_residues:
+        flexible_by_chain = parse_flexible_spec(args.flexible_residues, rank_map)
         if 'A' in flexible_by_chain:
             invalid_ranks = _res_index_to_ranks(flexible_by_chain['A'], chain_a_length) - kept_ranks_set
             if invalid_ranks:
                 raise ValueError(
-                    "bg_flexible_residues references chain A residue(s) removed by "
-                    f"bg_redesign_spec: {sorted(invalid_ranks)}"
+                    "flexible_residues references chain A residue(s) removed by "
+                    f"motifscaff_spec: {sorted(invalid_ranks)}"
                 )
 
     # hotspot_residues/bg_not_binding_residues apply to the fixed non-A context chain(s), same
-    # as the target in boltzgen_denovo. bg_flexible_residues may target chain A's kept residues
+    # as the target in boltzgen_denovo. flexible_residues may target chain A's kept residues
     # in addition to the fixed non-A context chain(s).
     apply_binding_types(file_entity, args.hotspot_residues, args.bg_not_binding_residues, other_chains, rank_map)
-    apply_structure_groups(file_entity, args.bg_flexible_residues, all_chains, rank_map)
+    apply_structure_groups(file_entity, args.flexible_residues, all_chains, rank_map)
 
     return {'entities': [{'file': file_entity}]}
 
@@ -422,14 +422,14 @@ def main():
     parser = argparse.ArgumentParser(description='Generate a BoltzGen design-spec YAML')
     parser.add_argument(
         '--input_pdb', default='',
-        help='Path to input PDB file. Optional for boltzgen_denovo (omit for monomer design); always required for boltzgen_redesign.',
+        help='Path to input PDB file. Optional for boltzgen_denovo (omit for monomer design); always required for boltzgen_motifscaff.',
     )
-    parser.add_argument('--design_mode', required=True, choices=['boltzgen_denovo', 'boltzgen_redesign'])
+    parser.add_argument('--design_mode', required=True, choices=['boltzgen_denovo', 'boltzgen_motifscaff'])
     parser.add_argument('--design_length', default='', help="Binder length, e.g. '80' or '60-100' (denovo only)")
     parser.add_argument('--hotspot_residues', default='', help="Target hotspot residues, e.g. 'A56,A115-120'")
     parser.add_argument('--bg_not_binding_residues', default='', help="Target anti-hotspot residues")
     parser.add_argument(
-        '--bg_redesign_spec', default='',
+        '--motifscaff_spec', default='',
         help=(
             "Chain A architecture spec (redesign only), e.g. '7-10,A1-60,5,A70-100,10': "
             "ordered comma-separated keep ('A<start>-<end>') and insert ('<n>' or "
@@ -437,15 +437,15 @@ def main():
         ),
     )
     parser.add_argument(
-        '--bg_redesign_inpaint_seq', default='',
+        '--motifscaff_inpaint_seq', default='',
         help="Chain A residues (within kept residues) whose sequence is allowed to change (redesign only)",
     )
-    parser.add_argument('--bg_flexible_residues', default='', help='Residues with unconditioned/free structure')
+    parser.add_argument('--flexible_residues', default='', help='Residues with unconditioned/free structure')
     parser.add_argument('--output', required=True, help='Output YAML file path')
     args = parser.parse_args()
 
-    if args.design_mode == 'boltzgen_redesign' and not args.input_pdb:
-        raise ValueError("input_pdb is required for boltzgen_redesign mode.")
+    if args.design_mode == 'boltzgen_motifscaff' and not args.input_pdb:
+        raise ValueError("input_pdb is required for boltzgen_motifscaff mode.")
 
     rank_map = get_residue_rank_map(args.input_pdb) if args.input_pdb else {}
 
@@ -463,7 +463,7 @@ def main():
         spec = build_denovo_spec(args, target_chains, rank_map)
     else:
         all_chains = get_protein_chains(args.input_pdb)
-        spec = build_redesign_spec(args, all_chains, rank_map)
+        spec = build_motifscaff_spec(args, all_chains, rank_map)
         other_chains = [c for c in all_chains if c != 'A']
         if other_chains:
             print(f"Redesigning residues in chain A against fixed chain(s): {other_chains}")

@@ -63,7 +63,7 @@ nextflow_pipeline {
             params {
                 design_mode = "rfd_motifscaff"
                 input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
-                rfd_contigs = "[5-15/A17-131/30-40]"
+                motifscaff_spec = "5-15,A17-131,30-40"
             }
         }
         then {
@@ -76,7 +76,22 @@ nextflow_pipeline {
             params {
                 design_mode = "rfd_motifscaff"
                 input_pdb = "${projectDir}/lib/examplebinder.pdb"
-                rfd_contigs = "[5-10/A1-88/10-20/0 B89-203]"
+motifscaff_spec = "5-10,A1-88,10-20"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_motifscaff binder auto-generated contigs from motifscaff_spec") {
+        when {
+            params {
+                design_mode = "rfd_motifscaff"
+                input_pdb = "${projectDir}/lib/examplebinder.pdb"
+                motifscaff_spec = "5-10,A1-88,10-20"
+                motifscaff_inpaint_seq = "A1-3"
+                flexible_residues = "A80-88"
             }
         }
         then {
@@ -151,12 +166,12 @@ nextflow_pipeline {
         }
     }
 
-    test("boltzgen_redesign") {
+    test("boltzgen_motifscaff") {
         when {
             params {
-                design_mode = "boltzgen_redesign"
+                design_mode = "boltzgen_motifscaff"
                 input_pdb = "${projectDir}/lib/examplebinder.pdb"
-                bg_redesign_spec = "7-10,A1-60,5,A70-100,10"
+                motifscaff_spec = "7-10,A1-60,5,A70-100,10"
             }
         }
         then {

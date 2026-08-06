@@ -15,7 +15,7 @@ Due to the creative nature of protein design and the complexity of RFdiffusion t
 
 [**BoltzGen design**](#boltzgendesign) - each mode below automatically runs as either monomer or binder design, depending on whether a target `input_pdb` is provided
 - [**boltzgen_denovo**](#mode-boltzgendenovo) – generative design of new monomers/binders using BoltzGen
-- [**boltzgen_redesign**](#mode-boltzgenredesign) – redesign/rediffusion of an existing monomer/binder using BoltzGen
+- [**boltzgen_motifscaff**](#mode-boltzgenmotifscaff) – redesign/rediffusion of an existing monomer/binder using BoltzGen
 
 ## Preparing Target Structures for Binder Design <a name="binderdesign"></a>
 
@@ -222,33 +222,32 @@ For more details on Fold Conditioning, see the official [RFdiffusion GitHub](htt
 
 ### RFdiffusion Motif Scaffolding Mode (rfd_motifscaff) <a name="mode-rfdmotifscaff"></a>
 
-Motif scaffolding, also known as inpainting, uses a reference scaffold and adds one or more motifs to generate a new structure. `input_pdb` and `rfd_contigs` are always required for this mode; whether it runs as monomer or binder design is auto-detected from the number of chains implied by your contigs (or your input PDB, if contigs are not provided).
+Motif scaffolding, also known as inpainting, uses a reference scaffold and adds one or more motifs to generate a new structure. `input_pdb` is always required for this mode, plus one of `motifscaff_spec`/`motifscaff_inpaint_seq`/`flexible_residues`; whether it runs as monomer or binder design is auto-detected from the number of chains in your `input_pdb`.
 
 **Monomer design**
 
 <img src="../img/monomer_motifscaff.png" width="400">
 
-We need to provide an input PDB file containing a single chain and contigs (contiguous residues) that specify which part of the structure we want to keep and where we want new residues to be inserted. For example, to add 5-15 residues to the N-terminus and 30-40 residues to the C-terminus of PL-D1:
+`motifscaff_spec` describes chain A's new architecture as an ordered, comma-separated list of chain-A 'keep' tokens (e.g. `A10-50` or `A60`) and bare-digit 'insert' tokens (e.g. `10` for an exact count or `7-10` for a sampled range). For example, to add 5-15 residues to the N-terminus and 30-40 residues to the C-terminus of PD-L1 (keeping residues A17-131):
 
 ```
 rfd_motifscaff_monomer {
     params {
         design_mode = 'rfd_motifscaff'
         input_pdb = "./benchmarkdata/5o45_pd-l1.pdb"
-        rfd_contigs = "[5-15/A17-131/30-40]"
+        motifscaff_spec = '5-15,A17-131,30-40'
     }
 }
 ```
-Note we need to specify 'A17-131' to tell RFdiffusion to keep these residues of the input PDB.
 
-We could also replace the first 10 amino acids of chain A with 5-15 residues:
+We could also replace the first 10 amino acids of chain A with 5-15 new residues:
 
 ```
 rfd_motifscaff_monomer {
     params {
         design_mode = 'rfd_motifscaff'
         input_pdb = "./benchmarkdata/5o45_pd-l1.pdb"
-        rfd_contigs = "[5-15/A27-131]"
+        motifscaff_spec = '5-15,A27-131'
     }
 }
 ```
@@ -260,20 +259,20 @@ rfd_motifscaff_monomer {
     params {
         design_mode = 'rfd_motifscaff'
         input_pdb = "./benchmarkdata/5o45_pd-l1.pdb"
-        rfd_contigs = "[A17-43/9-15/A53-117/3-6/A121-131]"
+        motifscaff_spec = 'A17-43,9-15,A53-117,3-6,A121-131'
     }
 }
 ```
 
-Finally, we can mask the sequence of the first three and last three residues to allow RFdiffusion to design new residues without changing the backbone using the `rfd_inpaint_seq` parameter
+Finally, we can mask the sequence of the first three and last three kept residues to allow RFdiffusion to design new residues without changing the backbone using `motifscaff_inpaint_seq`:
 
 ```
 rfd_motifscaff_monomer {
     params {
         design_mode = 'rfd_motifscaff'
         input_pdb = "./benchmarkdata/5o45_pd-l1.pdb"
-        rfd_contigs = "[A17-43/9-15/A53-117/3-6/A121-131]"
-        rfd_inpaint_seq = "[A17-19/A129-131]"
+        motifscaff_spec = 'A17-43,9-15,A53-117,3-6,A121-131'
+        motifscaff_inpaint_seq = 'A17-19,A129-131'
     }
 }
 ```
@@ -284,9 +283,9 @@ For more details on Motif Scaffolding, see the official [RFdiffusion GitHub](<[h
 
 <img src="../img/binder_motifscaff.png" width="400">
 
-We can also use motif scaffolding to add binding motifs to an input structure that already contains both a binder and a target chain, which ProteinDJ auto-detects as binder design.
+We can also use motif scaffolding to add binding motifs to an input structure that already contains both a binder and a target chain, which ProteinDJ auto-detects as binder design. `motifscaff_spec` only ever describes chain A (the binder) - any target chain(s) in `input_pdb` are automatically detected and appended unchanged.
 
-We need to provide an input PDB file containing a binder and a target protein, and contigs that specify which part of the binder we want to keep and where we want new residues to be inserted. For example, we have a PDB structure with a binder (chain A, residues 1-88) and a target (chain B, residues 89-203). To add 5 residues to the N-terminus and 10-20 residues to the C-terminus of the binder (chain A) we would use the contigs "[5-5/A1-88/10-20/0 B89-203]". The '/0' indicates a chain break between the diffused residues and chain B.
+For example, we have a PDB structure with a binder (chain A, residues 1-88) and a target (chain B, residues 89-203). To add 5 residues to the N-terminus and 10-20 residues to the C-terminus of the binder (chain A):
 
 By default, RFdiffusion will use the 'base' diffusion model checkpoint, but the RFdiffusion GitHub recommends using 'complex_base' or 'complex_beta' for motif scaffolding of binders.
 
@@ -295,22 +294,22 @@ rfd_motifscaff_binder {
     params {
         design_mode = 'rfd_motifscaff'
         input_pdb = "./lib/examplebinder.pdb"
-        rfd_contigs = "[5-10/A1-88/10-20/0 B89-203]"
+        motifscaff_spec = '5-10,A1-88,10-20'
         rfd_ckpt_override = 'complex_base'
     }
 }
 ```
 
-Our insertions length will be randomly chosen from the ranges provided, but we can constrain the length of the binder to 110 residues total, by using the rfd_length parameter e.g.
+Our insertions length will be randomly chosen from the ranges provided, but we can constrain the length of the binder to 110 residues total, by using the `rfd_motifscaff_length` parameter e.g.
 
 ```
 rfd_motifscaff_binder {
     params {
         design_mode = 'rfd_motifscaff'
         input_pdb = "./lib/examplebinder.pdb"
-        rfd_contigs = "[5-10/A1-88/10-20/0 B89-203]"
+        motifscaff_spec = '5-10,A1-88,10-20'
         rfd_ckpt_override = 'complex_base'
-        rfd_length = '110-110'
+        rfd_motifscaff_length = '110-110'
     }
 }
 ```
@@ -368,8 +367,8 @@ rfd_partialdiff_binder {
     params {
         design_mode = 'rfd_partialdiff'
         input_pdb = "./lib/examplebinder.pdb"
-        rfd_contigs = "[88-88/0 B89-203]"
-        rfd_partial_diffusion_timesteps = 20
+        rfd_partialdiff_timesteps = 20
+        flexible_residues = 'B10-35'
     }
 }
 ```
@@ -430,7 +429,7 @@ For more details on BindCraft, see the official BindCraft [GitHub](https://githu
 
 ## BoltzGen Design <a name="boltzgendesign"></a>
 
-[BoltzGen](https://github.com/HannesStark/boltzgen) is an all-atom generative model that can design a new monomer or binder (`boltzgen_denovo`), or redesign/rediffuse part of an existing monomer or binder (`boltzgen_redesign`). Like BindCraft, BoltzGen's design step produces both backbone and an initial sequence together, which ProteinDJ passes through sequence design, structure prediction, and analysis stages. As with RFdiffusion, both modes automatically run as **monomer design** or **binder design** depending on whether a target `input_pdb` is provided (for `boltzgen_redesign`, monomer vs. binder is instead determined by whether `input_pdb` contains only chain A or additional target chain(s)) - you do not need to select monomer vs. binder explicitly.
+[BoltzGen](https://github.com/HannesStark/boltzgen) is an all-atom generative model that can design a new monomer or binder (`boltzgen_denovo`), or redesign/rediffuse part of an existing monomer or binder (`boltzgen_motifscaff`). Like BindCraft, BoltzGen's design step produces both backbone and an initial sequence together, which ProteinDJ passes through sequence design, structure prediction, and analysis stages. As with RFdiffusion, both modes automatically run as **monomer design** or **binder design** depending on whether a target `input_pdb` is provided (for `boltzgen_motifscaff`, monomer vs. binder is instead determined by whether `input_pdb` contains only chain A or additional target chain(s)) - you do not need to select monomer vs. binder explicitly.
 
 ### BoltzGen De Novo Mode (boltzgen_denovo) <a name="mode-boltzgendenovo"></a>
 
@@ -481,7 +480,7 @@ boltzgen_denovo {
 }
 ```
 
-If part of your target is flexible or disordered (e.g. loops or an IDR) and you don't want BoltzGen to condition on that region's structure, mark it with `bg_flexible_residues`. This accepts a comma-separated list of contiguous ranges (`'A10-13'`), single residues (`'A16'`), or whole chains (`'B'`):
+If part of your target is flexible or disordered (e.g. loops or an IDR) and you don't want BoltzGen to condition on that region's structure, mark it with `flexible_residues`. This accepts a comma-separated list of contiguous ranges (`'A10-13'`), single residues (`'A16'`), or whole chains (`'B'`):
 
 ```
 boltzgen_denovo {
@@ -490,76 +489,76 @@ boltzgen_denovo {
         design_length = '60-100'
         input_pdb = './benchmarkdata/5o45_pd-l1.pdb'
         hotspot_residues = 'A56,A115,A123'
-        bg_flexible_residues = 'A17-20'
+        flexible_residues = 'A17-20'
     }
 }
 ```
 
-### BoltzGen Redesign Mode (boltzgen_redesign) <a name="mode-boltzgenredesign"></a>
+### BoltzGen Motif Scaffolding Mode (boltzgen_motifscaff) <a name="mode-boltzgenmotifscaff"></a>
 
-<img src="../img/boltzgen_redesign.png" width="400">
+<img src="../img/boltzgen_motifscaff.png" width="400">
 
-BoltzGen redesign mode reworks an existing chain A monomer or binder while keeping any remaining target chain(s) of `input_pdb` fixed (a monomer `input_pdb`, i.e. chain A only, has no target chains to keep fixed). This is useful for improving or diversifying an existing design without starting from scratch, and can optionally change chain A's architecture (inserting/deleting residues) as well as its sequence and/or structural flexibility.
+BoltzGen motif scaffolding mode reworks an existing chain A monomer or binder while keeping any remaining target chain(s) of `input_pdb` fixed (a monomer `input_pdb`, i.e. chain A only, has no target chains to keep fixed). This is useful for improving or diversifying an existing design without starting from scratch, and can optionally change chain A's architecture (inserting/deleting residues) as well as its sequence and/or structural flexibility.
 
-At least one of `bg_redesign_spec`, `bg_redesign_inpaint_seq`, or `bg_flexible_residues` must be set in this mode - otherwise chain A would be left completely unchanged, which is a hard error (wasted computation).
+At least one of `motifscaff_spec`, `motifscaff_inpaint_seq`, or `flexible_residues` must be set in this mode - otherwise chain A would be left completely unchanged, which is a hard error (wasted computation).
 
-**Changing the architecture with `bg_redesign_spec`**
+**Changing the architecture with `motifscaff_spec`**
 
-`bg_redesign_spec` describes the new chain A architecture as an ordered, comma-separated list of tokens:
+`motifscaff_spec` describes the new chain A architecture as an ordered, comma-separated list of tokens:
 - Keep token `A<start>-<end>` or `A<n>` - a contiguous run of original chain A residues (PDB author numbering) to retain as-is (sequence + structure). Keep tokens must be strictly ascending/non-overlapping.
 - Insert token `<n>` (exact count) or `<min>-<max>` (sampled range) - bare digit(s), no chain letter. Adds that many brand-new, fully designed residues at this position.
 
 Any original chain A residue not covered by a keep token (leading, trailing, or between two keep tokens) is implicitly deleted. For example, to insert 7-10 new residues at the N-terminus, keep residues A1-60, insert 5 new residues, keep A70-100 (implicitly deleting A61-69), then append 10 new residues at the C-terminus:
 
 ```
-boltzgen_redesign {
+boltzgen_motifscaff {
     params {
-        design_mode = 'boltzgen_redesign'
+        design_mode = 'boltzgen_motifscaff'
         input_pdb = './lib/examplebinder.pdb'
-        bg_redesign_spec = '7-10,A1-60,5,A70-100,10'
+        motifscaff_spec = '7-10,A1-60,5,A70-100,10'
     }
 }
 ```
 
-If `bg_redesign_spec` is null, chain A's architecture (length) is left unchanged.
+If `motifscaff_spec` is null, chain A's architecture (length) is left unchanged.
 
-**Redesigning the sequence with `bg_redesign_inpaint_seq`**
+**Redesigning the sequence with `motifscaff_inpaint_seq`**
 
-`bg_redesign_inpaint_seq` marks chain A residues - within those kept by `bg_redesign_spec` - whose sequence is allowed to change while their structure stays fixed/conditioned (comma-separated ranges referencing chain A only, e.g. `'A10-50,A60'`):
+`motifscaff_inpaint_seq` marks chain A residues - within those kept by `motifscaff_spec` - whose sequence is allowed to change while their structure stays fixed/conditioned (comma-separated ranges referencing chain A only, e.g. `'A10-50,A60'`):
 
 ```
-boltzgen_redesign {
+boltzgen_motifscaff {
     params {
-        design_mode = 'boltzgen_redesign'
+        design_mode = 'boltzgen_motifscaff'
         input_pdb = './lib/examplebinder.pdb'
-        bg_redesign_inpaint_seq = 'A60-88'
+        motifscaff_inpaint_seq = 'A60-88'
     }
 }
 ```
 
-**Freeing up structure with `bg_flexible_residues`**
+**Freeing up structure with `flexible_residues`**
 
-`bg_flexible_residues` marks residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Unlike `bg_redesign_inpaint_seq`, it can reference any chain, including chain A residues kept by `bg_redesign_spec`:
+`flexible_residues` marks residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Unlike `motifscaff_inpaint_seq`, it can reference any chain, including chain A residues kept by `motifscaff_spec`:
 
 ```
-boltzgen_redesign {
+boltzgen_motifscaff {
     params {
-        design_mode = 'boltzgen_redesign'
+        design_mode = 'boltzgen_motifscaff'
         input_pdb = './lib/examplebinder.pdb'
-        bg_flexible_residues = 'A60-88'
+        flexible_residues = 'A60-88'
     }
 }
 ```
 
-Combining `bg_redesign_inpaint_seq` and `bg_flexible_residues` on the same chain A residues reproduces full redesign (both structure and sequence change) for that region, while everything else stays fixed:
+Combining `motifscaff_inpaint_seq` and `flexible_residues` on the same chain A residues reproduces full redesign (both structure and sequence change) for that region, while everything else stays fixed:
 
 ```
-boltzgen_redesign {
+boltzgen_motifscaff {
     params {
-        design_mode = 'boltzgen_redesign'
+        design_mode = 'boltzgen_motifscaff'
         input_pdb = './lib/examplebinder.pdb'
-        bg_redesign_inpaint_seq = 'A60-88'
-        bg_flexible_residues = 'A60-88'
+        motifscaff_inpaint_seq = 'A60-88'
+        flexible_residues = 'A60-88'
     }
 }
 ```
@@ -567,12 +566,12 @@ boltzgen_redesign {
 As with `boltzgen_denovo`, `hotspot_residues`/`bg_not_binding_residues` can be used to guide/restrict binding location - these apply to the fixed non-A target chain(s), and are therefore only valid when `input_pdb` contains target chain(s) beyond chain A (i.e. binder redesign, not monomer redesign):
 
 ```
-boltzgen_redesign {
+boltzgen_motifscaff {
     params {
-        design_mode = 'boltzgen_redesign'
+        design_mode = 'boltzgen_motifscaff'
         input_pdb = './lib/examplebinder.pdb'
-        bg_redesign_inpaint_seq = 'A60-88'
-        bg_flexible_residues = 'A60-88'
+        motifscaff_inpaint_seq = 'A60-88'
+        flexible_residues = 'A60-88'
         hotspot_residues = 'B56,B115,B123'
     }
 }

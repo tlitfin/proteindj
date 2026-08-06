@@ -21,7 +21,7 @@ nextflow_function {
         }
     }
 
-    test("forMode dispatches boltzgen_denovo and boltzgen_redesign to BoltzGenEngine") {
+    test("forMode dispatches boltzgen_denovo and boltzgen_motifscaff to BoltzGenEngine") {
         when {
             function {
                 """
@@ -32,7 +32,7 @@ nextflow_function {
         then {
             assert function.success
             assert DesignEngine.forMode([design_mode: "boltzgen_denovo"], false).class.simpleName == 'BoltzGenEngine'
-            assert DesignEngine.forMode([design_mode: "boltzgen_redesign"], false).class.simpleName == 'BoltzGenEngine'
+            assert DesignEngine.forMode([design_mode: "boltzgen_motifscaff"], false).class.simpleName == 'BoltzGenEngine'
         }
     }
 
@@ -127,7 +127,7 @@ nextflow_function {
         }
     }
 
-    test("BoltzGenEngine.validateParams rejects boltzgen_redesign with no redesign directive set") {
+    test("BoltzGenEngine.validateParams rejects boltzgen_motifscaff with no redesign directive set") {
         when {
             function {
                 """
@@ -139,7 +139,7 @@ nextflow_function {
             assert function.success
             def threw = false
             try {
-                new BoltzGenEngine([design_mode: "boltzgen_redesign", input_pdb: "some.pdb"], false).validateParams()
+                new BoltzGenEngine([design_mode: "boltzgen_motifscaff", input_pdb: "some.pdb"], false).validateParams()
             } catch (IllegalArgumentException e) {
                 threw = true
             }
@@ -147,7 +147,7 @@ nextflow_function {
         }
     }
 
-    test("BoltzGenEngine.validateParams rejects bg_redesign_spec set on boltzgen_denovo") {
+    test("BoltzGenEngine.validateParams rejects motifscaff_spec set on boltzgen_denovo") {
         when {
             function {
                 """
@@ -159,7 +159,7 @@ nextflow_function {
             assert function.success
             def threw = false
             try {
-                new BoltzGenEngine([design_mode: "boltzgen_denovo", design_length: "65-150", bg_redesign_spec: "A1-60,10"], false).validateParams()
+                new BoltzGenEngine([design_mode: "boltzgen_denovo", design_length: "65-150", motifscaff_spec: "A1-60,10"], false).validateParams()
             } catch (IllegalArgumentException e) {
                 threw = true
             }
@@ -167,7 +167,7 @@ nextflow_function {
         }
     }
 
-    test("BoltzGenEngine.validateParams accepts a valid boltzgen_redesign spec") {
+    test("BoltzGenEngine.validateParams accepts a valid boltzgen_motifscaff spec") {
         when {
             function {
                 """
@@ -177,7 +177,7 @@ nextflow_function {
         }
         then {
             assert function.success
-            def params = [design_mode: "boltzgen_redesign", input_pdb: "some.pdb", bg_redesign_spec: "7-10,A1-60,5,A70-100,10"]
+            def params = [design_mode: "boltzgen_motifscaff", input_pdb: "some.pdb", motifscaff_spec: "7-10,A1-60,5,A70-100,10"]
             new BoltzGenEngine(params, false).validateParams()
         }
     }
@@ -202,7 +202,77 @@ nextflow_function {
         }
     }
 
-    test("RFDEngine.validateParams requires rfd_contigs for rfd_motifscaff") {
+    test("RFDEngine.validateParams rejects rfd_partialdiff_fixed_seq without a chain identifier") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new RFDEngine([design_mode: "rfd_partialdiff", rfd_partialdiff_timesteps: 20, rfd_partialdiff_fixed_seq: "17-19"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("RFDEngine.validateParams accepts a valid rfd_partialdiff_fixed_seq") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_partialdiff", rfd_partialdiff_timesteps: 20, rfd_partialdiff_fixed_seq: "A17-19,A60"]
+            new RFDEngine(params, false).validateParams()
+        }
+    }
+
+    test("RFDEngine.validateParams rejects an invalid rfd_partialdiff_spec format") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new RFDEngine([design_mode: "rfd_partialdiff", rfd_partialdiff_timesteps: 20, rfd_partialdiff_spec: "A1-19,50-59"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
+        }
+    }
+
+    test("RFDEngine.validateParams accepts a valid rfd_partialdiff_spec") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_partialdiff", rfd_partialdiff_timesteps: 20, rfd_partialdiff_spec: "A1-19,59"]
+            new RFDEngine(params, false).validateParams()
+        }
+    }
+
+    test("RFDEngine.validateParams requires motifscaff_spec/motifscaff_inpaint_seq/flexible_residues for rfd_motifscaff") {
         when {
             function {
                 """
@@ -222,7 +292,22 @@ nextflow_function {
         }
     }
 
-    test("RFDEngine.validateParams rejects an rfd_scaffold_dir missing required _ss.pt/_adj.pt files") {
+test("RFDEngine.validateParams accepts a valid motifscaff_spec for rfd_motifscaff") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_motifscaff", input_pdb: "some.pdb", motifscaff_spec: "5-10,A1-60,5,A70-100,10"]
+            new RFDEngine(params, false).validateParams()
+        }
+    }
+
+    test("RFDEngine.validateParams rejects an rfd_foldcond_scaffold_dir missing required _ss.pt/_adj.pt files") {
         when {
             function {
                 """
@@ -253,6 +338,60 @@ nextflow_function {
         then {
             assert function.success
             new RFDEngine([design_mode: "rfd_denovo", design_length: "65-150"], false).validateParams()
+        }
+    }
+
+    test("RFDEngine.validateParams rejects flexible_residues for monomer rfd_denovo/rfd_foldcond") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threwDenovo = false
+            try {
+                new RFDEngine([design_mode: "rfd_denovo", design_length: "65-150", flexible_residues: "A10-20"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threwDenovo = true
+            }
+            assert threwDenovo
+        }
+    }
+
+    test("RFDEngine.validateParams accepts flexible_residues for binder rfd_denovo") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            new RFDEngine([design_mode: "rfd_denovo", design_length: "65-150", input_pdb: "some.pdb", flexible_residues: "B10-20"], true).validateParams()
+        }
+    }
+
+    test("RFDEngine.validateParams rejects an invalid flexible_residues format") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def threw = false
+            try {
+                new RFDEngine([design_mode: "rfd_partialdiff", input_pdb: "some.pdb", rfd_partialdiff_timesteps: 20, flexible_residues: "10-20"], false).validateParams()
+            } catch (IllegalArgumentException e) {
+                threw = true
+            }
+            assert threw
         }
     }
 
@@ -307,6 +446,133 @@ nextflow_function {
                 threw = true
             }
             assert threw
+        }
+    }
+
+    test("RFDiffusionParams auto-generates rfd_motifscaff contigs from motifscaff_spec for binder mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            // examplebinder.pdb: chain A residues 1-88 (binder), chain B residues 89-203 (target)
+            def params = [design_mode: "rfd_motifscaff", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", motifscaff_spec: "5-10,A1-88,10-20"]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert cmd.contains("contigmap.contigs=[5-10 A1-88 10-20/0 B89-203]")
+        }
+    }
+
+    test("RFDiffusionParams auto-generates rfd_motifscaff contigs for monomer mode without a target chain") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_motifscaff", is_binder_mode: false, input_pdb: "${projectDir}/lib/examplebinder.pdb", motifscaff_spec: "5-10,A1-88,10-20"]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert cmd.contains("contigmap.contigs=[5-10 A1-88 10-20]")
+            assert !cmd.contains("/0 B")
+        }
+    }
+
+    test("RFDiffusionParams translates motifscaff_inpaint_seq and flexible_residues into contigmap.inpaint_seq/inpaint_str") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [
+                design_mode: "rfd_motifscaff",
+                is_binder_mode: true,
+                input_pdb: "${projectDir}/lib/examplebinder.pdb",
+                motifscaff_spec: "A1-88",
+                motifscaff_inpaint_seq: "A10-20,A60",
+                flexible_residues: "A30-35",
+            ]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert cmd.contains("contigmap.inpaint_seq=[A10-20/A60]")
+            assert cmd.contains("contigmap.inpaint_str=[A30-35]")
+        }
+    }
+
+    test("RFDiffusionParams expands a bare chain ID in flexible_residues to the chain's full range") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [
+                design_mode: "rfd_motifscaff",
+                is_binder_mode: true,
+                input_pdb: "${projectDir}/lib/examplebinder.pdb",
+                motifscaff_spec: "A1-88",
+                flexible_residues: "B",
+            ]
+            def cmd = new RFDiffusionParams(params).generateCommandString(RFDiffusionParams.AUTO_CONTIGS_SENTINEL)
+            assert cmd.contains("contigmap.inpaint_str=[B89-203]")
+        }
+    }
+    test("RFDiffusionParams translates flexible_residues into contigmap.inpaint_str for rfd_denovo binder mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_denovo", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", flexible_residues: "A10-20"]
+            def cmd = new RFDiffusionParams(params).generateCommandString("[88-88/0 B89-203]")
+            assert cmd.contains("contigmap.inpaint_str=[A10-20]")
+        }
+    }
+
+    test("RFDiffusionParams translates flexible_residues into contigmap.inpaint_str for rfd_foldcond binder mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_foldcond", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", flexible_residues: "A10-20"]
+            def cmd = new RFDiffusionParams(params).generateCommandString("NoContigsNeededForFoldConditioning")
+            assert cmd.contains("contigmap.inpaint_str=[A10-20]")
+        }
+    }
+
+    test("RFDiffusionParams translates flexible_residues into contigmap.inpaint_str for rfd_partialdiff binder mode") {
+        when {
+            function {
+                """
+                input[0] = "[A1-88/0]"
+                """
+            }
+        }
+        then {
+            assert function.success
+            def params = [design_mode: "rfd_partialdiff", is_binder_mode: true, input_pdb: "${projectDir}/lib/examplebinder.pdb", rfd_partialdiff_timesteps: 20, flexible_residues: "B90-95"]
+            def cmd = new RFDiffusionParams(params).generateCommandString("[88-88/0 B89-203]")
+            assert cmd.contains("contigmap.inpaint_str=[B90-95]")
         }
     }
 }
