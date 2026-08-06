@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_boltzgen_redesign.json",
-  "title": "boltzgen_redesign pipeline parameters",
-  "description": "Parameters for boltzgen_redesign mode",
+  "$id": "https://raw.githubusercontent.com//master/nextflow_schema_boltzgen_motifscaff.json",
+  "title": "boltzgen_motifscaff pipeline parameters",
+  "description": "Parameters for boltzgen_motifscaff mode",
   "type": "object",
   "definitions": {
     "essential_parameters": {
@@ -14,9 +14,9 @@
         "design_mode": {
           "type": "string",
           "description": "Pipeline mode.",
-          "default": "boltzgen_redesign",
+          "default": "boltzgen_motifscaff",
           "enum": [
-            "boltzgen_redesign"
+            "boltzgen_motifscaff"
           ]
         },
         "num_designs": {
@@ -31,7 +31,7 @@
         },
         "out_dir": {
           "type": "string",
-          "default": "${projectDir}/pdj_boltzgen_redesign",
+          "default": "${projectDir}/pdj_boltzgen_motifscaff",
           "description": "Output directory for results.",
           "format": "directory-path"
         }
@@ -55,6 +55,26 @@
           "format": "file-path",
           "description": "Path to an input PDB file. e.g. 'target.pdb'",
           "default": "${projectDir}/lib/examplebinder.pdb"
+        },
+        "flexible_residues": {
+          "type": "string",
+          "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
+        },
+        "motifscaff_spec": {
+          "type": "string",
+          "description": "Chain A architecture spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, chain A's architecture (length) is left unchanged. Used by boltzgen_motifscaff and rfd_motifscaff.",
+          "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$"
+        },
+        "motifscaff_inpaint_seq": {
+          "type": "string",
+          "description": "Chain A residues, within those kept by motifscaff_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'. Used by boltzgen_motifscaff and rfd_motifscaff.",
+          "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$"
+        },
+        "bg_not_binding_residues": {
+          "type": "string",
+          "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain. Optional for boltzgen_denovo and boltzgen_motifscaff binder design modes. e.g. 'A200,A210-215,B'.",
+          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
         }
       },
       "required": [
@@ -135,38 +155,6 @@
           "type": "string",
           "description": "Path to input files when skipping stages e.g. './rfd_results'",
           "format": "directory-path",
-          "hidden": true
-        }
-      }
-    },
-    "boltzgen_advanced_parameters": {
-      "title": "BoltzGen Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BoltzGen.",
-      "default": "",
-      "properties": {
-        "bg_not_binding_residues": {
-          "type": "string",
-          "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
-          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
-          "hidden": true
-        },
-        "bg_redesign_spec": {
-          "type": "string",
-          "description": "Chain A (binder) architecture spec for boltzgen_redesign: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, the whole chain A architecture (length) is left unchanged.",
-          "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$",
-          "hidden": true
-        },
-        "bg_redesign_inpaint_seq": {
-          "type": "string",
-          "description": "Chain A (binder) residues, within those kept by bg_redesign_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'.",
-          "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$",
-          "hidden": true
-        },
-        "bg_flexible_residues": {
-          "type": "string",
-          "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_redesign mode this may also reference chain A residues kept by bg_redesign_spec.",
-          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
           "hidden": true
         }
       }
@@ -734,9 +722,6 @@
     },
     {
       "$ref": "#/definitions/workflow_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/boltzgen_advanced_parameters"
     },
     {
       "$ref": "#/definitions/proteinmpnn_fastrelax_parameters"

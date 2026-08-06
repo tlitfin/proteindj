@@ -60,24 +60,55 @@
                     "type": "string",
                     "description": "Specifies hotspot residues for binding. Comma-separated tokens, each a chain-qualified residue e.g. 'A56', a chain-qualified range e.g. 'A115-120', or a bare chain ID meaning the whole chain e.g. 'B'. e.g. 'A56,A115,A123'",
                     "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
-},
+                },
                 "flexible_residues": {
                     "type": "string",
                     "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
-                    "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
-                    "hidden": true
+                    "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
                 },                
                 "motifscaff_spec": {
                     "type": "string",
                     "description": "Chain A architecture spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, chain A's architecture (length) is left unchanged. Used by boltzgen_motifscaff and rfd_motifscaff.",
-                    "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$",
-                    "hidden": true
+                    "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$"
                 },
                 "motifscaff_inpaint_seq": {
                     "type": "string",
                     "description": "Chain A residues, within those kept by motifscaff_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'. Used by boltzgen_motifscaff and rfd_motifscaff.",
-                    "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$",
-                    "hidden": true
+                    "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$"
+                },
+                "rfd_motifscaff_length": {
+                    "type": "string",
+                    "description": "Length of diffused chain when performing motif scaffolding e.g. 100-120",
+                    "pattern": "^\\d+-\\d+$"
+                },
+                "rfd_foldcond_scaffold_dir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Path to directory containing scaffold files. e.g. 'binderscaffolds/scaffolds_assorted'"
+                },
+                "rfd_foldcond_mask_loops": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether to ignore loop regions when applying secondary structure constraints from scaffolds (default=true). Recommended to set to false for binder design as the scaffold sets have enough diversity"
+                },
+                "rfd_partialdiff_timesteps": {
+                    "type": "integer",
+                    "description": "Number of timesteps for partial diffusion. e.g. 20"
+                },
+                "rfd_partialdiff_spec": {
+                    "type": "string",
+                    "description": "Chain A partial diffusion spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60', left fully fixed) and bare-digit 'diffuse' tokens (fixed counts only, e.g. '59' - no ranges, since partial diffusion cannot change chain A's length), e.g. 'A1-19,59' keeps residues A1-19 and partially diffuses the remaining 59 residues. If null, the whole chain is partially diffused.",
+                    "pattern": "^((A\\d+(-\\d+)?)|(\\d+))(,((A\\d+(-\\d+)?)|(\\d+)))*$"
+                },
+                "rfd_partialdiff_fixed_seq": {
+                    "type": "string",
+                    "description": "Design chain residues whose sequence should be kept fixed during partial diffusion, referencing the design chain only (chain A in binder mode, the sole chain in monomer mode). Comma-separated tokens, each a chain-qualified residue e.g. 'A56' or a chain-qualified range e.g. 'A115-120'. e.g. 'A17-19,A143-145'. If null, the sequence is fully redesignable.",
+                    "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
+                },
+                "bg_not_binding_residues": {
+                    "type": "string",
+                    "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain. Optional for boltzgen_denovo and boltzgen_motifscaff binder design modes. e.g. 'A200,A210-215,B'.",
+                    "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
                 }
             }
         },
@@ -213,55 +244,12 @@
                 }
             }
         },
-        "boltzgen_advanced_parameters": {
-            "title": "BoltzGen Advanced Parameters",
-            "type": "object",
-            "description": "Advanced parameters to control the behaviour of BoltzGen.",
-            "default": "",
-            "properties": {
-                "bg_not_binding_residues": {
-                    "type": "string",
-                    "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
-                    "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
-                    "hidden": true
-                                }
-            }
-        },
         "rfdiffusion_advanced_parameters": {
             "title": "RFdiffusion Advanced Parameters",
             "type": "object",
             "description": "Advanced parameters to control the behaviour of RFdiffusion.",
             "default": "",
             "properties": {
-                "rfd_contigs": {
-                    "type": "string",
-                    "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-                    "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
-                },
-                "rfd_scaffold_dir": {
-                    "type": "string",
-                    "format": "directory-path",
-                    "description": "Path to directory containing scaffold files. e.g. 'binderscaffolds/scaffolds_assorted'"
-                },
-                "rfd_mask_loops": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Whether to ignore loop regions when applying secondary structure constraints from scaffolds (default=true). Recommended to set to false for binder design as the scaffold sets have enough diversity"
-                },
-                "rfd_inpaint_seq": {
-                    "type": "string",
-                    "description": "Residues that will have their sequence masked when diffusing. e.g. '[A17-19/A143-145]'",
-                    "pattern": "^\\[([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?)(?:\\/([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?))*\\]$"
-                },
-                "rfd_length": {
-                    "type": "string",
-                    "description": "Length of diffused chain when performing motif scaffolding e.g. 100-120",
-                    "pattern": "^\\d+-\\d+$"
-                },
-                "rfd_partial_diffusion_timesteps": {
-                    "type": "integer",
-                    "description": "Number of timesteps for partial diffusion. e.g. 20"
-                },
                 "rfd_ckpt_override": {
                     "type": "string",
                     "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
@@ -885,9 +873,6 @@
         },
         {
             "$ref": "#/definitions/bindcraft_advanced_parameters"
-        },
-        {
-            "$ref": "#/definitions/boltzgen_advanced_parameters"
         },
         {
             "$ref": "#/definitions/rfdiffusion_advanced_parameters"

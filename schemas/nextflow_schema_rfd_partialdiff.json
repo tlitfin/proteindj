@@ -55,10 +55,33 @@
           "format": "file-path",
           "description": "Path to an input PDB file. e.g. 'target.pdb'",
           "default": "${projectDir}/lib/examplebinder.pdb"
+        },
+        "flexible_residues": {
+          "type": "string",
+          "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
+        },
+        "rfd_partialdiff_timesteps": {
+          "type": "integer",
+          "description": "Number of timesteps for partial diffusion. e.g. 20",
+          "default": 20
+        },
+        "rfd_partialdiff_spec": {
+          "type": "string",
+          "description": "Chain A partial diffusion spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60', left fully fixed) and bare-digit 'diffuse' tokens (fixed counts only, e.g. '59' - no ranges, since partial diffusion cannot change chain A's length), e.g. 'A1-19,59' keeps residues A1-19 and partially diffuses the remaining 59 residues. If null, the whole chain is partially diffused.",
+          "pattern": "^((A\\d+(-\\d+)?)|(\\d+))(,((A\\d+(-\\d+)?)|(\\d+)))*$",
+          "default": "A1-19,59"
+        },
+        "rfd_partialdiff_fixed_seq": {
+          "type": "string",
+          "description": "Design chain residues whose sequence should be kept fixed during partial diffusion, referencing the design chain only (chain A in binder mode, the sole chain in monomer mode). Comma-separated tokens, each a chain-qualified residue e.g. 'A56' or a chain-qualified range e.g. 'A115-120'. e.g. 'A17-19,A143-145'. If null, the sequence is fully redesignable.",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+          "default": "A17-19"
         }
       },
       "required": [
-        "input_pdb"
+        "input_pdb",
+        "rfd_partialdiff_timesteps"
       ]
     },
     "workflow_advanced_parameters": {
@@ -145,16 +168,6 @@
       "description": "Advanced parameters to control the behaviour of RFdiffusion.",
       "default": "",
       "properties": {
-        "rfd_contigs": {
-          "type": "string",
-          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-          "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
-        },
-        "rfd_partial_diffusion_timesteps": {
-          "type": "integer",
-          "description": "Number of timesteps for partial diffusion. e.g. 20",
-          "default": 20
-        },
         "rfd_ckpt_override": {
           "type": "string",
           "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
@@ -182,10 +195,7 @@
           "description": "Additional configuration parameters to pass to RFdiffusion. e.g. 'contigmap.inpaint_str=[B165-178]'",
           "hidden": true
         }
-      },
-      "required": [
-        "rfd_partial_diffusion_timesteps"
-      ]
+      }
     },
     "proteinmpnn_fastrelax_parameters": {
       "title": "ProteinMPNN-FastRelax Parameters",
