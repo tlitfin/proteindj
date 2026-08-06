@@ -27,7 +27,7 @@ graph LR
 - **Fold Design** — generates backbone/fold structures (RFdiffusion *or* BindCraft today).
 - **Sequence Design** — ProteinMPNN or FAMPNN assign sequences to the fold(s).
 - **Structure Prediction** — AlphaFold2-Initial-Guess or Boltz-2 re-predicts structure for validation.
-- **Analysis** — PyRosetta/BioPython-based metric calculation, ranking, filtering.
+- **Analysis** — PDBFixer/OpenMM/arpeggia/PRODIGY/BioPython-based metric calculation, ranking, filtering.
 
 Each stage is swappable via a top-level `params` switch (`design_mode` chooses the fold-design
 engine implicitly, `seq_method` chooses MPNN/FAMPNN, `pred_method` chooses AF2/Boltz). This means
@@ -165,14 +165,21 @@ prefix convention (`bc_*`, `rfd_*`, `mpnn_*`, `fampnn_*`, `af2_*`, `boltz_*`):
    `//// <TOOL> ADVANCED PARAMETERS ////` section (see `bc_chains`, `bc_design_protocol`,
    `bc_template_protocol`, `bc_omit_AAs`, `bc_fix_interface_residues`, `bc_advanced_json`).
 2. **[schemas/mode_parameters.csv](../schemas/mode_parameters.csv)** — a big matrix of
-   `<mode>_parameters,<mode>_values` column pairs used to generate example per-mode config/test
-   profiles; add a column pair for the new mode and populate relevant rows (blank cells mean "not
-   applicable to this mode").
+   `<mode>_parameters,<mode>_values` column pairs used to generate the per-mode schemas below; add
+   a column pair for the new mode and populate relevant rows (blank cells mean "not applicable to
+   this mode"). Also populate the mode's cell in the special `__required__` row with a
+   comma-separated list of mode-specific parameters that must be required for this mode (e.g.
+   `input_pdb,rfd_contigs` for `rfd_motifscaff`) — this drives the `required` list in the
+   `mode_specific_parameters` group of the generated schema, replacing what used to be a hardcoded
+   `MODE_REQUIRED_PARAMS` dict in `generate_mode_schemas.py`.
 3. **[schemas/nextflow_schema_<mode>.json](../schemas/nextflow_schema_bindcraft_denovo.json)** — a
    JSON Schema (draft-07) per design mode, split into `essential_parameters`,
    `mode_specific_parameters`, `workflow_advanced_parameters`, `<tool>_advanced_parameters`, etc.
    groups, each with `type`, `description`, `pattern`/`enum` validation and `required` lists. This
-   is what powers `nextflow_schema.json`/Seqera Platform parameter forms.
+   is what powers `nextflow_schema.json`/Seqera Platform parameter forms. Don't hand-edit these —
+   run `./scripts/regenerate_schemas.sh` from the repo root after updating `nextflow_schema.json`
+   and `mode_parameters.csv`; it regenerates every per-mode schema plus bindsweeper's
+   `binder_schema.json` in one step.
 4. **[docs/parameters.md](parameters.md)** and **[docs/modes.md](modes.md)** — human-readable
    parameter tables and a worked example / diagram for the new mode (see the "BindCraft Mode"
    section of modes.md, `<img src="../img/bindcraft_denovo.png">`, and the `## BindCraft Advanced
@@ -224,8 +231,8 @@ value (e.g. `x_denovo`):
    - [ ] Add a `withLabel: X { container = ...; containerOptions = ... }` block to
      [nextflow.config](../nextflow.config)'s `process {}` scope. Reuse existing model-weight binds
      (`af2_models`, etc.) if the tool genuinely needs the same weights; otherwise add a new
-     `x_models` param + bind (see the already-scaffolded-but-unused `boltzgen_models` param and `BG`
-     label in nextflow.config as a real in-progress example of this exact step).
+     `x_models` param + bind (see the `bg_models` param and `BG` label in nextflow.config as a
+     completed real-world example of this exact step, from the BoltzGen integration).
    - [ ] Add build/download entries to `apptainer/build_containers.sh` / `download_containers.sh`.
 
 2. **Nextflow module** (`modules/x.nf`)
@@ -255,11 +262,12 @@ value (e.g. `x_denovo`):
 
 4. **Params & schema**
    - [ ] Add `x_*` params (with default values and doc comments) to [nextflow.config](../nextflow.config).
-   - [ ] Add a column pair to [schemas/mode_parameters.csv](../schemas/mode_parameters.csv).
-   - [ ] Add `schemas/nextflow_schema_x_denovo.json` (copy an existing one as a template, update
-     `enum`/`pattern`/`required`/defaults).
-   - [ ] Regenerate/update the root [nextflow_schema.json](../nextflow_schema.json) if it's an
-     aggregate of the per-mode schemas.
+   - [ ] Add the new property definitions to [nextflow_schema.json](../nextflow_schema.json).
+   - [ ] Add a column pair to [schemas/mode_parameters.csv](../schemas/mode_parameters.csv),
+     including the new mode's required mode-specific params in the `__required__` row.
+   - [ ] Run `./scripts/regenerate_schemas.sh` to (re)generate
+     `schemas/nextflow_schema_x_denovo.json` and every other per-mode schema, plus bindsweeper's
+     `binder_schema.json`, in one step.
 
 5. **Metadata**
    - [ ] Add `XMetadataConverter` to [scripts/metadata_converter.py](../scripts/metadata_converter.py)
@@ -302,8 +310,8 @@ value (e.g. `x_denovo`):
   fold-design engine.
 - **Reuse existing params for genuinely shared resources** (e.g. BindCraft reusing `af2_models`)
   rather than creating redundant `x_models` params — but do create a new dedicated params/bind pair
-  when the resource truly differs (see `boltzgen_models`/`BG` label, already scaffolded in
-  `nextflow.config` for a future integration, but not yet wired into `main.nf`/`modules/`).
+  when the resource truly differs (see `bg_models`/`BG` label in `nextflow.config`, wired into
+  `main.nf`/`modules/boltzgen.nf` as part of the BoltzGen integration).
 - **Cap unbounded tools with a batch-size ceiling.** BindCraft's hallucination loop can run
   indefinitely searching for designs that pass its internal filters; ProteinDJ bounds this by
   setting `max_trajectories = batch_size` so a batch can't run forever.

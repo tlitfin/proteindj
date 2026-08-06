@@ -1,4 +1,10 @@
 class Utils {
+    // Shared residue-spec grammar for hotspot_residues/bg_not_binding_residues/bg_flexible_residues
+    // etc: comma-separated tokens, each a chain-qualified single residue ('A56'), a chain-qualified
+    // range ('A115-120'), or a bare chain ID meaning the whole chain ('B'). A chain identifier is
+    // always required, for consistency across RFdiffusion, BindCraft, and BoltzGen.
+    static final String RESIDUE_SPEC_REGEX = /^([A-Za-z]+(\d+(-\d+)?)?)(,[A-Za-z]+(\d+(-\d+)?)?)*$/
+
     // Method to rebatch channels of tuples of PDBs and JSON files
     static def rebatchTuples(input_channel, batch_size = 50) {
         return input_channel 
@@ -107,5 +113,57 @@ class Utils {
                 }.size() 
             }
             .ifEmpty(0)
+    }
+
+    // Extract distinct protein chain IDs from a PDB's ATOM records (excludes HETATM/ligands/waters)
+    static Set<String> getPdbChainIds(pdbFile) {
+        def chainIds = [] as Set
+        pdbFile.eachLine { line ->
+            if (line.startsWith("ATOM  ") && line.length() >= 22) {
+                chainIds << line.substring(21, 22)
+            }
+        }
+        return chainIds
+    }
+
+    // Extract the sorted, distinct residue numbers present for a given chain in a PDB's ATOM
+    // records. Used to expand a bare chain ID hotspot token (e.g. 'B') into individual residues.
+    static List<Integer> getPdbChainResidueNumbers(pdbFile, String chainId) {
+        def resNums = [] as Set
+        pdbFile.eachLine { line ->
+            if (line.startsWith("ATOM  ") && line.length() >= 26 && line.substring(21, 22) == chainId) {
+                resNums << line.substring(22, 26).trim().toInteger()
+            }
+        }
+        return resNums.sort()
+    }
+
+    // Validate design length (required, one or two comma-separated integers, min<=max)
+    static void validateDesignLength(design_length) {
+        if (!design_length) {
+            throw new IllegalArgumentException("Please provide a value for design_length, e.g. '65', '65-150'.")
+        }
+        def designLengthVals = design_length.split('-')
+        if (designLengthVals.size() > 2 || !designLengthVals.every { it.isInteger() }) {
+            throw new IllegalArgumentException("design_length parameter must contain one or two integers (dash-separated) e.g. '65' '65-150'.")
+        }
+        if (designLengthVals.size() == 2) {
+            def minLength = Integer.parseInt(designLengthVals[0])
+            def maxLength = Integer.parseInt(designLengthVals[1])
+            if (minLength > maxLength || minLength < 1) {
+                throw new IllegalArgumentException("design_length values must be valid: min ≤ max and min ≥ 1.")
+            }
+        }
+    }
+
+    // Count the number of output chains implied by an RFdiffusion contig string, based on
+    // chain-break ('0') tokens. Unlike letter-based counting, this correctly handles newly
+    // diffused chains that have no chain letter of their own (e.g. partial diffusion / denovo
+    // binder chains), since a chain break always separates one output chain from the next.
+    // e.g. '[A1-88/0 B1-116]' -> 2, '[A17-111/20]' -> 1, '[88-88/0 B89-203]' -> 2
+    static int countContigChains(String contigs) {
+        def tokens = contigs.replaceAll(/[\[\]]/, '').split(/[\s\/]+/).findAll { it }
+        def numBreaks = tokens.count { it == '0' }
+        return numBreaks + 1
     }
 }

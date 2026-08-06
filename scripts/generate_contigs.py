@@ -2,7 +2,8 @@
 """
 Generate RFdiffusion contig strings from PDB files.
 Handles missing residues and chainbreaks according to RFdiffusion requirements.
-Supports different design modes: binder_denovo, binder_partialdiff, monomer_partialdiff, monomer_denovo.
+Supports design modes 'rfd_denovo' and 'rfd_partialdiff', with monomer vs binder
+notation selected via the --is_binder flag (auto-detected upstream in main.nf).
 """
 
 import argparse
@@ -133,7 +134,7 @@ def validate_design_length(design_length):
 
 def generate_contig_binder_denovo(chain_residues, design_length=None):
     """
-    Generate contig string for binder_denovo mode.
+    Generate contig string for binder rfd_denovo mode.
     Full chain notation with chain IDs for all chains, optionally with design_length appended.
     
     Example: '[A1-77/0 B23-77/B80-105/0 60]' or '[A1-77/0 B23-77/B80-105/0 70-80]'
@@ -158,14 +159,14 @@ def generate_contig_binder_denovo(chain_residues, design_length=None):
 
 def generate_contig_monomer_denovo(design_length=None):
     """
-    Generate contig string for monomer_denovo mode.
+    Generate contig string for monomer rfd_denovo mode.
     Uses design_length exclusively if provided.
     
     Example: '[60]' or '[70-80]'
     """
     if not design_length:
         raise ValueError(
-            "design_length is required for monomer_denovo mode. "
+            "design_length is required for monomer rfd_denovo mode. "
             "Provide a length (e.g., '60') or range (e.g., '70-80')"
         )
     
@@ -174,7 +175,7 @@ def generate_contig_monomer_denovo(design_length=None):
 
 def generate_contig_monomer_partialdiff(chain_residues):
     """
-    Generate contig string for monomer_partialdiff mode.
+    Generate contig string for monomer rfd_partialdiff mode.
     Total number of residues without chain IDs.
     
     Example: '[155-155]'
@@ -185,7 +186,7 @@ def generate_contig_monomer_partialdiff(chain_residues):
 
 def generate_contig_binder_partialdiff(chain_residues):
     """
-    Generate contig string for binder_partialdiff mode.
+    Generate contig string for binder rfd_partialdiff mode.
     Chain A as residue count without chain ID, chain B with full notation including breaks.
     
     Example: "[88-88/0 B89-203]"
@@ -194,7 +195,7 @@ def generate_contig_binder_partialdiff(chain_residues):
     
     if len(sorted_chains) < 2:
         raise ValueError(
-            "binder_partialdiff mode requires at least 2 chains (binder and target)"
+            "binder rfd_partialdiff mode requires at least 2 chains (binder and target)"
         )
     
     # Chain A: just count of residues without chain ID
@@ -213,15 +214,16 @@ def generate_contig_binder_partialdiff(chain_residues):
     return f"[{'/0 '.join(contig_parts)}]"
 
 
-def generate_contig_string(pdb_file, design_mode='binder_denovo', design_length=None):
+def generate_contig_string(pdb_file, design_mode='rfd_denovo', design_length=None, is_binder=True):
     """
     Generate RFdiffusion contig string from PDB file.
     
     Args:
         pdb_file: Path to PDB file
-        design_mode: Design mode - 'binder_denovo', 'binder_partialdiff', 
-                     'monomer_partialdiff', or 'monomer_denovo'
+        design_mode: Design mode - 'rfd_denovo' or 'rfd_partialdiff'
         design_length: Optional length specification (e.g., '60' or '70-80')
+        is_binder: Whether this is a binder (target + designed chain) or monomer design,
+                   auto-detected upstream from input_pdb/rfd_contigs before this script runs
         
     Returns:
         str: Contig string formatted for RFdiffusion with square brackets
@@ -229,9 +231,14 @@ def generate_contig_string(pdb_file, design_mode='binder_denovo', design_length=
     # Validate design_length format if provided
     if design_length:
         validate_design_length(design_length)
-    
-    # For monomer_denovo, we don't need to parse the PDB if design_length is provided
-    if design_mode == 'monomer_denovo':
+
+    if design_mode not in ('rfd_denovo', 'rfd_partialdiff'):
+        raise ValueError(
+            f"Invalid design_mode: {design_mode}. Must be 'rfd_denovo' or 'rfd_partialdiff'"
+        )
+
+    # Monomer de novo design doesn't need to parse the PDB - design_length defines the whole contig
+    if design_mode == 'rfd_denovo' and not is_binder:
         return generate_contig_monomer_denovo(design_length)
     
     # Parse PDB for other modes
@@ -244,18 +251,13 @@ def generate_contig_string(pdb_file, design_mode='binder_denovo', design_length=
     if not chain_residues:
         raise ValueError("No protein chains found in PDB file")
     
-    # Generate contig based on design mode
-    if design_mode == 'binder_denovo':
+    # Generate contig based on design mode + monomer/binder detection
+    if design_mode == 'rfd_denovo':
         return generate_contig_binder_denovo(chain_residues, design_length)
-    elif design_mode == 'monomer_partialdiff':
+    elif not is_binder:
         return generate_contig_monomer_partialdiff(chain_residues)
-    elif design_mode == 'binder_partialdiff':
-        return generate_contig_binder_partialdiff(chain_residues)
     else:
-        raise ValueError(
-            f"Invalid design_mode: {design_mode}. "
-            "Must be 'binder_denovo', 'binder_partialdiff', 'monomer_partialdiff', or 'monomer_denovo'"
-        )
+        return generate_contig_binder_partialdiff(chain_residues)
 
 
 def main():
@@ -263,42 +265,47 @@ def main():
         description='Generate RFdiffusion contig strings from PDB files',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Design Modes:
-  binder_denovo:         Full chain notation for all chains (de novo binder design)
-                         Example: '[A1-77/0 B23-77/B80-105/0 60]'
+Design Modes (monomer vs binder notation is selected via --is_binder):
+  rfd_denovo, --is_binder:        Full chain notation for all chains (de novo binder design)
+                                  Example: '[A1-77/0 B23-77/B80-105/0 60]'
   
-  monomer_denovo:        Design length only (de novo monomer design)
-                         Example: '[60]' or '[70-80]'
-                         Requires --design_length parameter
+  rfd_denovo, (monomer):           Design length only (de novo monomer design)
+                                  Example: '[60]' or '[70-80]'
+                                  Requires --design_length parameter
   
-  monomer_partialdiff:   Total residue count without chain IDs (partial diffusion of monomer)
-                         Example: '[155-155]'
+  rfd_partialdiff, (monomer):     Total residue count without chain IDs (partial diffusion)
+                                  Example: '[155-155]'
   
-  binder_partialdiff:    Chain A as count, chain B+ with full notation (partial diffusion of binder)
-                         Example: '[88-88/0 B89-203]'
+  rfd_partialdiff, --is_binder:   Chain A as count, chain B+ with full notation (partial diffusion)
+                                  Example: '[88-88/0 B89-203]'
 
 Design Length:
-  For binder_denovo:     Appends the length of the designed binder to the contig
-  For monomer_denovo:    Specifies the entire contig (required)
-  Format:                Single number (e.g., '60') or range (e.g., '70-80')
+  For rfd_denovo binder case:     Appends the length of the designed binder to the contig
+  For rfd_denovo monomer case:    Specifies the entire contig (required)
+  Format:                         Single number (e.g., '60') or range (e.g., '70-80')
 
 Examples:
-  %(prog)s input.pdb --design_mode binder_denovo --design_length 60
-  %(prog)s input.pdb --design_mode monomer_denovo --design_length 70-80
-  %(prog)s input.pdb --design_mode monomer_partialdiff
-  %(prog)s input.pdb --design_mode binder_partialdiff -o contigs.txt
+  %(prog)s input.pdb --design_mode rfd_denovo --is_binder --design_length 60
+  %(prog)s input.pdb --design_mode rfd_denovo --design_length 70-80
+  %(prog)s input.pdb --design_mode rfd_partialdiff
+  %(prog)s input.pdb --design_mode rfd_partialdiff --is_binder -o contigs.txt
         """
     )
     parser.add_argument('pdb_file', help='Input PDB file')
     parser.add_argument(
         '--design_mode',
-        choices=['binder_denovo', 'binder_partialdiff', 'monomer_partialdiff', 'monomer_denovo'],
-        default='binder_denovo',
-        help='Design mode (default: binder_denovo)'
+        choices=['rfd_denovo', 'rfd_partialdiff'],
+        default='rfd_denovo',
+        help='Design mode (default: rfd_denovo)'
+    )
+    parser.add_argument(
+        '--is_binder',
+        action='store_true',
+        help='Generate binder-style contigs (target + designed chain) instead of monomer-style'
     )
     parser.add_argument(
         '--design_length',
-        help='Design length specification (e.g., "60" or "70-80"). Required for monomer_denovo mode.'
+        help='Design length specification (e.g., "60" or "70-80"). Required for monomer rfd_denovo mode.'
     )
     parser.add_argument('-o', '--output', help='Output file (default: print to stdout)')
     
@@ -308,7 +315,8 @@ Examples:
         contig_string = generate_contig_string(
             args.pdb_file, 
             args.design_mode,
-            args.design_length
+            args.design_length,
+            args.is_binder
         )
         
         if args.output:

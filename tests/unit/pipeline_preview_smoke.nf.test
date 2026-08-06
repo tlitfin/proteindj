@@ -1,0 +1,166 @@
+// Lightweight regression check across all design_mode/monomer-binder combinations: runs the
+// pipeline with '-preview' (validates params/channels/DAG without executing any processes) so
+// this stays fast while still catching wiring/param-validation regressions per mode
+nextflow_pipeline {
+
+    name "Test pipeline -preview across all design_mode/monomer-binder combinations"
+    script "main.nf"
+    options "-preview"
+
+    test("rfd_denovo monomer") {
+        when {
+            params {
+                design_mode = "rfd_denovo"
+                design_length = "65-150"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_denovo binder") {
+        when {
+            params {
+                design_mode = "rfd_denovo"
+                design_length = "60-100"
+                input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_foldcond monomer") {
+        when {
+            params {
+                design_mode = "rfd_foldcond"
+                rfd_scaffold_dir = "${projectDir}/binderscaffolds/scaffolds_assorted"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_foldcond binder") {
+        when {
+            params {
+                design_mode = "rfd_foldcond"
+                input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
+                hotspot_residues = "A56,A115,A123"
+                rfd_scaffold_dir = "${projectDir}/binderscaffolds/scaffolds_assorted"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_motifscaff monomer") {
+        when {
+            params {
+                design_mode = "rfd_motifscaff"
+                input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
+                rfd_contigs = "[5-15/A17-131/30-40]"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_motifscaff binder") {
+        when {
+            params {
+                design_mode = "rfd_motifscaff"
+                input_pdb = "${projectDir}/lib/examplebinder.pdb"
+                rfd_contigs = "[5-10/A1-88/10-20/0 B89-203]"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_partialdiff monomer") {
+        when {
+            params {
+                design_mode = "rfd_partialdiff"
+                input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
+                rfd_contigs = "[115-115]"
+                rfd_partial_diffusion_timesteps = 20
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("rfd_partialdiff binder") {
+        when {
+            params {
+                design_mode = "rfd_partialdiff"
+                input_pdb = "${projectDir}/lib/examplebinder.pdb"
+                rfd_contigs = "[88-88/0 B89-203]"
+                rfd_partial_diffusion_timesteps = 20
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("bindcraft_denovo") {
+        when {
+            params {
+                design_mode = "bindcraft_denovo"
+                design_length = "60-100"
+                input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("boltzgen_denovo monomer") {
+        when {
+            params {
+                design_mode = "boltzgen_denovo"
+                design_length = "60-100"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("boltzgen_denovo binder") {
+        when {
+            params {
+                design_mode = "boltzgen_denovo"
+                design_length = "60-100"
+                input_pdb = "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"
+                hotspot_residues = "A56,A115,A123"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+
+    test("boltzgen_redesign") {
+        when {
+            params {
+                design_mode = "boltzgen_redesign"
+                input_pdb = "${projectDir}/lib/examplebinder.pdb"
+                bg_redesign_spec = "7-10,A1-60,5,A70-100,10"
+            }
+        }
+        then {
+            assert workflow.success
+        }
+    }
+}

@@ -11,8 +11,14 @@ process PrepBG {
 
     script:
     """
+    # Monomer boltzgen_denovo has no target - input_pdb is the NO_FILE placeholder in that case
+    INPUT_PDB_ARG=""
+    if [ "\$(basename ${input_pdb})" != "NO_FILE" ]; then
+        INPUT_PDB_ARG="--input_pdb ${input_pdb}"
+    fi
+
     python /scripts/generate_boltzgen_yaml.py \
-        --input_pdb ${input_pdb} \
+        \$INPUT_PDB_ARG \
         --design_mode ${design_mode} \
         --design_length "${params.design_length}" \
         --hotspot_residues "${params.hotspot_residues ?: ''}" \

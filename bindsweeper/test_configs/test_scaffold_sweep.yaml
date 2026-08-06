@@ -1,4 +1,4 @@
-mode: binder_foldcond
+mode: rfd_foldcond
 profile: milton
 
 fixed_params:

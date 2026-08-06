@@ -22,6 +22,7 @@ process PublishResults {
     val af2_filter_count
     val boltz_count
     val boltz_filter_count
+    val is_binder_mode
 
     output:
     path "all_designs.csv"
@@ -66,7 +67,7 @@ process PublishResults {
     def num_processes = task.cpus - 1
     
     // Use user-specified ranking metric or default based on mode and prediction method
-    def is_monomer = params.design_mode.startsWith('monomer_')
+    def is_monomer = !is_binder_mode
     def ranking_metric = params.ranking_metric
     if (!ranking_metric) {
         // 'af2_boltz' defaults to boltz_* metrics since Boltz is the final/most-refined stage
