@@ -304,8 +304,6 @@ We can also use motif scaffolding to add binding motifs to an input structure th
 
 For example, we have a PDB structure with a binder (chain A, residues 1-88) and a target (chain B, residues 89-203). To add 5 residues to the N-terminus and 10-20 residues to the C-terminus of the binder (chain A):
 
-RFdiffusion's own checkpoint auto-selection doesn't know a target chain is present in this mode (it only switches to the complex-trained checkpoint when hotspot residues are supplied, which `rfd_motifscaff` never does), so it would otherwise fall back to the monomer-only 'base' checkpoint. To avoid this, ProteinDJ automatically uses the 'complex_base' checkpoint for `rfd_motifscaff` binder design instead, unless you set `motifscaff_inpaint_seq`/`flexible_residues` (see below) or override it yourself with `rfd_ckpt_override`.
-
 ```
 rfd_motifscaff_binder {
     params {
