@@ -827,93 +827,29 @@ workflow {
     // Combine Metadata into CSV
     CombineMetadata(metadata_fold, metadata_fold_seq).csv.collectFile(name: "all_designs.csv").set { all_designs_metadata }
 
-    // Count outputs
-    if (params.run_fold_only) {
-        Utils.countPdbFiles(fold_tuples).set { fold_count }
-        Utils.countPdbFiles(final_pdbs).set { filter_fold_count }
-        seq_count = 0
-        filter_seq_count = 0
-        pred_count = 0
-        filter_pred_count = 0
-        filter_analysis_count = 0
-        af2_count = 0
-        af2_filter_count = 0
-        boltz_count = 0
-        boltz_filter_count = 0
-    }
-    else if (params.skip_fold_seq_pred) {
-        fold_count = 0
-        filter_fold_count = 0
-        seq_count = 0
-        filter_seq_count = 0
-        pred_count = 0
-        Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
-        Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
-        af2_count = 0
-        af2_filter_count = 0
-        boltz_count = 0
-        boltz_filter_count = 0
-    }
-    else if (params.skip_fold_seq) {
-        fold_count = 0
-        filter_fold_count = 0
-        seq_count = 0
-        filter_seq_count = 0
-        Utils.countPdbFiles(pred_tuple).set { pred_count }
-        Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
-        Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
-        if (params.pred_method == 'af2_boltz') {
-            Utils.countPdbFiles(af2c_pred_tuple).set { af2_count }
-            Utils.countPdbFiles(af2c_survivor_pdbs).set { af2_filter_count }
-            Utils.countPdbFiles(pred_tuple).set { boltz_count }
-            Utils.countPdbFiles(analysis_input_pdbs).set { boltz_filter_count }
-        } else {
-            af2_count = 0
-            af2_filter_count = 0
-            boltz_count = 0
-            boltz_filter_count = 0
-        }
-    }
-    else if (params.skip_fold) {
-        fold_count = 0
-        filter_fold_count = 0
-        Utils.countPdbFiles(seq_tuple).set { seq_count }
-        Utils.countPdbFiles(filt_seq_pdbs).set { filter_seq_count }
-        Utils.countPdbFiles(pred_tuple).set { pred_count }
-        Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
-        Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
-        if (params.pred_method == 'af2_boltz') {
-            Utils.countPdbFiles(af2c_pred_tuple).set { af2_count }
-            Utils.countPdbFiles(af2c_survivor_pdbs).set { af2_filter_count }
-            Utils.countPdbFiles(pred_tuple).set { boltz_count }
-            Utils.countPdbFiles(analysis_input_pdbs).set { boltz_filter_count }
-        } else {
-            af2_count = 0
-            af2_filter_count = 0
-            boltz_count = 0
-            boltz_filter_count = 0
-        }
-    }
-    else {
-        Utils.countPdbFiles(fold_tuples).set { fold_count }
-        Utils.countPdbFiles(filt_fold_pdbs_jsons).set { filter_fold_count }
-        Utils.countPdbFiles(seq_tuple).set { seq_count }
-        Utils.countPdbFiles(filt_seq_pdbs).set { filter_seq_count }
-        Utils.countPdbFiles(pred_tuple).set { pred_count }
-        Utils.countPdbFiles(analysis_input_pdbs).set { filter_pred_count }
-        Utils.countPdbFiles(FilterAnalysis.out.pdbs).set { filter_analysis_count }
-        if (params.pred_method == 'af2_boltz') {
-            Utils.countPdbFiles(af2c_pred_tuple).set { af2_count }
-            Utils.countPdbFiles(af2c_survivor_pdbs).set { af2_filter_count }
-            Utils.countPdbFiles(pred_tuple).set { boltz_count }
-            Utils.countPdbFiles(analysis_input_pdbs).set { boltz_filter_count }
-        } else {
-            af2_count = 0
-            af2_filter_count = 0
-            boltz_count = 0
-            boltz_filter_count = 0
-        }
-    }
+    // Count outputs. Each guard below mirrors the entry condition of the stage that
+    // populated the corresponding channel earlier in the workflow, so referencing a
+    // not-yet-set channel is avoided by ternary short-circuiting rather than branching.
+    fold_count = running_fold_design ? Utils.countPdbFiles(fold_tuples) : 0
+    filter_fold_count = running_fold_design
+        ? (params.run_fold_only ? Utils.countPdbFiles(final_pdbs) : Utils.countPdbFiles(filt_fold_pdbs_jsons))
+        : 0
+
+    def ran_seq = !params.skip_fold_seq && !params.skip_fold_seq_pred && !params.run_fold_only
+    seq_count = ran_seq ? Utils.countPdbFiles(seq_tuple) : 0
+    filter_seq_count = ran_seq ? Utils.countPdbFiles(filt_seq_pdbs) : 0
+
+    def ran_pred = !params.skip_fold_seq_pred && !params.run_fold_only
+    pred_count = ran_pred ? Utils.countPdbFiles(pred_tuple) : 0
+
+    filter_pred_count = !params.run_fold_only ? Utils.countPdbFiles(analysis_input_pdbs) : 0
+    filter_analysis_count = !params.run_fold_only ? Utils.countPdbFiles(FilterAnalysis.out.pdbs) : 0
+
+    def is_af2_boltz_cascade = ran_pred && params.pred_method == 'af2_boltz'
+    af2_count = is_af2_boltz_cascade ? Utils.countPdbFiles(af2c_pred_tuple) : 0
+    af2_filter_count = is_af2_boltz_cascade ? Utils.countPdbFiles(af2c_survivor_pdbs) : 0
+    boltz_count = is_af2_boltz_cascade ? Utils.countPdbFiles(pred_tuple) : 0
+    boltz_filter_count = is_af2_boltz_cascade ? Utils.countPdbFiles(analysis_input_pdbs) : 0
 
     // Generate report and statistics of run
     PublishResults(
