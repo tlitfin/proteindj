@@ -68,6 +68,7 @@ class MetadataConverter:
             # MPNN/FAMPNN fields
             'fampnn_avg_psce','mpnn_score',
             # AF2 fields
+            'af2_iptm',
             'af2_pae_interaction','af2_pae_overall', 'af2_pae_binder', 'af2_pae_target',
             'af2_plddt_overall', 'af2_plddt_binder', 'af2_plddt_target',
             'af2_rmsd_overall','af2_rmsd_binder_bndaln','af2_rmsd_binder_tgtaln', 'af2_rmsd_target',
@@ -279,6 +280,8 @@ class AF2MetadataConverter(MetadataConverter):
             'rmsd_overall','rmsd_binder_bndaln','rmsd_binder_tgtaln', 'rmsd_target',
             'time'
         }
+        # ipTM is a 0-1 score, rounded with more precision than the PAE/pLDDT/RMSD fields above
+        precise_float_fields = {'iptm'}
 
         with open(input_file, 'r', encoding='utf-8') as f:
             # Read header
@@ -309,7 +312,12 @@ class AF2MetadataConverter(MetadataConverter):
                     else:
                         prefixed_key = f"af2_{key}"
                         
-                        if key in float_fields:
+                        if key in precise_float_fields:
+                            try:
+                                record[prefixed_key] = round(float(value), 3)
+                            except ValueError:
+                                record[prefixed_key] = None
+                        elif key in float_fields:
                             try:
                                 record[prefixed_key] = round(float(value), 2)
                             except ValueError:

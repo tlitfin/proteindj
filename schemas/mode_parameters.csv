@@ -77,6 +77,7 @@ fold_min_rog,null,fold_min_rog,,fold_min_rog,,fold_min_rog,,fold_min_rog,,fold_m
 fold_max_rog,null,fold_max_rog,,fold_max_rog,,fold_max_rog,,fold_max_rog,,fold_max_rog,,fold_max_rog,,fold_max_rog,
 mpnn_max_score,null,mpnn_max_score,,mpnn_max_score,,mpnn_max_score,,mpnn_max_score,,mpnn_max_score,,mpnn_max_score,,mpnn_max_score,
 fampnn_max_psce,null,fampnn_max_psce,,fampnn_max_psce,,fampnn_max_psce,,fampnn_max_psce,,fampnn_max_psce,,fampnn_max_psce,,fampnn_max_psce,
+af2_min_iptm,null,af2_min_iptm,,af2_min_iptm,,af2_min_iptm,,af2_min_iptm,,af2_min_iptm,,af2_min_iptm,,af2_min_iptm,
 af2_max_pae_interaction,null,af2_max_pae_interaction,,af2_max_pae_interaction,,af2_max_pae_interaction,,af2_max_pae_interaction,,af2_max_pae_interaction,,af2_max_pae_interaction,,af2_max_pae_interaction,
 af2_max_pae_overall,null,af2_max_pae_overall,,af2_max_pae_overall,,af2_max_pae_overall,,af2_max_pae_overall,,af2_max_pae_overall,,af2_max_pae_overall,,af2_max_pae_overall,
 af2_max_pae_binder,null,af2_max_pae_binder,,af2_max_pae_binder,,af2_max_pae_binder,,af2_max_pae_binder,,af2_max_pae_binder,,af2_max_pae_binder,,af2_max_pae_binder,

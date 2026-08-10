@@ -495,6 +495,13 @@
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
     },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
+    },
     "af2_max_pae_interaction": {
       "type": [
         "number",
@@ -1396,6 +1403,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -2300,6 +2314,13 @@
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
     },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
+    },
     "af2_max_pae_interaction": {
       "type": [
         "number",
@@ -3199,6 +3220,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -4108,6 +4136,13 @@
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
     },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
+    },
     "af2_max_pae_interaction": {
       "type": [
         "number",
@@ -4970,6 +5005,13 @@
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
     },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
+    },
     "af2_max_pae_interaction": {
       "type": [
         "number",
@@ -5830,6 +5872,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [

@@ -464,6 +464,11 @@
           "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence.",
           "hidden": true
         },
+        "af2_min_iptm": {
+          "type": "number",
+          "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8",
+          "hidden": true
+        },
         "af2_max_pae_interaction": {
           "type": "number",
           "description": "Max predicted aligned error for interactions e.g. 10"

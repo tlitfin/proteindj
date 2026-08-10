@@ -56,6 +56,7 @@ Metrics from AlphaFold2 Initial-Guess or Boltz-2 predictions evaluating structur
 | Metric                   | Description                                                                                                        |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | `af2_pae_interaction`    | AF2 predicted aligned error for interaction interfaces; lower is better.                                           |
+| `af2_iptm`               | AF2 predicted interface TM-score (ipTM) between binder and target; higher is better. |
 | `af2_pae_overall`        | AF2 predicted aligned error for all chains; lower is better.                                                       |
 | `af2_pae_binder`         | AF2 predicted aligned error for the binder chain; lower is better.                                                 |
 | `af2_pae_target`         | AF2 predicted aligned error for the target protein; lower is better.                                               |

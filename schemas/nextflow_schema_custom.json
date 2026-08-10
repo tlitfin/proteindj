@@ -601,6 +601,12 @@
           "hidden": true,
           "default": "null"
         },
+        "af2_min_iptm": {
+          "type": "number",
+          "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8",
+          "hidden": true,
+          "default": "null"
+        },
         "af2_max_pae_interaction": {
           "type": "number",
           "description": "Max predicted aligned error for interactions e.g. 10",

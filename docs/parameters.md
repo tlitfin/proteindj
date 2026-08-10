@@ -264,6 +264,7 @@ AlphaFold2 Initial-Guess Filtering Parameters.
 
 | Parameter                    | Description                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `af2_min_iptm`               | Min predicted interface TM-score (ipTM) between binder and target. |
 | `af2_max_pae_interaction`    | Max predicted aligned error for interactions                                                   |
 | `af2_max_pae_overall`        | Max predicted aligned error for all chains                                                     |
 | `af2_max_pae_binder`         | Max predicted aligned error for binder                                                         |
