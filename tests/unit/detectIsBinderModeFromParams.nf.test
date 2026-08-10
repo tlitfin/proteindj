@@ -53,7 +53,7 @@ nextflow_function {
             function {
                 """
                 input[0] = "rfd_motifscaff"
-                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5o45_pd-l1.pdb", rfd_contigs: null]
+                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"]
                 """
             }
         }
@@ -68,7 +68,7 @@ nextflow_function {
             function {
                 """
                 input[0] = "rfd_motifscaff"
-                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5vli_ha.pdb", rfd_contigs: null]
+                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5vli_ha.pdb"]
                 """
             }
         }
@@ -78,33 +78,33 @@ nextflow_function {
         }
     }
 
-    test("rfd_partialdiff with rfd_contigs containing a chainbreak overrides single-chain PDB as binder") {
+    test("rfd_partialdiff with single-chain input_pdb is monomer") {
         when {
             function {
                 """
                 input[0] = "rfd_partialdiff"
-                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5o45_pd-l1.pdb", rfd_contigs: "A1-60/0 65-100"]
-                """
-            }
-        }
-        then {
-            assert function.success
-            assert function.result == true
-        }
-    }
-
-    test("rfd_partialdiff with single-chain rfd_contigs overrides two-chain PDB as monomer") {
-        when {
-            function {
-                """
-                input[0] = "rfd_partialdiff"
-                input[1] = [input_pdb: "${projectDir}/tests/fixtures/resume_binder/examplebinder.pdb", rfd_contigs: "65-100"]
+                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"]
                 """
             }
         }
         then {
             assert function.success
             assert function.result == false
+        }
+    }
+
+    test("rfd_partialdiff with two-chain input_pdb is binder") {
+        when {
+            function {
+                """
+                input[0] = "rfd_partialdiff"
+                input[1] = [input_pdb: "${projectDir}/tests/fixtures/resume_binder/examplebinder.pdb"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == true
         }
     }
 }

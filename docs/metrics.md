@@ -56,6 +56,7 @@ Metrics from AlphaFold2 Initial-Guess or Boltz-2 predictions evaluating structur
 | Metric                   | Description                                                                                                        |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | `af2_pae_interaction`    | AF2 predicted aligned error for interaction interfaces; lower is better.                                           |
+| `af2_iptm`               | AF2 predicted interface TM-score (ipTM) between binder and target; higher is better. |
 | `af2_pae_overall`        | AF2 predicted aligned error for all chains; lower is better.                                                       |
 | `af2_pae_binder`         | AF2 predicted aligned error for the binder chain; lower is better.                                                 |
 | `af2_pae_target`         | AF2 predicted aligned error for the target protein; lower is better.                                               |
@@ -76,13 +77,13 @@ Metrics from AlphaFold2 Initial-Guess or Boltz-2 predictions evaluating structur
 | `boltz_pDockQ2_min`     | Minimum predicted DockQ Score v2 (calculated from PAE) of target and binder chains. Higher is better (0 to 1)                                       |
 | `boltz_pae_interaction`   | Predicted aligned error for interaction interfaces. Lower is better (0 to ~30 Å)                        |
 | `boltz_pde`              | Predicted distance error (Boltz-2); lower is better.                                                               |
-| `boltz_pde_interface`    | Predicted distance error for interface (Boltz-2).                                                                  |
+| `boltz_ipde`    | Predicted distance error for interface (Boltz-2).                                                                  |
 | `boltz_plddt`            | Predicted LDDT score (Boltz-2) for the complex (0-1 scale; higher is better).                                      |
-| `boltz_plddt_interface`  | Interface pLDDT score for the complex (Boltz-2).                                                                   |
+| `boltz_iplddt`  | Interface pLDDT score for the complex (Boltz-2).                                                                   |
 | `boltz_ptm`              | Predicted template modeling score for Boltz-2 (0-1 scale; higher is better).                                       |
 | `boltz_ptm_binder`       | pTM score for the binder chain only  (0-1 scale; higher is better). |
 | `boltz_ptm_target`       | Mean pTM score across all target chains (0-1 scale; higher is better).      |
-| `boltz_ptm_interface`    | Mean binder→target interface pTM score across all target chains (0-1 scale; higher is better). |
+| `boltz_iptm`    | Mean binder→target interface pTM score across all target chains (0-1 scale; higher is better). |
 
 ---
 

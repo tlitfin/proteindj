@@ -116,7 +116,7 @@ def build_metadata(fold_id, design_mask, design_mode):
     Args:
         fold_id: Sequential fold_id to assign
         design_mask: Boolean numpy array from the .npz sidecar
-        design_mode: 'boltzgen_denovo' or 'boltzgen_redesign'
+        design_mode: 'boltzgen_denovo' or 'boltzgen_motifscaff'
 
     Returns:
         dict: Metadata dictionary
@@ -163,7 +163,7 @@ def process_design(cif_path, npz_path, fold_id, output_dir, design_mode):
         npz_path: Path to input .npz metadata sidecar
         fold_id: Sequential fold_id for this design
         output_dir: Output directory path
-        design_mode: 'boltzgen_denovo' or 'boltzgen_redesign'
+        design_mode: 'boltzgen_denovo' or 'boltzgen_motifscaff'
     """
     output_pdb = output_dir / f"fold_{fold_id}.pdb"
     output_json = output_dir / f"fold_{fold_id}.json"
@@ -205,7 +205,7 @@ def main():
         '--design_mode',
         type=str,
         default='boltzgen_denovo',
-        choices=['boltzgen_denovo', 'boltzgen_redesign'],
+        choices=['boltzgen_denovo', 'boltzgen_motifscaff'],
         help='BoltzGen design mode used to generate these designs'
     )
 

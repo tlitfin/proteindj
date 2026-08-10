@@ -39,13 +39,13 @@
       "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
       "example": "A56,A115,A123"
     },
-    "rfd_contigs": {
+    "flexible_residues": {
       "type": [
         "string",
         "null"
       ],
-      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
+      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
     },
     "seq_method": {
       "type": [
@@ -93,7 +93,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -107,7 +107,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -149,7 +149,7 @@
         "string",
         "null"
       ],
-      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
+      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'. 'rfd_motifscaff' binder mode already defaults to 'complex_base' internally unless 'motifscaff_inpaint_seq'/'flexible_residues' is set.",
       "enum": [
         "active_site",
         "base",
@@ -235,7 +235,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -458,7 +458,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -494,6 +494,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -577,14 +584,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -621,12 +628,12 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -635,7 +642,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -649,7 +656,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -928,12 +935,20 @@
       "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
       "example": "A56,A115,A123"
     },
-    "rfd_scaffold_dir": {
+    "flexible_residues": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
+    },
+    "rfd_foldcond_scaffold_dir": {
       "type": "string",
       "description": "Path to directory containing scaffold files. e.g. 'binderscaffolds/scaffolds_assorted'",
       "example": "${projectDir}/binderscaffolds/scaffolds_assorted"
     },
-    "rfd_mask_loops": {
+    "rfd_foldcond_mask_loops": {
       "type": [
         "boolean",
         "null"
@@ -987,7 +1002,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -1001,7 +1016,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -1043,7 +1058,7 @@
         "string",
         "null"
       ],
-      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
+      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'. 'rfd_motifscaff' binder mode already defaults to 'complex_base' internally unless 'motifscaff_inpaint_seq'/'flexible_residues' is set.",
       "enum": [
         "active_site",
         "base",
@@ -1129,7 +1144,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -1352,7 +1367,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -1388,6 +1403,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -1471,14 +1493,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -1515,12 +1537,12 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -1529,7 +1551,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -1543,7 +1565,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -1810,22 +1832,31 @@
       "pattern": ".*\\.pdb$",
       "example": "${projectDir}/lib/examplebinder.pdb"
     },
-    "rfd_contigs": {
-      "type": "string",
-      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$",
-      "example": "[5-10/A1-88/10-20/0 B89-203]"
-    },
-    "rfd_inpaint_seq": {
+    "flexible_residues": {
       "type": [
         "string",
         "null"
       ],
-      "description": "Residues that will have their sequence masked when diffusing. e.g. '[A17-19/A143-145]'",
-      "pattern": "^\\[([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?)(?:\\/([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?))*\\]$",
-      "example": "[A17-19/A129-131]"
+      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
     },
-    "rfd_length": {
+    "motifscaff_spec": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Chain A architecture spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, chain A's architecture (length) is left unchanged. Used by boltzgen_motifscaff and rfd_motifscaff.",
+      "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$"
+    },
+    "motifscaff_inpaint_seq": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Chain A residues, within those kept by motifscaff_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'. Used by boltzgen_motifscaff and rfd_motifscaff.",
+      "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$"
+    },
+    "rfd_motifscaff_length": {
       "type": [
         "string",
         "null"
@@ -1880,7 +1911,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -1894,7 +1925,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -1936,7 +1967,7 @@
         "string",
         "null"
       ],
-      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
+      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'. 'rfd_motifscaff' binder mode already defaults to 'complex_base' internally unless 'motifscaff_inpaint_seq'/'flexible_residues' is set.",
       "enum": [
         "active_site",
         "base",
@@ -2023,7 +2054,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -2246,7 +2277,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -2282,6 +2313,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -2365,14 +2403,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -2409,12 +2447,12 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -2423,7 +2461,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -2437,7 +2475,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -2704,18 +2742,36 @@
       "pattern": ".*\\.pdb$",
       "example": "${projectDir}/lib/examplebinder.pdb"
     },
-    "rfd_contigs": {
+    "flexible_residues": {
       "type": [
         "string",
         "null"
       ],
-      "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-      "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
+      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
     },
-    "rfd_partial_diffusion_timesteps": {
+    "rfd_partialdiff_timesteps": {
       "type": "integer",
       "description": "Number of timesteps for partial diffusion. e.g. 20",
       "example": 20
+    },
+    "rfd_partialdiff_spec": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Chain A partial diffusion spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60', left fully fixed) and bare-digit 'diffuse' tokens (fixed counts only, e.g. '59' - no ranges, since partial diffusion cannot change chain A's length), e.g. 'A1-19,59' keeps residues A1-19 and partially diffuses the remaining 59 residues. If null, the whole chain is partially diffused.",
+      "pattern": "^((A\\d+(-\\d+)?)|(\\d+))(,((A\\d+(-\\d+)?)|(\\d+)))*$",
+      "example": "A1-19,59"
+    },
+    "rfd_partialdiff_fixed_seq": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Design chain residues whose sequence should be kept fixed during partial diffusion, referencing the design chain only (chain A in binder mode, the sole chain in monomer mode). Comma-separated tokens, each a chain-qualified residue e.g. 'A56' or a chain-qualified range e.g. 'A115-120'. e.g. 'A17-19,A143-145'. If null, the sequence is fully redesignable.",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+      "example": "A17-19"
     },
     "seq_method": {
       "type": [
@@ -2763,7 +2819,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -2777,7 +2833,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -2819,7 +2875,7 @@
         "string",
         "null"
       ],
-      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
+      "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'. 'rfd_motifscaff' binder mode already defaults to 'complex_base' internally unless 'motifscaff_inpaint_seq'/'flexible_residues' is set.",
       "enum": [
         "active_site",
         "base",
@@ -2905,7 +2961,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -3128,7 +3184,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -3164,6 +3220,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -3247,14 +3310,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -3291,12 +3354,12 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -3305,7 +3368,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -3319,7 +3382,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -3646,7 +3709,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -3660,7 +3723,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -3813,7 +3876,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -4036,7 +4099,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -4072,6 +4135,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -4155,14 +4225,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -4199,12 +4269,12 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -4213,7 +4283,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -4227,7 +4297,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -4511,6 +4581,22 @@
       "description": "Specifies hotspot residues for binding. Comma-separated tokens, each a chain-qualified residue e.g. 'A56', a chain-qualified range e.g. 'A115-120', or a bare chain ID meaning the whole chain e.g. 'B'. e.g. 'A56,A115,A123'",
       "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
     },
+    "flexible_residues": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
+    },
+    "bg_not_binding_residues": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain. Optional for boltzgen_denovo and boltzgen_motifscaff binder design modes. e.g. 'A200,A210-215,B'.",
+      "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
+    },
     "seq_method": {
       "type": [
         "string",
@@ -4557,7 +4643,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -4571,7 +4657,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -4607,22 +4693,6 @@
         "null"
       ],
       "description": "Path to input files when skipping stages e.g. './rfd_results'"
-    },
-    "bg_not_binding_residues": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
-      "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
-    },
-    "bg_flexible_residues": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_redesign mode this may also reference chain A residues kept by bg_redesign_spec.",
-      "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
     },
     "mpnn_omitAAs": {
       "type": [
@@ -4682,7 +4752,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -4898,7 +4968,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -4934,6 +5004,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -5017,14 +5094,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -5061,12 +5138,12 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -5075,7 +5152,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -5089,7 +5166,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -5334,7 +5411,7 @@
       "example": "24GB"
     }
   },
-  "boltzgen_redesign": {
+  "boltzgen_motifscaff": {
     "num_designs": {
       "type": "integer",
       "description": "Number of designs to generate using RFdiffusion or Bindcraft.",
@@ -5348,13 +5425,45 @@
     "out_dir": {
       "type": "string",
       "description": "Output directory for results.",
-      "example": "${projectDir}/pdj_boltzgen_redesign"
+      "example": "${projectDir}/pdj_boltzgen_motifscaff"
     },
     "input_pdb": {
       "type": "string",
       "description": "Path to an input PDB file. e.g. 'target.pdb'",
       "pattern": ".*\\.pdb$",
       "example": "${projectDir}/lib/examplebinder.pdb"
+    },
+    "flexible_residues": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+      "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
+    },
+    "motifscaff_spec": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Chain A architecture spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, chain A's architecture (length) is left unchanged. Used by boltzgen_motifscaff and rfd_motifscaff.",
+      "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$"
+    },
+    "motifscaff_inpaint_seq": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Chain A residues, within those kept by motifscaff_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'. Used by boltzgen_motifscaff and rfd_motifscaff.",
+      "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$"
+    },
+    "bg_not_binding_residues": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain. Optional for boltzgen_denovo and boltzgen_motifscaff binder design modes. e.g. 'A200,A210-215,B'.",
+      "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
     },
     "seq_method": {
       "type": [
@@ -5402,7 +5511,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -5416,7 +5525,7 @@
         "integer",
         "null"
       ],
-      "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity."
+      "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
     },
     "run_fold_only": {
       "type": [
@@ -5452,38 +5561,6 @@
         "null"
       ],
       "description": "Path to input files when skipping stages e.g. './rfd_results'"
-    },
-    "bg_not_binding_residues": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
-      "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
-    },
-    "bg_redesign_spec": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Chain A (binder) architecture spec for boltzgen_redesign: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, the whole chain A architecture (length) is left unchanged.",
-      "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$"
-    },
-    "bg_redesign_inpaint_seq": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Chain A (binder) residues, within those kept by bg_redesign_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'.",
-      "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$"
-    },
-    "bg_flexible_residues": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_redesign mode this may also reference chain A residues kept by bg_redesign_spec.",
-      "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$"
     },
     "mpnn_omitAAs": {
       "type": [
@@ -5543,7 +5620,7 @@
         "null"
       ],
       "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-      "example": 0
+      "example": 1
     },
     "mpnn_relax_seqs_per_cycle": {
       "type": [
@@ -5759,7 +5836,7 @@
         "integer",
         "null"
       ],
-      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4"
+      "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
     },
     "fold_max_ss": {
       "type": [
@@ -5795,6 +5872,13 @@
         "null"
       ],
       "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence."
+    },
+    "af2_min_iptm": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8"
     },
     "af2_max_pae_interaction": {
       "type": [
@@ -5878,14 +5962,14 @@
         "number",
         "null"
       ],
-      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2"
+      "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
     },
     "boltz_max_rmsd_binder": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1"
+      "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
     },
     "boltz_max_rmsd_target": {
       "type": [
@@ -5922,12 +6006,12 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
       ],
-      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65"
+      "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
     },
     "boltz_min_plddt": {
       "type": [
@@ -5936,7 +6020,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -5950,7 +6034,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"

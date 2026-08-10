@@ -80,7 +80,7 @@ Due to the creative nature of protein design and the complexity of RFdiffusion t
 - **rfd_partialdiff** – partial diffusion of an input monomer or binder
 - **bindcraft_denovo** - hallucination of new binders using BindCraft
 - **boltzgen_denovo** – generative design of new binders against a target using BoltzGen
-- **boltzgen_redesign** – redesign/rediffusion of an existing binder using BoltzGen
+- **boltzgen_motifscaff** – redesign/rediffusion of an existing binder using BoltzGen
 
 <img src="img/modes_overview.png" height="720">
 
@@ -88,7 +88,7 @@ All the settings and parameters for ProteinDJ can be found in the `nextflow.conf
 
 | Parameter         | Example Value      | Description                                                                                                                                                                                     |
 | ----------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design_mode`        | `'rfd_denovo'` | Pipeline mode. Choose from 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff' (each automatically runs as monomer or binder design depending on whether `input_pdb` is provided), 'bindcraft_denovo', 'boltzgen_denovo', or 'boltzgen_redesign'. |
+| `design_mode`        | `'rfd_denovo'` | Pipeline mode. Choose from 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff' (each automatically runs as monomer or binder design depending on whether `input_pdb` is provided), 'bindcraft_denovo', 'boltzgen_denovo', or 'boltzgen_motifscaff'. |
 | `num_designs` | `8`                | Number of designs to generate using RFdiffusion or Bindcraft.                                                                                                                                                |
 | `seqs_per_design` | `8`                | Number of sequences to generate per design.                                                                                                                                         |
 | `out_dir`         | `'./pdj_results'`  | Output directory for results. Existing results in this directory will be overwritten.                                                                                                           |

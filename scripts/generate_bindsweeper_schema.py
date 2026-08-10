@@ -16,7 +16,7 @@ MODES = [
     "rfd_partialdiff",
     "bindcraft_denovo",
     "boltzgen_denovo",
-    "boltzgen_redesign",
+    "boltzgen_motifscaff",
 ]
 
 FIELDS_TO_COPY = ["description", "pattern", "enum", "minimum", "maximum"]

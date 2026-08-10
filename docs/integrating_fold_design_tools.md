@@ -169,8 +169,9 @@ prefix convention (`bc_*`, `rfd_*`, `mpnn_*`, `fampnn_*`, `af2_*`, `boltz_*`):
    a column pair for the new mode and populate relevant rows (blank cells mean "not applicable to
    this mode"). Also populate the mode's cell in the special `__required__` row with a
    comma-separated list of mode-specific parameters that must be required for this mode (e.g.
-   `input_pdb,rfd_contigs` for `rfd_motifscaff`) — this drives the `required` list in the
-   `mode_specific_parameters` group of the generated schema, replacing what used to be a hardcoded
+   `input_pdb,design_length` for `bindcraft_denovo`) — this drives the `required` list of whichever
+   definition group each named parameter lives in (e.g. `mode_specific_parameters` for `input_pdb`,
+   `rfdiffusion_advanced_parameters` for `rfd_foldcond_scaffold_dir`), replacing what used to be a hardcoded
    `MODE_REQUIRED_PARAMS` dict in `generate_mode_schemas.py`.
 3. **[schemas/nextflow_schema_<mode>.json](../schemas/nextflow_schema_bindcraft_denovo.json)** — a
    JSON Schema (draft-07) per design mode, split into `essential_parameters`,

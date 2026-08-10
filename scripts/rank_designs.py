@@ -42,7 +42,7 @@ def parse_arguments():
     parser.add_argument(
         "--ranking-metric",
         required=True,
-        help="Metric to use for ranking (e.g., 'af2_pae_interaction', 'boltz_ptm_interface', 'boltz_ipSAE_min')"
+        help="Metric to use for ranking (e.g., 'af2_pae_interaction', 'boltz_iptm', 'boltz_ipSAE_min')"
     )
     parser.add_argument(
         "--max-designs",

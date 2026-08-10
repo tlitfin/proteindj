@@ -52,7 +52,7 @@ workflow {
 
     def outputDirectory = params.out_dir
 
-    VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_redesign', 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff']
+    VALID_MODES = ['bindcraft_denovo', 'boltzgen_denovo', 'boltzgen_motifscaff', 'rfd_denovo', 'rfd_foldcond', 'rfd_motifscaff', 'rfd_partialdiff']
     if (!(params.design_mode in VALID_MODES)) {
         throw new IllegalArgumentException("Invalid design mode: ${params.design_mode}. Must be one of: ${VALID_MODES.join(', ')}")
     }
@@ -112,8 +112,8 @@ workflow {
     def seq_max_score = params.seq_method == 'mpnn' ? params.mpnn_max_score : params.fampnn_max_psce
     def seq_max_score_param = seq_max_score != null ? "--max-score ${seq_max_score}" : ''
     def seq_filter_params = Utils.formatFilterParams(params, "seq", ["min_ext_coef", "max_ext_coef", "min_pi", "max_pi"])
-    def af2_filter_params = Utils.formatFilterParams(params, "af2", ["max_pae_interaction", "max_pae_overall", "max_pae_binder", "max_pae_target", "min_plddt_overall", "min_plddt_binder", "min_plddt_target", "max_rmsd_overall", "max_rmsd_binder_bndaln", "max_rmsd_binder_tgtaln", "max_rmsd_target"])
-    def boltz_filter_params = Utils.formatFilterParams(params, "boltz", ["max_rmsd_overall", "max_rmsd_binder", "max_rmsd_target", "min_conf_score", "min_ptm", "min_ptm_binder", "min_ptm_target", "min_ptm_interface", "min_plddt", "min_plddt_interface", "max_pde", "max_pde_interface", "min_ipSAE_min", "min_LIS", "min_pDockQ2_min", "max_pae_interaction"])
+    def af2_filter_params = Utils.formatFilterParams(params, "af2", ["min_iptm", "max_pae_interaction", "max_pae_overall", "max_pae_binder", "max_pae_target", "min_plddt_overall", "min_plddt_binder", "min_plddt_target", "max_rmsd_overall", "max_rmsd_binder_bndaln", "max_rmsd_binder_tgtaln", "max_rmsd_target"])
+    def boltz_filter_params = Utils.formatFilterParams(params, "boltz", ["max_rmsd_overall", "max_rmsd_binder", "max_rmsd_target", "min_conf_score", "min_ptm", "min_ptm_binder", "min_ptm_target", "min_iptm", "min_plddt", "min_iplddt", "max_pde", "max_ipde", "min_ipSAE_min", "min_LIS", "min_pDockQ2_min", "max_pae_interaction"])
     def analysis_filter_params = Utils.formatFilterParams(params, "pr", ["min_helices", "max_helices", "min_strands", "max_strands", "min_total_ss", "max_total_ss", "min_rog", "max_rog", "min_intface_bsa", "min_intface_shpcomp", "min_intface_hbonds", "max_intface_unsat_hbonds", "max_intface_deltag", "max_intface_deltagtobsa", "max_surfhphobics", "max_sap", "max_sap_complex"])
 
     println("***********************************************************************")
@@ -225,7 +225,7 @@ workflow {
                 .rebatchTuples(bc_pdbs_jsons, 200)
                 .set { fold_tuples }
 
-        } else if (params.design_mode in ['boltzgen_denovo','boltzgen_redesign']) {
+        } else if (params.design_mode in ['boltzgen_denovo','boltzgen_motifscaff']) {
             // Use BoltzGen for fold design
 
             // Collect input files
@@ -260,21 +260,26 @@ workflow {
                 .set { fold_tuples }
 
         } else { // Use RFdiffusion for fold design
-            // Check for user-provided contigs or whether to automatically generate them
+            // Check which contigs auto-generation strategy applies for this mode
             if (params.design_mode == 'rfd_foldcond'){
                Channel.value('NoContigsNeededForFoldConditioning').set{rfdContigs}
-            } else if (params.rfd_contigs){
-               // Use provided value
-               description=RFDEngine.describeContigs("$params.rfd_contigs")
-               println description
-               Channel.value(params.rfd_contigs).set{rfdContigs}
             } else if (params.design_mode == 'rfd_motifscaff'){
-                error("rfd_contigs is required for rfd_motifscaff mode.")
+                // Auto-generate contigs from motifscaff_spec/target-chain detection, resolved in
+                // Groovy by RFDiffusionParams at command-generation time (no PDB parsing here).
+                // engine.validateParams() has already confirmed at least one of motifscaff_spec/
+                // motifscaff_inpaint_seq/flexible_residues is set.
+                println("Automatically generating RFdiffusion contigs from motifscaff_spec/motifscaff_inpaint_seq/flexible_residues.")
+                Channel.value(RFDiffusionParams.AUTO_CONTIGS_SENTINEL).set{rfdContigs}
+            } else if (params.design_mode == 'rfd_partialdiff' && params.rfd_partialdiff_spec){
+                // Auto-generate contigs from rfd_partialdiff_spec/target-chain detection, resolved in
+                // Groovy by RFDiffusionParams at command-generation time (no PDB parsing here).
+                println("Automatically generating RFdiffusion contigs from rfd_partialdiff_spec.")
+                Channel.value(RFDiffusionParams.AUTO_PARTIALDIFF_SENTINEL).set{rfdContigs}
             } else if (params.design_mode == 'rfd_denovo' && !is_binder_mode){
                 // Contigs for monomer rfd_denovo are equivalent to design_length
                 Channel.value("[$params.design_length]").set{rfdContigs}
             } else {
-                // Auto-generate contigs for RFdiffusion if not provided (rfd_denovo binder, or rfd_partialdiff monomer/binder)
+                // Auto-generate contigs for RFdiffusion if not provided (rfd_denovo binder, or rfd_partialdiff monomer/binder without rfd_partialdiff_spec)
                 println("Automatically generating RFdiffusion contigs from input PDB. Will include all residues.")
                 GenerateRFDContigs(file(params.input_pdb), params.design_mode, is_binder_mode)
                 GenerateRFDContigs.out.view({ contigs -> "Generated the RFdiffusion contigs: $contigs" }).set{rfdContigs}
@@ -891,7 +896,7 @@ def validateranking_metric(ranking_metric, pred_method) {
     if (pred_method == 'boltz' && !ranking_metric.startsWith('boltz_')) {
         throw new IllegalArgumentException(
             "Ranking metric '${ranking_metric}' does not match prediction method '${pred_method}'. " +
-            "For Boltz-2 predictions, use metrics with 'boltz_' prefix (e.g., 'boltz_ptm_interface', 'boltz_ipSAE_min', 'boltz_LIS')."
+            "For Boltz-2 predictions, use metrics with 'boltz_' prefix (e.g., 'boltz_iptm', 'boltz_ipSAE_min', 'boltz_LIS')."
         )
     }
     if (pred_method == 'af2_boltz' && !(ranking_metric.startsWith('af2_') || ranking_metric.startsWith('boltz_'))) {
@@ -905,23 +910,18 @@ def validateranking_metric(ranking_metric, pred_method) {
 }
 
 // Auto-detect binder vs monomer behavior for RFdiffusion/BoltzGen modes when fold design will
-// actually run this invocation. Uses params.input_pdb / params.rfd_contigs to determine chain count.
+// actually run this invocation. Uses params.input_pdb to determine chain count.
 def detectIsBinderModeFromParams(design_mode, params) {
     if (design_mode in ['rfd_denovo', 'rfd_foldcond', 'boltzgen_denovo']) {
         return params.input_pdb as boolean
     }
-    // rfd_motifscaff / rfd_partialdiff / boltzgen_redesign always require an input PDB
+    // rfd_motifscaff / rfd_partialdiff / boltzgen_motifscaff always require an input PDB
     if (!params.input_pdb) {
         throw new IllegalArgumentException("input_pdb is required for '${design_mode}' mode.")
     }
     def inputFile = file(params.input_pdb)
     if (!inputFile.exists()) {
         throw new FileNotFoundException("Input PDB file not found at path: ${params.input_pdb}. Please ensure the file exists and the path is correct.")
-    }
-    if (params.rfd_contigs) {
-        // Chain-break token count is robust to newly-diffused chains that have no chain letter
-        // (e.g. partial diffusion / denovo binder chains)
-        return Utils.countContigChains(params.rfd_contigs) >= 2
     }
     Set chainIds = Utils.getPdbChainIds(inputFile)
     if (chainIds.isEmpty()) {
@@ -932,7 +932,7 @@ def detectIsBinderModeFromParams(design_mode, params) {
 
 // Auto-detect binder vs monomer behavior when fold design is being skipped this invocation.
 // Derived from the chain count of an actual resumed PDB in params.skip_input_dir, without
-// requiring/validating RFdiffusion-specific input parameters (input_pdb, rfd_contigs).
+// requiring/validating RFdiffusion-specific input parameters (input_pdb).
 def detectIsBinderModeFromResumedPdb(skip_input_dir) {
     if (!skip_input_dir || !file(skip_input_dir).exists()) {
         throw new FileNotFoundException("skip_input_dir not found at path: ${skip_input_dir}. Please ensure the path is correct.")

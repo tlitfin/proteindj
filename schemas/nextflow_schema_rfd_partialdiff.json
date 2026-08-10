@@ -56,24 +56,36 @@
           "description": "Path to an input PDB file. e.g. 'target.pdb'",
           "default": "${projectDir}/lib/examplebinder.pdb"
         },
-        "rfd_contigs": {
+        "flexible_residues": {
           "type": "string",
-          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-          "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$"
+          "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$"
         },
-        "rfd_partial_diffusion_timesteps": {
+        "rfd_partialdiff_timesteps": {
           "type": "integer",
           "description": "Number of timesteps for partial diffusion. e.g. 20",
           "default": 20
+        },
+        "rfd_partialdiff_spec": {
+          "type": "string",
+          "description": "Chain A partial diffusion spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60', left fully fixed) and bare-digit 'diffuse' tokens (fixed counts only, e.g. '59' - no ranges, since partial diffusion cannot change chain A's length), e.g. 'A1-19,59' keeps residues A1-19 and partially diffuses the remaining 59 residues. If null, the whole chain is partially diffused.",
+          "pattern": "^((A\\d+(-\\d+)?)|(\\d+))(,((A\\d+(-\\d+)?)|(\\d+)))*$",
+          "default": "A1-19,59"
+        },
+        "rfd_partialdiff_fixed_seq": {
+          "type": "string",
+          "description": "Design chain residues whose sequence should be kept fixed during partial diffusion, referencing the design chain only (chain A in binder mode, the sole chain in monomer mode). Comma-separated tokens, each a chain-qualified residue e.g. 'A56' or a chain-qualified range e.g. 'A115-120'. e.g. 'A17-19,A143-145'. If null, the sequence is fully redesignable.",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+          "default": "A17-19"
         }
       },
       "required": [
         "input_pdb",
-        "rfd_partial_diffusion_timesteps"
+        "rfd_partialdiff_timesteps"
       ]
     },
     "workflow_advanced_parameters": {
-      "title": "Mode-Specific Parameters",
+      "title": "Workflow Advanced Parameters",
       "type": "object",
       "description": "These parameters are used for some of the ProteinDJ modes.",
       "default": "",
@@ -111,18 +123,16 @@
         },
         "ranking_metric": {
           "type": "string",
-          "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2.",
+          "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2.",
           "hidden": true
         },
         "max_designs": {
           "type": "integer",
-          "description": "Maximum number of top-ranked designs to output (null = output all ranked designs)",
-          "hidden": true
+          "description": "Maximum number of top-ranked designs to output (null = output all ranked designs)"
         },
         "max_seqs_per_fold": {
           "type": "integer",
-          "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity.",
-          "hidden": true
+          "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity."
         },
         "run_fold_only": {
           "type": "boolean",
@@ -160,7 +170,7 @@
       "properties": {
         "rfd_ckpt_override": {
           "type": "string",
-          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
+          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'. 'rfd_motifscaff' binder mode already defaults to 'complex_base' internally unless 'motifscaff_inpaint_seq'/'flexible_residues' is set.",
           "enum": [
             "active_site",
             "base",
@@ -237,9 +247,8 @@
         },
         "mpnn_relax_max_cycles": {
           "type": "integer",
-          "default": 0,
-          "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-          "hidden": true
+          "default": 1,
+          "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable."
         },
         "mpnn_relax_seqs_per_cycle": {
           "type": "integer",
@@ -323,7 +332,6 @@
         "uncropped_target_pdb": {
           "type": "string",
           "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
-          "hidden": true,
           "format": "file-path",
           "pattern": ".*\\.pdb$"
         },
@@ -430,8 +438,7 @@
         },
         "fold_min_ss": {
           "type": "integer",
-          "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4",
-          "hidden": true
+          "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
         },
         "fold_max_ss": {
           "type": "integer",
@@ -458,10 +465,14 @@
           "description": "Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence.",
           "hidden": true
         },
+        "af2_min_iptm": {
+          "type": "number",
+          "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8",
+          "hidden": true
+        },
         "af2_max_pae_interaction": {
           "type": "number",
-          "description": "Max predicted aligned error for interactions e.g. 10",
-          "hidden": true
+          "description": "Max predicted aligned error for interactions e.g. 10"
         },
         "af2_max_pae_overall": {
           "type": "number",
@@ -500,13 +511,11 @@
         },
         "af2_max_rmsd_binder_bndaln": {
           "type": "number",
-          "description": "Max binder RMSD when binder chains are aligned e.g. 1",
-          "hidden": true
+          "description": "Max binder RMSD when binder chains are aligned e.g. 1"
         },
         "af2_max_rmsd_binder_tgtaln": {
           "type": "number",
-          "description": "Max binder RMSD when target chains are aligned e.g. 2",
-          "hidden": true
+          "description": "Max binder RMSD when target chains are aligned e.g. 2"
         },
         "af2_max_rmsd_target": {
           "type": "number",
@@ -515,13 +524,11 @@
         },
         "boltz_max_rmsd_overall": {
           "type": "number",
-          "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2",
-          "hidden": true
+          "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5"
         },
         "boltz_max_rmsd_binder": {
           "type": "number",
-          "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1",
-          "hidden": true
+          "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5"
         },
         "boltz_max_rmsd_target": {
           "type": "number",
@@ -548,17 +555,16 @@
           "description": "Minimum predicted TM-score of target chain e.g. 0.9",
           "hidden": true
         },
-        "boltz_min_ptm_interface": {
+        "boltz_min_iptm": {
           "type": "number",
-          "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65",
-          "hidden": true
+          "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85"
         },
         "boltz_min_plddt": {
           "type": "number",
           "description": "Minimum pLDDT score e.g. 0.85",
           "hidden": true
         },
-        "boltz_min_plddt_interface": {
+        "boltz_min_iplddt": {
           "type": "number",
           "description": "Minimum pLDDT score of the binder-target interface e.g. 0.8",
           "hidden": true
@@ -568,7 +574,7 @@
           "description": "Maximum predicted distance error e.g. 10",
           "hidden": true
         },
-        "boltz_max_pde_interface": {
+        "boltz_max_ipde": {
           "type": "number",
           "description": "Maximum predicted distance error for the binder-target interface e.g 12",
           "hidden": true
@@ -717,8 +723,7 @@
         "gpu_model": {
           "type": "string",
           "default": "A30",
-          "description": "GPU model to request, e.g., 'A30'.",
-          "hidden": true
+          "description": "GPU model to request, e.g., 'A30'."
         },
         "gpu_queue": {
           "type": "string",
@@ -728,8 +733,7 @@
         "gpus": {
           "type": "integer",
           "default": 4,
-          "description": "Number of GPUs to request.",
-          "hidden": true
+          "description": "Number of GPUs to request."
         },
         "cpus": {
           "type": "integer",

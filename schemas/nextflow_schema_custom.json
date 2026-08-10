@@ -17,7 +17,7 @@
           "enum": [
             "bindcraft_denovo",
             "boltzgen_denovo",
-            "boltzgen_redesign",
+            "boltzgen_motifscaff",
             "rfd_denovo",
             "rfd_foldcond",
             "rfd_motifscaff",
@@ -73,44 +73,68 @@
           "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
           "default": null
         },
-        "rfd_contigs": {
+        "flexible_residues": {
           "type": "string",
-          "description": "Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `rfd_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`.",
-          "pattern": "^\\[[A-Z0-9\\-\\/ \\[\\]]+\\]$",
+          "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0 / RFdiffusion contigmap.inpaint_str), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_motifscaff/rfd_motifscaff mode this may also reference chain A residues kept by motifscaff_spec. Used by boltzgen_denovo, boltzgen_motifscaff, rfd_motifscaff, rfd_partialdiff, and binder design with rfd_denovo/rfd_foldcond.",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
           "default": null
         },
-        "rfd_scaffold_dir": {
+        "motifscaff_spec": {
           "type": "string",
-          "format": "directory-path",
-          "description": "Path to directory containing scaffold files. e.g. 'binderscaffolds/scaffolds_assorted'",
+          "description": "Chain A architecture spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, chain A's architecture (length) is left unchanged. Used by boltzgen_motifscaff and rfd_motifscaff.",
+          "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$",
           "default": null
         },
-        "rfd_mask_loops": {
-          "type": "boolean",
-          "default": true,
-          "description": "Whether to ignore loop regions when applying secondary structure constraints from scaffolds (default=true). Recommended to set to false for binder design as the scaffold sets have enough diversity"
-        },
-        "rfd_inpaint_seq": {
+        "motifscaff_inpaint_seq": {
           "type": "string",
-          "description": "Residues that will have their sequence masked when diffusing. e.g. '[A17-19/A143-145]'",
-          "pattern": "^\\[([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?)(?:\\/([A-Z]?\\d+(?:-\\d+)?(?:\\/\\d+)?))*\\]$",
+          "description": "Chain A residues, within those kept by motifscaff_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'. Used by boltzgen_motifscaff and rfd_motifscaff.",
+          "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$",
           "default": null
         },
-        "rfd_length": {
+        "rfd_motifscaff_length": {
           "type": "string",
           "description": "Length of diffused chain when performing motif scaffolding e.g. 100-120",
           "pattern": "^\\d+-\\d+$",
           "default": null
         },
-        "rfd_partial_diffusion_timesteps": {
+        "rfd_foldcond_scaffold_dir": {
+          "type": "string",
+          "format": "directory-path",
+          "description": "Path to directory containing scaffold files. e.g. 'binderscaffolds/scaffolds_assorted'",
+          "default": null
+        },
+        "rfd_foldcond_mask_loops": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to ignore loop regions when applying secondary structure constraints from scaffolds (default=true). Recommended to set to false for binder design as the scaffold sets have enough diversity"
+        },
+        "rfd_partialdiff_timesteps": {
           "type": "integer",
           "description": "Number of timesteps for partial diffusion. e.g. 20",
           "default": "null"
+        },
+        "rfd_partialdiff_spec": {
+          "type": "string",
+          "description": "Chain A partial diffusion spec: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60', left fully fixed) and bare-digit 'diffuse' tokens (fixed counts only, e.g. '59' - no ranges, since partial diffusion cannot change chain A's length), e.g. 'A1-19,59' keeps residues A1-19 and partially diffuses the remaining 59 residues. If null, the whole chain is partially diffused.",
+          "pattern": "^((A\\d+(-\\d+)?)|(\\d+))(,((A\\d+(-\\d+)?)|(\\d+)))*$",
+          "default": null
+        },
+        "rfd_partialdiff_fixed_seq": {
+          "type": "string",
+          "description": "Design chain residues whose sequence should be kept fixed during partial diffusion, referencing the design chain only (chain A in binder mode, the sole chain in monomer mode). Comma-separated tokens, each a chain-qualified residue e.g. 'A56' or a chain-qualified range e.g. 'A115-120'. e.g. 'A17-19,A143-145'. If null, the sequence is fully redesignable.",
+          "pattern": "^([A-Za-z]+(\\d+(-\\d+)?)?)(,[A-Za-z]+(\\d+(-\\d+)?)?)*$",
+          "default": null
+        },
+        "bg_not_binding_residues": {
+          "type": "string",
+          "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain. Optional for boltzgen_denovo and boltzgen_motifscaff binder design modes. e.g. 'A200,A210-215,B'.",
+          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
+          "default": null
         }
       }
     },
     "workflow_advanced_parameters": {
-      "title": "Mode-Specific Parameters",
+      "title": "Workflow Advanced Parameters",
       "type": "object",
       "description": "These parameters are used for some of the ProteinDJ modes.",
       "default": "",
@@ -148,20 +172,18 @@
         },
         "ranking_metric": {
           "type": "string",
-          "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2.",
+          "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2.",
           "hidden": true,
           "default": null
         },
         "max_designs": {
           "type": "integer",
           "description": "Maximum number of top-ranked designs to output (null = output all ranked designs)",
-          "hidden": true,
           "default": "null"
         },
         "max_seqs_per_fold": {
           "type": "integer",
-          "description": "Maximum number of sequences per fold to keep after ranking (null = no limit). Helps increase fold diversity.",
-          "hidden": true,
+          "description": "Maximum number of sequences per fold to keep after ranking (e.g. 4, null = no limit). Helps increase fold diversity.",
           "default": "null"
         },
         "run_fold_only": {
@@ -254,42 +276,6 @@
         }
       }
     },
-    "boltzgen_advanced_parameters": {
-      "title": "BoltzGen Advanced Parameters",
-      "type": "object",
-      "description": "Advanced parameters to control the behaviour of BoltzGen.",
-      "default": "",
-      "properties": {
-        "bg_not_binding_residues": {
-          "type": "string",
-          "description": "Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. 'A200', a chain-qualified range e.g. 'A210-215', or a bare chain ID e.g. 'B' meaning the whole chain.",
-          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
-          "hidden": true,
-          "default": null
-        },
-        "bg_redesign_spec": {
-          "type": "string",
-          "description": "Chain A (binder) architecture spec for boltzgen_redesign: an ordered, comma-separated list of chain-A 'keep' tokens (e.g. 'A10-50' or 'A60') and bare-digit 'insert' tokens (e.g. '10' for an exact count or '7-10' for a sampled range), e.g. '7-10,A1-60,5,A70-100,10' inserts 7-10 residues at the N-terminus, keeps residues A1-60, inserts 5 residues, keeps A70-100, then appends 10 residues at the C-terminus. Any original chain A residue not covered by a keep token is deleted. If null, the whole chain A architecture (length) is left unchanged.",
-          "pattern": "^((A\\d+(-\\d+)?)|(\\d+(-\\d+)?))(,((A\\d+(-\\d+)?)|(\\d+(-\\d+)?)))*$",
-          "hidden": true,
-          "default": null
-        },
-        "bg_redesign_inpaint_seq": {
-          "type": "string",
-          "description": "Chain A (binder) residues, within those kept by bg_redesign_spec, whose sequence is allowed to change while their structure stays fixed/conditioned, comma-separated e.g. 'A10-50,A60'.",
-          "pattern": "^A(\\d+(-\\d+)?)?(,A(\\d+(-\\d+)?)?)*$",
-          "hidden": true,
-          "default": null
-        },
-        "bg_flexible_residues": {
-          "type": "string",
-          "description": "Residues whose structure should NOT be conditioned on (BoltzGen structure_groups visibility=0), useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. 'B16', a chain-qualified range e.g. 'B10-13', or a bare chain ID e.g. 'C' meaning the whole chain is flexible. In boltzgen_redesign mode this may also reference chain A residues kept by bg_redesign_spec.",
-          "pattern": "^[A-Z](\\d+(-\\d+)?)?(,[A-Z](\\d+(-\\d+)?)?)*$",
-          "hidden": true,
-          "default": null
-        }
-      }
-    },
     "rfdiffusion_advanced_parameters": {
       "title": "RFdiffusion Advanced Parameters",
       "type": "object",
@@ -298,7 +284,7 @@
       "properties": {
         "rfd_ckpt_override": {
           "type": "string",
-          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'",
+          "description": "Override the diffusion model checkpoint used by RFdiffusion. Choose from: 'active_site', 'base', 'base_epoch8', 'complex_base', 'complex_beta', 'complex_fold_base', 'inpaint_seq', 'inpaint_seq_fold'. RFdiffusion will automatically select a checkpoint. Not recommended to override except for 'rfd_denovo' binder mode i.e. 'complex_beta'. 'rfd_motifscaff' binder mode already defaults to 'complex_base' internally unless 'motifscaff_inpaint_seq'/'flexible_residues' is set.",
           "enum": [
             "active_site",
             "base",
@@ -379,8 +365,7 @@
         "mpnn_relax_max_cycles": {
           "type": "integer",
           "default": 0,
-          "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable.",
-          "hidden": true
+          "description": "Maximum number of fast relax cycles to run on each sequence. Set to zero to disable."
         },
         "mpnn_relax_seqs_per_cycle": {
           "type": "integer",
@@ -467,7 +452,6 @@
         "uncropped_target_pdb": {
           "type": "string",
           "description": "Path to uncropped target PDB file to use in structure prediction e.g. 'benchmarkdata/5o45_pd-l1_uncropped.pdb'",
-          "hidden": true,
           "format": "file-path",
           "pattern": ".*\\.pdb$",
           "default": null
@@ -584,8 +568,7 @@
         },
         "fold_min_ss": {
           "type": "integer",
-          "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 4",
-          "hidden": true,
+          "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3",
           "default": "null"
         },
         "fold_max_ss": {
@@ -618,10 +601,15 @@
           "hidden": true,
           "default": "null"
         },
+        "af2_min_iptm": {
+          "type": "number",
+          "description": "Min predicted interface TM-score (ipTM) between binder and target e.g. 0.8",
+          "hidden": true,
+          "default": "null"
+        },
         "af2_max_pae_interaction": {
           "type": "number",
           "description": "Max predicted aligned error for interactions e.g. 10",
-          "hidden": true,
           "default": "null"
         },
         "af2_max_pae_overall": {
@@ -669,13 +657,11 @@
         "af2_max_rmsd_binder_bndaln": {
           "type": "number",
           "description": "Max binder RMSD when binder chains are aligned e.g. 1",
-          "hidden": true,
           "default": "null"
         },
         "af2_max_rmsd_binder_tgtaln": {
           "type": "number",
           "description": "Max binder RMSD when target chains are aligned e.g. 2",
-          "hidden": true,
           "default": "null"
         },
         "af2_max_rmsd_target": {
@@ -686,14 +672,12 @@
         },
         "boltz_max_rmsd_overall": {
           "type": "number",
-          "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2",
-          "hidden": true,
+          "description": "Max RMSD between all chains of Boltz-2 prediction and input design. e.g. 2.5",
           "default": "null"
         },
         "boltz_max_rmsd_binder": {
           "type": "number",
-          "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1",
-          "hidden": true,
+          "description": "Max RMSD between binder chains of Boltz-2 prediction and input design. e.g. 1.5",
           "default": "null"
         },
         "boltz_max_rmsd_target": {
@@ -726,10 +710,9 @@
           "hidden": true,
           "default": "null"
         },
-        "boltz_min_ptm_interface": {
+        "boltz_min_iptm": {
           "type": "number",
-          "description": "Minimum predicted TM-score of binder-target interface e.g. 0.65",
-          "hidden": true,
+          "description": "Minimum predicted TM-score of binder-target interface e.g. 0.85",
           "default": "null"
         },
         "boltz_min_plddt": {
@@ -738,7 +721,7 @@
           "hidden": true,
           "default": "null"
         },
-        "boltz_min_plddt_interface": {
+        "boltz_min_iplddt": {
           "type": "number",
           "description": "Minimum pLDDT score of the binder-target interface e.g. 0.8",
           "hidden": true,
@@ -750,7 +733,7 @@
           "hidden": true,
           "default": "null"
         },
-        "boltz_max_pde_interface": {
+        "boltz_max_ipde": {
           "type": "number",
           "description": "Maximum predicted distance error for the binder-target interface e.g 12",
           "hidden": true,
@@ -926,8 +909,7 @@
         "gpu_model": {
           "type": "string",
           "default": null,
-          "description": "GPU model to request, e.g., 'A30'.",
-          "hidden": true
+          "description": "GPU model to request, e.g., 'A30'."
         },
         "gpu_queue": {
           "type": "string",
@@ -938,8 +920,7 @@
         "gpus": {
           "type": "integer",
           "default": 4,
-          "description": "Number of GPUs to request.",
-          "hidden": true
+          "description": "Number of GPUs to request."
         },
         "cpus": {
           "type": "integer",
@@ -980,9 +961,6 @@
     },
     {
       "$ref": "#/definitions/bindcraft_advanced_parameters"
-    },
-    {
-      "$ref": "#/definitions/boltzgen_advanced_parameters"
     },
     {
       "$ref": "#/definitions/rfdiffusion_advanced_parameters"

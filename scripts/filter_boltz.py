@@ -26,15 +26,15 @@ def parse_arguments():
                     help='Minimum pTM score for binder chain')
     parser.add_argument('--boltz-min-ptm-target', type=float,
                     help='Minimum pTM score for target chain')
-    parser.add_argument('--boltz-min-ptm-interface', type=float,
+    parser.add_argument('--boltz-min-iptm', type=float,
                     help='Minimum interface pTM score')
     parser.add_argument('--boltz-min-plddt', type=float,
                     help='Minimum complex pLDDT score')
-    parser.add_argument('--boltz-min-plddt-interface', type=float,
+    parser.add_argument('--boltz-min-iplddt', type=float,
                     help='Minimum interface-weighted pLDDT')
     parser.add_argument('--boltz-max-pde', type=float,
                     help='Maximum complex PDE score')
-    parser.add_argument('--boltz-max-pde-interface', type=float,
+    parser.add_argument('--boltz-max-ipde', type=float,
                     help='Maximum interface-weighted PDE')
     parser.add_argument('--boltz-min-ipSAE-min', type=float,
                     help='Minimum interaction Prediction Score from Aligned Errors (ipSAE)')
@@ -177,10 +177,10 @@ def filter_data(data, args):
                 if ptm_target < args.boltz_min_ptm_target:
                     failures.append(f"ptm_target {ptm_target:.3f} < {args.boltz_min_ptm_target}")
             
-            if args.boltz_min_ptm_interface:
-                ptm_interface = entry.get('boltz_ptm_interface', 0)
-                if ptm_interface < args.boltz_min_ptm_interface:
-                    failures.append(f"ptm_interface {ptm_interface:.3f} < {args.boltz_min_ptm_interface}")
+            if args.boltz_min_iptm:
+                iptm = entry.get('boltz_iptm', 0)
+                if iptm < args.boltz_min_iptm:
+                    failures.append(f"iptm {iptm:.3f} < {args.boltz_min_iptm}")
             
             # Structure quality checks
             if args.boltz_min_plddt:
@@ -188,10 +188,10 @@ def filter_data(data, args):
                 if plddt < args.boltz_min_plddt:
                     failures.append(f"plddt {plddt:.3f} < {args.boltz_min_plddt}")
             
-            if args.boltz_min_plddt_interface:
-                plddt_interface = entry.get('boltz_plddt_interface', 0)
-                if plddt_interface < args.boltz_min_plddt_interface:
-                    failures.append(f"plddt_interface {plddt_interface:.3f} < {args.boltz_min_plddt_interface}")
+            if args.boltz_min_iplddt:
+                iplddt = entry.get('boltz_iplddt', 0)
+                if iplddt < args.boltz_min_iplddt:
+                    failures.append(f"iplddt {iplddt:.3f} < {args.boltz_min_iplddt}")
             
             # Energy metric checks
             if args.boltz_max_pde:
@@ -199,10 +199,10 @@ def filter_data(data, args):
                 if pde > args.boltz_max_pde:
                     failures.append(f"pde {pde:.2f} > {args.boltz_max_pde}")
             
-            if args.boltz_max_pde_interface:
-                pde_interface = entry.get('boltz_pde_interface', 0)
-                if pde_interface > args.boltz_max_pde_interface:
-                    failures.append(f"pde_interface {pde_interface:.2f} > {args.boltz_max_pde_interface}")
+            if args.boltz_max_ipde:
+                ipde = entry.get('boltz_ipde', 0)
+                if ipde > args.boltz_max_ipde:
+                    failures.append(f"ipde {ipde:.2f} > {args.boltz_max_ipde}")
             
             # Interface interaction metrics
             if args.boltz_min_ipSAE_min:
@@ -296,11 +296,11 @@ def main():
         args.boltz_min_ptm is not None or
         args.boltz_min_ptm_binder is not None or
         args.boltz_min_ptm_target is not None or
-        args.boltz_min_ptm_interface is not None or
+        args.boltz_min_iptm is not None or
         args.boltz_min_plddt is not None or
-        args.boltz_min_plddt_interface is not None or
+        args.boltz_min_iplddt is not None or
         args.boltz_max_pde is not None or
-        args.boltz_max_pde_interface is not None
+        args.boltz_max_ipde is not None
     )
     
     if not any_filter_applied:
