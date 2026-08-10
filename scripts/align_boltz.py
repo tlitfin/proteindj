@@ -143,7 +143,7 @@ def align_structures(args):
                 # Mean iptm from binder (chain 0) toward all target chains
                 binder_iptm_row = data.get("pair_chains_iptm", {}).get("0", {})
                 binder_to_target_iptm = [v for k, v in binder_iptm_row.items() if k != "0"]
-                boltz_ptm_interface = round(sum(binder_to_target_iptm) / len(binder_to_target_iptm), 3) if binder_to_target_iptm else 0.0
+                boltz_iptm = round(sum(binder_to_target_iptm) / len(binder_to_target_iptm), 3) if binder_to_target_iptm else 0.0
 
                 out_json = {
                     "fold_id": fold_id,
@@ -160,11 +160,11 @@ def align_structures(args):
                     "boltz_ptm": round(data.get("ptm", 0), 3),
                     "boltz_ptm_binder": round(chains_ptm.get("0", 0), 3),
                     "boltz_ptm_target": boltz_ptm_target,
-                    "boltz_ptm_interface": boltz_ptm_interface,
+                    "boltz_iptm": boltz_iptm,
                     "boltz_plddt": round(data.get("complex_plddt", 0), 3),
-                    "boltz_plddt_interface": round(data.get("complex_iplddt", 0), 3),
+                    "boltz_iplddt": round(data.get("complex_iplddt", 0), 3),
                     "boltz_pde": round(data.get("complex_pde", 0), 2),
-                    "boltz_pde_interface": round(data.get("complex_ipde", 0), 2)
+                    "boltz_ipde": round(data.get("complex_ipde", 0), 2)
                 }
             else:
                 out_json = {

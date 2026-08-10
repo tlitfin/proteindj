@@ -23,7 +23,7 @@ To design binders with ProteinDJ, it is important to prepare your target structu
 
 <img src="../img/target_prep.png" width="700">
 
-If you want to test your binder designs in the context of a larger structure or complex, you can provide a separate PDB file to AlphaFold2 Initial-Guess/Boltz-2 using the `uncropped_target_pdb` parameter. This is more computationally efficient - about 6x faster than using the same larger structure as an input model for RFdiffusion/BindCraft/BoltzGen. Note that if the binder has been designed to an interface that is no longer available in the full context, this will be reflected by poor AlphaFold2/Boltz2 metrics, especially af2_rmsd_binder_tgtaln/boltz_rmsd_overall and af2_pae_interaction/boltz_ptm_interface.
+If you want to test your binder designs in the context of a larger structure or complex, you can provide a separate PDB file to AlphaFold2 Initial-Guess/Boltz-2 using the `uncropped_target_pdb` parameter. This is more computationally efficient - about 6x faster than using the same larger structure as an input model for RFdiffusion/BindCraft/BoltzGen. Note that if the binder has been designed to an interface that is no longer available in the full context, this will be reflected by poor AlphaFold2/Boltz2 metrics, especially af2_rmsd_binder_tgtaln/boltz_rmsd_overall and af2_pae_interaction/boltz_iptm.
 
 ### Specifying Hotspot / Target Residues <a name="specifying-hotspot--target-residues"></a>
 

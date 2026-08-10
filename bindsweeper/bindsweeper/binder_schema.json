@@ -93,7 +93,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -628,7 +628,7 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
@@ -642,7 +642,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -656,7 +656,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -1002,7 +1002,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -1537,7 +1537,7 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
@@ -1551,7 +1551,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -1565,7 +1565,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -1911,7 +1911,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -2447,7 +2447,7 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
@@ -2461,7 +2461,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -2475,7 +2475,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -2819,7 +2819,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -3354,7 +3354,7 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
@@ -3368,7 +3368,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -3382,7 +3382,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -3709,7 +3709,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -4269,7 +4269,7 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
@@ -4283,7 +4283,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -4297,7 +4297,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -4643,7 +4643,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -5138,7 +5138,7 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
@@ -5152,7 +5152,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -5166,7 +5166,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"
@@ -5511,7 +5511,7 @@
         "string",
         "null"
       ],
-      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_ptm_interface'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
+      "description": "Structure prediction metric to use for ranking designs (e.g., 'af2_pae_interaction', 'boltz_ipSAE_min', 'boltz_iptm'). Must match the prediction method prefix (af2_* for AlphaFold2, boltz_* for Boltz-2). If null, defaults to 'af2_pae_interaction' for AlphaFold2 or 'boltz_ipSAE_min' for Boltz-2."
     },
     "max_designs": {
       "type": [
@@ -6006,7 +6006,7 @@
       ],
       "description": "Minimum predicted TM-score of target chain e.g. 0.9"
     },
-    "boltz_min_ptm_interface": {
+    "boltz_min_iptm": {
       "type": [
         "number",
         "null"
@@ -6020,7 +6020,7 @@
       ],
       "description": "Minimum pLDDT score e.g. 0.85"
     },
-    "boltz_min_plddt_interface": {
+    "boltz_min_iplddt": {
       "type": [
         "number",
         "null"
@@ -6034,7 +6034,7 @@
       ],
       "description": "Maximum predicted distance error e.g. 10"
     },
-    "boltz_max_pde_interface": {
+    "boltz_max_ipde": {
       "type": [
         "number",
         "null"

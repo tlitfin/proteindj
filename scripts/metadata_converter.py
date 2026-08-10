@@ -76,9 +76,9 @@ class MetadataConverter:
             'boltz_conf_score','boltz_rmsd_overall', 'boltz_rmsd_binder','boltz_rmsd_target',
             'boltz_ipSAE_min','boltz_LIS','boltz_pDockQ2_min',
             'boltz_pae_interaction',
-            'boltz_pde', 'boltz_pde_interface',
-            'boltz_plddt', 'boltz_plddt_interface',
-            'boltz_ptm', 'boltz_ptm_interface','boltz_ptm_binder','boltz_ptm_target',
+            'boltz_pde', 'boltz_ipde',
+            'boltz_plddt', 'boltz_iplddt',
+            'boltz_ptm', 'boltz_iptm','boltz_ptm_binder','boltz_ptm_target',
             # Prediction Analysis fields
             'pr_helices','pr_strands', 'pr_total_ss','pr_RoG',
             'pr_intface_BSA','pr_intface_shpcomp',

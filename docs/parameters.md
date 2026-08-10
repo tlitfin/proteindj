@@ -96,7 +96,7 @@ These parameters control the workflow of ProteinDJ.
 | `pred_method`        | 'af2'   | Structure prediction method. Options: `'af2'` (AlphaFold2 Initial-Guess), `'boltz'` (Boltz-2), or `'af2_boltz'` (runs AF2 first, filters, then runs Boltz-2 on the survivors for a final, more accurate prediction). |
 | `zip_pdbs`           | true    | Whether to compress output final designs in a tar.gz archive. If false, results will be output as uncompressed PDB files.                                                                                                |
 | `rank_designs`       | true   | Whether to rank final designs by prediction quality metrics and output `ranked_designs.csv` and `ranked_designs` folder (or `.tar.gz`). |
-| `ranking_metric`     | null   | Structure prediction metric to use for ranking designs (e.g., `'af2_pae_interaction'`, `'boltz_ptm_interface'`, `'boltz_ipSAE_min'`). Must match prediction method prefix (`af2_*` or `boltz_*`; either prefix is accepted when `pred_method` is `'af2_boltz'`). If null, defaults are set depending on design_mode and pred_method: binder modes use `'af2_pae_interaction'` (AlphaFold2) or `'boltz_ipSAE_min'` (Boltz-2 or af2_boltz); monomer modes use `'af2_plddt_overall'` (AlphaFold2) or `'boltz_ptm'` (Boltz-2 or af2_boltz). See [Metrics Guide](metrics.md) for all available metrics. |
+| `ranking_metric`     | null   | Structure prediction metric to use for ranking designs (e.g., `'af2_pae_interaction'`, `'boltz_iptm'`, `'boltz_ipSAE_min'`). Must match prediction method prefix (`af2_*` or `boltz_*`; either prefix is accepted when `pred_method` is `'af2_boltz'`). If null, defaults are set depending on design_mode and pred_method: binder modes use `'af2_pae_interaction'` (AlphaFold2) or `'boltz_ipSAE_min'` (Boltz-2 or af2_boltz); monomer modes use `'af2_plddt_overall'` (AlphaFold2) or `'boltz_ptm'` (Boltz-2 or af2_boltz). See [Metrics Guide](metrics.md) for all available metrics. |
 | `max_designs`   | null    | Maximum number of top-ranked designs to output (e.g. 100). If null, all designs are ranked and output.                                                                    |
 | `max_seqs_per_fold` | null | Maximum number of sequences per fold to keep after ranking (e.g. 3). Helps increase fold diversity by limiting sequences for highly successful folds. If null, no limit is applied. |
 | `run_fold_only`      | false   | Whether to run only fold design and skip sequence design, prediction, and analysis.                                                                                                                                      |
@@ -294,11 +294,11 @@ Boltz-2 Filtering Parameters.
 | `boltz_min_ptm`             | Minimum predicted template modelling score of the prediction                                      |
 | `boltz_min_ptm_binder`      | Minimum predicted template modelling score of the binder chain. Binder modes only.                |
 | `boltz_min_ptm_target`      | Minimum predicted template modelling score of the target chain. Binder modes only.                |
-| `boltz_min_ptm_interface`   | Minimum predicted template modelling score of the prediction interface                            |
+| `boltz_min_iptm`   | Minimum predicted template modelling score of the prediction interface                            |
 | `boltz_min_plddt`           | Minimum pLDDT score of the prediction                                                             |
-| `boltz_min_plddt_interface` | Minimum pLDDT score of the prediction interface                                                   |
+| `boltz_min_iplddt` | Minimum pLDDT score of the prediction interface                                                   |
 | `boltz_max_pde`             | Maximum predicted distance error of the prediction                                                |
-| `boltz_max_pde_interface`   | Maximum predicted distance error for the prediction interface                                     |
+| `boltz_max_ipde`   | Maximum predicted distance error for the prediction interface                                     |
 
 ### Analysis Filtering Parameters
 
