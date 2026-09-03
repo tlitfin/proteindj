@@ -11,6 +11,7 @@ import glob
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Filter designs and copy top hits from PDB files.')
     parser.add_argument('--json-directory', required=True, help='Path to directory containing JSON score files')
+    parser.add_argument('--af2-min-iptm', type=float, help='Minimum predicted interface TM-score (ipTM)')
     parser.add_argument('--af2-max-pae-interaction', type=float, help='Maximum PAE interaction score')
     parser.add_argument('--af2-max-pae-overall', type=float, help='Maximum PAE overall score')
     parser.add_argument('--af2-max-pae-binder', type=float, help='Maximum PAE binder score')
@@ -57,16 +58,15 @@ def read_data_from_directory(directory_path, pattern='*.json'):
                         print(f"Skipping empty file: {json_file}")
                         continue
                         
-                    # Check if the file contains one JSON object per line (JSONL)
-                    if file_content.startswith('[') or file_content.startswith('{'):
-                        # Single JSON object or array
+                    # Try parsing as a single JSON document (object or array) first
+                    try:
                         file_data = json.loads(file_content)
                         if isinstance(file_data, list):
                             data.extend(file_data)
                         else:
                             data.append(file_data)
-                    else:
-                        # JSONL format (one JSON object per line)
+                    except json.JSONDecodeError:
+                        # Fall back to JSONL (one JSON object per line)
                         for line in file_content.splitlines():
                             if line.strip():
                                 data.append(json.loads(line))
@@ -96,6 +96,12 @@ def filter_data(data, args):
             # Check each criterion individually and print specific failures
             failures = []
             
+            # ipTM check
+            if args.af2_min_iptm is not None:
+                iptm = float(entry['af2_iptm'])
+                if iptm < args.af2_min_iptm:
+                    failures.append(f"iptm {iptm} < {args.af2_min_iptm}")
+
             # PAE interaction check
             if args.af2_max_pae_interaction is not None:
                 pae_interaction = float(entry['af2_pae_interaction'])
@@ -229,6 +235,7 @@ def main():
     
     # Check if any filter is applied
     any_filter_applied = (
+        args.af2_min_iptm is not None or
         args.af2_max_pae_interaction is not None or
         args.af2_max_pae_overall is not None or
         args.af2_max_pae_binder is not None or

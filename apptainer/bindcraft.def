@@ -26,32 +26,35 @@ From: nvidia/cuda:12.8.0-base-ubuntu24.04
     . /opt/conda/etc/profile.d/conda.sh
     conda activate BindCraft
     
-    # Install conda packages from conda-forge and custom channels (excluding JAX and PyRosetta)
+    # Install conda packages from conda-forge and custom channels (excluding JAX)
+    # Pin cuda-nvcc and cuda-version to 12.* to prevent conda-forge from pulling CUDA 13.1+
     conda install -c conda-forge -c nvidia \
-        pip pandas matplotlib 'numpy<2.0.0' biopython scipy pdbfixer seaborn \
+        pip pandas matplotlib 'numpy<2.0.0' biopython scipy pdbfixer openmm seaborn \
         libgfortran5 tqdm jupyter ffmpeg fsspec py3dmol \
         chex dm-haiku 'flax<0.10.0' dm-tree joblib ml-collections immutabledict optax \
-        cuda-nvcc cudnn \
+        'cuda-nvcc=12.*' 'cuda-version=12' cudnn \
         -y
     
     # Install JAX with CUDA support via pip
     export PIP_NO_CACHE_DIR=1
     pip install --upgrade "jax[cuda12]"
-
-    # Install PyRosetta
-    pip install pyrosetta-installer
-    python -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'
     
     # Install ColabDesign from GitHub
     pip install git+https://github.com/sokrypton/ColabDesign.git --no-deps
     
-    # Clone BindCraft repository
-    git clone https://github.com/martinpacesa/BindCraft /opt/BindCraft
-    cd /opt/BindCraft && git checkout 0366085
+    # Install FreeSASA Python module
+    pip install freesasa
+
+    # Clone FreeBindCraft repository and checkout the requested revision
+    git clone https://github.com/PapenfussLab/FreeBindCraft.git /opt/BindCraft \
+    && git -C /opt/BindCraft checkout 7a202e2
+    cd /opt/BindCraft
     
     # Make executables executable
-    chmod +x /opt/BindCraft/functions/dssp
     chmod +x /opt/BindCraft/functions/DAlphaBall.gcc
+    chmod +x /opt/BindCraft/functions/dssp
+    chmod +x /opt/BindCraft/functions/FASPR
+    chmod +x /opt/BindCraft/functions/sc
     
     # Create activation script for BASH_ENV
     mkdir -p /opt/etc
@@ -82,11 +85,12 @@ From: nvidia/cuda:12.8.0-base-ubuntu24.04
 
 %labels
     Author JoshuaHardy 
-    Version 2.2
+    Version 3.0
     Description "Apptainer container for BindCraft protein binder design"
     
 %help
-    BindCraft container for protein binder design using AlphaFold2, ProteinMPNN, and PyRosetta.
+    BindCraft container for protein binder design using AlphaFold2 and ProteinMPNN.
+    This container uses FreeBindCraft (https://github.com/cytokineking/FreeBindCraft) which has PyRosetta replaced with software with less restrictive licenses (OpenMM, sc-rs, FreeSASA and BioPython).
     
     Execute with GPU support using:
         apptainer run --nv bindcraft.sif
@@ -97,5 +101,4 @@ From: nvidia/cuda:12.8.0-base-ubuntu24.04
             --filters './settings_filters/default_filters.json' \
             --advanced './settings_advanced/default_4stage_multimer.json'
     
-    Note: PyRosetta requires a license for commercial use.
     Provide AlphaFold2 weights via --bind at runtime.

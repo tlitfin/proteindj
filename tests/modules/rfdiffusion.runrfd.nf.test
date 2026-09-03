@@ -1,0 +1,163 @@
+nextflow_process {
+
+    name "Test Process RunRFD"
+    script "modules/rfdiffusion.nf"
+    process "RunRFD"
+
+    // GPU process - RFdiffusion de novo backbone generation. Covers both major use cases:
+    // standalone monomer generation and binder generation against a target.
+
+    // Monomer rfd_denovo avoids needing a setup{} block: main.nf computes contigs directly as
+    // "[design_length]" for this mode (no GenerateRFDContigs call needed), requires no target
+    // PDB (RFDEngine.requiresInputPdb() is false), and only needs lib/placeholder.pdb (RFdiffusion
+    // requires xyz coordinates even with no real target) plus lib/NO_FILE(1) for target_adj/ss.
+    // rfdCommand is precomputed exactly as main.nf does, via RFDiffusionParams.generateCommandString().
+    test("Should generate a de novo monomer backbone of the requested length") {
+
+        tag "gpu"
+
+        when {
+            process {
+                """
+                def rfdParams = new RFDiffusionParams([design_mode: 'rfd_denovo', is_binder_mode: false])
+                def rfdCommand = rfdParams.generateCommandString("[50-50]")
+
+                input[0] = tuple(
+                    0,
+                    1,
+                    0,
+                    'rfd_denovo',
+                    [file("${projectDir}/lib/placeholder.pdb", checkIfExists: true)],
+                    rfdCommand,
+                    file("${projectDir}/lib/NO_FILE", checkIfExists: true),
+                    file("${projectDir}/lib/NO_FILE1", checkIfExists: true)
+                )
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // path("rfd_results/*.pdb")/*.json glob outputs collapse to a plain String (not a
+            // List) when only one file matches, expected here since batch_size/num_designs == 1.
+            def rawPdbs = process.out.pdbs[0]
+            def outPdbs = rawPdbs instanceof List ? rawPdbs : [rawPdbs]
+
+            def rawPdbsJsons = process.out.pdbs_jsons[0]
+            def outPdbs2 = rawPdbsJsons[0] instanceof List ? rawPdbsJsons[0] : [rawPdbsJsons[0]]
+            def outJsons = rawPdbsJsons[1] instanceof List ? rawPdbsJsons[1] : [rawPdbsJsons[1]]
+
+            assert outPdbs.size() == 1
+            assert outPdbs2.size() == 1
+            assert outJsons.size() == 1
+
+            assert file(outPdbs[0]).getName() == "fold_0.pdb"
+            assert file(outJsons[0]).getName() == "fold_0.json"
+
+            // Backbone length should match the requested design_length (50 residues)
+            def caCount = 0
+            path(outPdbs[0]).text.readLines().each { line ->
+                if (line.startsWith("ATOM") && line.substring(12, 16).trim() == "CA") {
+                    caCount++
+                }
+            }
+            assert caCount == 50
+
+            def data = new groovy.json.JsonSlurper().parseText(path(outJsons[0]).text)
+            assert data.fold_id == 0
+            assert data.rfd_config.inference.num_designs == 1
+            assert data.rfd_config.contigmap.contigs == ['50-50']
+        }
+
+    }
+
+    // Binder rfd_denovo against benchmarkdata/5o45_pd-l1.pdb (single chain A, residues 17-131,
+    // 115 residues - already established via tests/modules/boltzgen.prepbg.nf.test/
+    // bindcraft.prepbc.nf.test). Uses a setup{} block to run GenerateRFDContigs exactly as
+    // main.nf does for the binder rfd_denovo branch, rather than hardcoding the target range.
+    // Note the output chain convention observed in the real rfd_output fixture: the newly
+    // diffused/hallucinated binder chain comes out as chain A, and the conditioning target
+    // chain (kept from the input PDB) comes out as chain B - the reverse of the contig segment
+    // order ("target/0 binder_length"), which is RFdiffusion's own output chain ordering.
+    test("Should generate a de novo binder backbone against a target of the requested length") {
+
+        tag "gpu"
+
+        setup {
+            run("GenerateRFDContigs") {
+                script "modules/rfdiffusion.nf"
+                process {
+                    """
+                    input[0] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                    input[1] = 'rfd_denovo'
+                    input[2] = true
+                    """
+                }
+                params {
+                    design_length = "65-65"
+                }
+            }
+        }
+
+        when {
+            process {
+                """
+                // GenerateRFDContigs.out is a channel whose value only resolves once the
+                // pipeline dataflow runs, so generateCommandString() must be called inside a
+                // .map{} (mirroring main.nf's own rf_ch construction) rather than eagerly.
+                input[0] = GenerateRFDContigs.out.map { contigs ->
+                    def rfdParams = new RFDiffusionParams([
+                        design_mode: 'rfd_denovo',
+                        is_binder_mode: true,
+                        input_pdb: "${projectDir}/benchmarkdata/5o45_pd-l1.pdb",
+                        hotspot_residues: 'A50,A75'
+                    ])
+                    def rfdCommand = rfdParams.generateCommandString(contigs)
+                    tuple(
+                        0,
+                        1,
+                        0,
+                        'rfd_denovo',
+                        [file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)],
+                        rfdCommand,
+                        file("${projectDir}/lib/NO_FILE", checkIfExists: true),
+                        file("${projectDir}/lib/NO_FILE1", checkIfExists: true)
+                    )
+                }
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def rawPdbsJsons = process.out.pdbs_jsons[0]
+            def outPdbs = rawPdbsJsons[0] instanceof List ? rawPdbsJsons[0] : [rawPdbsJsons[0]]
+            def outJsons = rawPdbsJsons[1] instanceof List ? rawPdbsJsons[1] : [rawPdbsJsons[1]]
+
+            assert outPdbs.size() == 1
+            assert outJsons.size() == 1
+            assert file(outPdbs[0]).getName() == "fold_0.pdb"
+            assert file(outJsons[0]).getName() == "fold_0.json"
+
+            // Binder chain (A) should match the requested design_length; target chain (B)
+            // should be unchanged from the input PDB's chain A range (17-131, 115 residues).
+            def chainCaCounts = [:].withDefault { 0 }
+            path(outPdbs[0]).text.readLines().each { line ->
+                if (line.startsWith("ATOM") && line.substring(12, 16).trim() == "CA") {
+                    chainCaCounts[line.substring(21, 22)]++
+                }
+            }
+            assert chainCaCounts["A"] == 65
+            assert chainCaCounts["B"] == 115
+
+            def data = new groovy.json.JsonSlurper().parseText(path(outJsons[0]).text)
+            assert data.fold_id == 0
+            assert data.rfd_config.inference.num_designs == 1
+            assert data.rfd_config.inference.input_pdb == "5o45_pd-l1.pdb"
+        }
+
+    }
+
+}

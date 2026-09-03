@@ -1,0 +1,110 @@
+nextflow_function {
+
+    name "Test detectIsBinderModeFromParams"
+    script "main.nf"
+    function "detectIsBinderModeFromParams"
+
+    test("rfd_denovo with no input_pdb is monomer") {
+        when {
+            function {
+                """
+                input[0] = "rfd_denovo"
+                input[1] = [input_pdb: null]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == false
+        }
+    }
+
+    test("rfd_denovo with input_pdb is binder") {
+        when {
+            function {
+                """
+                input[0] = "rfd_denovo"
+                input[1] = [input_pdb: "some.pdb"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == true
+        }
+    }
+
+    test("rfd_motifscaff missing input_pdb throws") {
+        when {
+            function {
+                """
+                input[0] = "rfd_motifscaff"
+                input[1] = [input_pdb: null]
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("rfd_motifscaff with single-chain input_pdb is monomer") {
+        when {
+            function {
+                """
+                input[0] = "rfd_motifscaff"
+                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == false
+        }
+    }
+
+    test("rfd_motifscaff with two-chain input_pdb is binder") {
+        when {
+            function {
+                """
+                input[0] = "rfd_motifscaff"
+                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5vli_ha.pdb"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == true
+        }
+    }
+
+    test("rfd_partialdiff with single-chain input_pdb is monomer") {
+        when {
+            function {
+                """
+                input[0] = "rfd_partialdiff"
+                input[1] = [input_pdb: "${projectDir}/benchmarkdata/5o45_pd-l1.pdb"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == false
+        }
+    }
+
+    test("rfd_partialdiff with two-chain input_pdb is binder") {
+        when {
+            function {
+                """
+                input[0] = "rfd_partialdiff"
+                input[1] = [input_pdb: "${projectDir}/tests/fixtures/resume_binder/examplebinder.pdb"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == true
+        }
+    }
+}

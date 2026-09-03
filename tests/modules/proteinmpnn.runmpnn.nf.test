@@ -1,0 +1,133 @@
+nextflow_process {
+
+    name "Test Process RunMPNN"
+    script "modules/proteinmpnn.nf"
+    process "RunMPNN"
+
+    // GPU process - non-deterministic sequence sampling. Real backbone from
+    // tier_b_binder/mpnn_input/{fold_0,fold_1}.pdb (binder chain A + cropped target chain B),
+    // where fixed target-chain residues are already marked via "REMARK PDBinfo-LABEL: N
+    // FIXED" lines (fold_0: B69-183, fold_1: B64-178) - parsed directly from the input file
+    // rather than hardcoded, so this stays correct if the fixtures are regenerated. Note
+    // dl_binder_design's MPNN wrapper repacks/relaxes the structure after design, so Cα
+    // positions drift slightly (~0.1-0.5 Å observed) even at fixed positions - the backbone
+    // check here is an RMSD bound, not exact-coordinate equality like RunFAMPNN.
+    test("Should preserve fixed target-chain identity and approximate backbone while redesigning the binder") {
+
+        tag "gpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/mpnn_input"
+                seqs_per_design = 2
+            }
+            process {
+                """
+                input[0] = [
+                    0,
+                    [
+                        file("\${params.fixtures_dir}/fold_0.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.pdb", checkIfExists: true)
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Parses ATOM CA lines into a map keyed by "<chain><resnum>" -> [resName, x, y, z]
+            def parseCA = { pdbPath ->
+                def m = [:]
+                path(pdbPath).text.readLines().each { line ->
+                    if (line.startsWith("ATOM") && line.substring(12, 16).trim() == "CA") {
+                        def chain = line.substring(21, 22)
+                        def resnum = line.substring(22, 26).trim().toInteger()
+                        def resName = line.substring(17, 20).trim()
+                        def x = line.substring(30, 38).trim().toDouble()
+                        def y = line.substring(38, 46).trim().toDouble()
+                        def z = line.substring(46, 54).trim().toDouble()
+                        m["${chain}${resnum}"] = [resName: resName, x: x, y: y, z: z]
+                    }
+                }
+                return m
+            }
+
+            // Parses "REMARK PDBinfo-LABEL: <resnum> FIXED" lines to get the fixed residue set
+            def parseFixedResnums = { pdbPath ->
+                def fixed = [] as Set
+                path(pdbPath).text.readLines().each { line ->
+                    if (line.startsWith("REMARK PDBinfo-LABEL:") && line.trim().endsWith("FIXED")) {
+                        fixed << (line.tokenize()[2] as Integer)
+                    }
+                }
+                return fixed
+            }
+
+            def outPdbs = process.out.pdbs_jsons[0][0]
+            def outJsons = process.out.pdbs_jsons[0][1]
+
+            // Cardinality: seqs_per_design designs per fold
+            assert outPdbs.size() == 4
+
+            // Naming convention
+            assert outPdbs.every { file(it).getName() ==~ /fold_[01]_seq_[01]\.pdb/ }
+
+            def inputPdbs = [
+                0: "${projectDir}/tests/fixtures/tier_b_binder/mpnn_input/fold_0.pdb",
+                1: "${projectDir}/tests/fixtures/tier_b_binder/mpnn_input/fold_1.pdb"
+            ]
+            def inputMaps = inputPdbs.collectEntries { k, v -> [(k): parseCA(v)] }
+            def fixedResnums = inputPdbs.collectEntries { k, v -> [(k): parseFixedResnums(v)] }
+
+            outPdbs.each { outPdbPath ->
+                def name = file(outPdbPath).getName()
+                def matcher = (name =~ /fold_(\d+)_seq_(\d+)\.pdb/)
+                assert matcher.matches()
+                def foldId = matcher[0][1].toInteger()
+                def outMap = parseCA(outPdbPath)
+                def inMap = inputMaps[foldId]
+
+                // Masking held: fixed target-chain residues keep the same amino acid identity
+                assert fixedResnums[foldId].size() > 0
+                fixedResnums[foldId].each { resnum ->
+                    def key = "B${resnum}"
+                    assert outMap[key].resName == inMap[key].resName
+                }
+
+                // Backbone approximately preserved: unlike FAMPNN, dl_binder_design's MPNN
+                // wrapper repacks/relaxes the structure after design, so individual Cα atoms
+                // can drift slightly (~0.1-0.5 Å observed). Assert every residue is present
+                // and the overall RMSD stays small enough that this is clearly the same fold,
+                // not a garbled/mismatched structure.
+                def sqDiffSum = 0.0
+                inMap.each { key, val ->
+                    def outVal = outMap[key]
+                    assert outVal != null
+                    def dx = outVal.x - val.x
+                    def dy = outVal.y - val.y
+                    def dz = outVal.z - val.z
+                    sqDiffSum += dx * dx + dy * dy + dz * dz
+                }
+                def rmsd = Math.sqrt(sqDiffSum / inMap.size())
+                assert rmsd < 1.0
+
+                // Binder chain was actually redesigned away from the poly-glycine input scaffold
+                def binderResNames = outMap.findAll { key, val -> key.startsWith("A") }.collect { key, val -> val.resName }
+                assert binderResNames.size() > 0
+                assert binderResNames.any { it != "GLY" }
+                assert binderResNames.unique().size() >= 3
+            }
+
+            // Schema: JSON metadata has the expected keys with sane values
+            outJsons.each { jsonPath ->
+                def data = new groovy.json.JsonSlurper().parseText(path(jsonPath).text)
+                assert data.sequence instanceof String && data.sequence.length() > 0
+                assert data.score instanceof String && data.score.toDouble() >= 0
+            }
+        }
+
+    }
+
+}

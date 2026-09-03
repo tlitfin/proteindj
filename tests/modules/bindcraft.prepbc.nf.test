@@ -1,0 +1,101 @@
+nextflow_process {
+
+    name "Test Process PrepBC"
+    script "modules/bindcraft.nf"
+    process "PrepBC"
+
+    // PrepBC is a pure-Python inline process that auto-detects/parses protein chains from a
+    // PDB via Bio.PDB, parses hotspot residues and design lengths from Nextflow params, writes
+    // a batch_<id>.json BindCraft settings file, and modifies an advanced_settings.json file.
+    // Fixture: 5o45_pd-l1.pdb is a single-chain (chain A) PD-L1 target structure.
+    test("Should create BindCraft settings and modify advanced settings JSON") {
+
+        tag "cpu"
+
+        when {
+            params {
+                bc_chains = "A"
+                hotspot_residues = "A50,A75"
+                design_length = "60-80"
+                bc_omit_AAs = "C,M"
+            }
+            process {
+                """
+                input[0] = 1
+                input[1] = 5
+                input[2] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                input[3] = file("${projectDir}/lib/bindcraft/settings_advanced/default_4stage_multimer.json", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Unnamed tuple output: process.out[0] is a List of emissions (one per task
+            // execution), and each emission is itself the 3-element tuple
+            // [batch_json_path, advanced_settings_json_path, batch_id].
+            def batchJsonPath = process.out[0][0][0]
+            def advancedJsonPath = process.out[0][0][1]
+            def outputBatchId = process.out[0][0][2]
+
+            assert outputBatchId == 1
+
+            def batchJson = new groovy.json.JsonSlurper().parse(file(batchJsonPath))
+            assert batchJson.binder_name == "batch_1"
+            assert batchJson.starting_pdb == "5o45_pd-l1.pdb"
+            assert batchJson.chains == "A"
+            assert batchJson.target_hotspot_residues == "A50,A75"
+            assert batchJson.lengths == [60, 80]
+            assert batchJson.number_of_final_designs == 5
+
+            def advancedJson = new groovy.json.JsonSlurper().parse(file(advancedJsonPath))
+            assert advancedJson.omit_AAs == "C,M"
+            assert advancedJson.enable_mpnn == false
+            assert advancedJson.max_trajectories == 5
+            assert advancedJson.af_params_dir == "/af2params"
+        }
+
+    }
+
+    // Auto-detection of chains when bc_chains is left empty
+    test("Should auto-detect chain A when bc_chains is empty") {
+
+        tag "cpu"
+
+        when {
+            params {
+                bc_chains = ""
+                hotspot_residues = ""
+                design_length = "80"
+                bc_omit_AAs = ""
+            }
+            process {
+                """
+                input[0] = 2
+                input[1] = 3
+                input[2] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                input[3] = file("${projectDir}/lib/bindcraft/settings_advanced/default_4stage_multimer.json", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def batchJson = new groovy.json.JsonSlurper().parse(file(process.out[0][0][0]))
+            assert batchJson.chains == "A"
+            assert batchJson.target_hotspot_residues == ""
+            assert batchJson.lengths == [80]
+            assert batchJson.binder_name == "batch_2"
+            assert batchJson.number_of_final_designs == 3
+
+            def advancedJson = new groovy.json.JsonSlurper().parse(file(process.out[0][0][1]))
+            assert advancedJson.omit_AAs == ""
+            assert advancedJson.enable_mpnn == false
+            assert advancedJson.max_trajectories == 3
+        }
+
+    }
+
+}

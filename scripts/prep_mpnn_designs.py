@@ -39,16 +39,22 @@ def get_fixed_residues(pdb_path, json_path=None):
         try:
             json_data = read_json_file(json_path)
             
-            # Look for inpaint_seq array (False means fixed)
-            if 'rfd_inpaint_seq' in json_data:
-                inpaint_array = json_data['rfd_inpaint_seq']
-                logger.info(f"Found rfd_inpaint_seq with {len(inpaint_array)} elements")
+            # Look for inpaint_seq array (False means fixed). Only one of these keys will be
+            # present, depending on which fold design tool (RFdiffusion, BindCraft, BoltzGen)
+            # produced this fold.
+            inpaint_key = next(
+                (k for k in ('rfd_inpaint_seq', 'bc_inpaint_seq', 'bg_inpaint_seq') if k in json_data),
+                None
+            )
+            if inpaint_key:
+                inpaint_array = json_data[inpaint_key]
+                logger.info(f"Found {inpaint_key} with {len(inpaint_array)} elements")
                 
                 # Map inpaint_seq to PDB residues
                 fixed_residues = map_inpaint_to_residues(pdb_path, inpaint_array)
                 return fixed_residues
             else:
-                logger.warning(f"No rfd_inpaint_seq found in JSON")
+                logger.warning(f"No rfd_inpaint_seq/bc_inpaint_seq/bg_inpaint_seq found in JSON")
         except Exception as e:
             logger.error(f"Error processing JSON: {e}")
     

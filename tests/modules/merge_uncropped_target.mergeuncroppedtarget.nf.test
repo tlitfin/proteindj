@@ -1,0 +1,46 @@
+nextflow_process {
+
+    name "Test Process MergeUncroppedTarget"
+    script "modules/merge_uncropped_target.nf"
+    process "MergeUncroppedTarget"
+
+    // Real cropped binder+target designs from tier_b_binder/fampnn_output (chain A=binder,
+    // chain B=cropped target, 115 residues) merged onto the genuine uncropped target
+    // benchmarkdata/5o45_pd-l1_uncropped.pdb (chain A, 144 residues) - chain B in the output
+    // should be extended towards the uncropped target's length via sequence alignment +
+    // superposition.
+    test("Should merge designs onto the uncropped target and extend the target chain") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/fampnn_output"
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.fixtures_dir}/fold_0_seq_0.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_1_seq_0.pdb", checkIfExists: true)
+                ]
+                input[1] = file("${projectDir}/benchmarkdata/5o45_pd-l1_uncropped.pdb", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.pdbs[0].size() == 2
+
+            def mergedFold0 = path(process.out.pdbs[0].find { file(it).getName() == "fold_0_seq_0.pdb" }).text
+            def chainBCount = mergedFold0.readLines().count {
+                it.startsWith("ATOM") && it.substring(13, 15) == "CA" && it.substring(21, 22) == "B"
+            }
+            // Original fampnn_output chain B (target) had only 115 residues - the merged output
+            // should be extended much closer to the uncropped target's 130 residues.
+            assert chainBCount > 115
+        }
+
+    }
+
+}

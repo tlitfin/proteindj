@@ -1,0 +1,43 @@
+nextflow_process {
+
+    name "Test Process FilterFold"
+    script "modules/rfdiffusion.nf"
+    process "FilterFold"
+
+    // Real RFD backbone outputs from tier_b_binder/rfd_output (fold_0, fold_1). filter_fold.py
+    // computes secondary-structure/RoG metrics itself via DSSP (not from the json), so a
+    // loose threshold is used here as a smoke test that both designs pass through untouched.
+    test("Should pass designs through a permissive SS/RoG filter") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/rfd_output"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.fixtures_dir}/fold_0.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.fixtures_dir}/fold_0.json", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.json", checkIfExists: true)
+                    ]
+                ]
+                input[1] = "--fold-min-helices 0"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.pdbs_jsons[0][0].size() == 2
+            assert process.out.pdbs_jsons[0][1].size() == 2
+        }
+
+    }
+
+}

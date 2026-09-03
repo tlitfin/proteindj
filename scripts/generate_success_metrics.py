@@ -68,6 +68,30 @@ def parse_arguments():
         help="Number of final successful designs"
     )
     parser.add_argument(
+        "--af2-count",
+        type=int,
+        default=0,
+        help="Number of AF2 predictions generated (af2_boltz pred_method only, default: 0)"
+    )
+    parser.add_argument(
+        "--af2-filter-count",
+        type=int,
+        default=0,
+        help="Number of AF2 predictions after filtering (af2_boltz pred_method only, default: 0)"
+    )
+    parser.add_argument(
+        "--boltz-count",
+        type=int,
+        default=0,
+        help="Number of Boltz predictions generated (af2_boltz pred_method only, default: 0)"
+    )
+    parser.add_argument(
+        "--boltz-filter-count",
+        type=int,
+        default=0,
+        help="Number of Boltz predictions after filtering (af2_boltz pred_method only, default: 0)"
+    )
+    parser.add_argument(
         "--parameter-combination",
         default="unknown",
         help="Parameter combination identifier"
@@ -170,6 +194,22 @@ def generate_success_metrics(args) -> Dict[str, Any]:
     else:
         pipeline_metrics["analysis_retention_rate"] = None
     
+    # AF2 retention rate (only if af2_boltz pred_method was used)
+    if args.af2_count > 0:
+        pipeline_metrics["af2_retention_rate"] = round(
+            calculate_success_rate(args.af2_filter_count, args.af2_count), 4
+        )
+    else:
+        pipeline_metrics["af2_retention_rate"] = None
+
+    # Boltz retention rate (only if af2_boltz pred_method was used)
+    if args.boltz_count > 0:
+        pipeline_metrics["boltz_retention_rate"] = round(
+            calculate_success_rate(args.boltz_filter_count, args.boltz_count), 4
+        )
+    else:
+        pipeline_metrics["boltz_retention_rate"] = None
+
     # Overall retention rate (always calculated from entry point to final)
     pipeline_metrics["overall_retention_rate"] = round(success_rate, 4)
     
@@ -185,6 +225,10 @@ def generate_success_metrics(args) -> Dict[str, Any]:
         "pred_generated": args.pred_count,
         "pred_filtered": args.filter_pred_count,
         "analysis_filtered": args.filter_analysis_count,
+        "af2_generated": args.af2_count,
+        "af2_filtered": args.af2_filter_count,
+        "boltz_generated": args.boltz_count,
+        "boltz_filtered": args.boltz_filter_count,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "pipeline_metrics": pipeline_metrics
     }

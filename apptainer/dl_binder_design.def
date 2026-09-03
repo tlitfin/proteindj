@@ -1,45 +1,74 @@
 Bootstrap: docker
-From: mambaorg/micromamba:1.5.8
+From: nvidia/cuda:12.9.1-base-ubuntu22.04
 
 %post
+    # Install build deps
     apt-get -q update
-    apt-get install --no-install-recommends -y \
-        wget unzip git build-essential cmake procps coreutils grep sed \
-        python3.10 \
-        pip
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        git \
+        python3-pip \
+        build-essential \
+        wget
+    
+    # Retrieve dl_binder_design and check out the requested revision.
+    git clone \
+        https://github.com/PapenfussLab/dl_binder_design.git \
+        /dl_binder_design \
+    && git -C /dl_binder_design checkout f159e83
+    # Retrieve ProteinMPNN code
+    git clone \
+        https://github.com/dauparas/ProteinMPNN.git \
+        /dl_binder_design/ProteinMPNN
 
+    # Install the provided versions of pip packages
+    export PIP_NO_CACHE_DIR=1
+    pip install uv
+    export UV_NO_CACHE=1
+    export UV_LINK_MODE=copy
+    uv pip install --system \
+        biopython==1.86 \
+        git+https://github.com/NVIDIA/dllogger#egg=dllogger \
+        dm-haiku==0.0.15 \
+        dm-tree==0.1.9 \
+        flax==0.10.4 \
+        "jax[cuda12]==0.4.38" \
+        ml-collections==1.1.0 \
+        ml_dtypes==0.5.3 \
+        mock==5.2.0 \
+        'numpy<2.0' \
+        'openmm[cuda12]' \
+        pdbfixer \
+        pyfaspr \
+        tensorflow==2.20.0 \
+        torch \
+        torchvision
+
+    # Clean up
+    rm -rf /var/lib/apt/lists/*
     apt-get autoremove -y
     apt-get clean
 
-    git clone https://github.com/PapenfussLab/dl_binder_design.git /dl_binder_design
-    cd /dl_binder_design/include
-
-    echo "creating micromamba environments"
-    micromamba create -n mpnn -f proteinmpnn_fastrelax.yml -y
-
-    cd ../mpnn_fr
-    git clone https://github.com/dauparas/ProteinMPNN.git
-    cd ProteinMPNN && git checkout 8907e66
-    
-    # Fetch HyperMPNN model weights
-    mkdir hyper_model_weights
-    cd hyper_model_weights
-    wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_002_epoch240_hyper.pt -O v_48_002.pt
-    wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_010_epoch300_hyper.pt -O v_48_010.pt
-    wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_020_epoch300_hyper.pt -O v_48_020.pt
-    wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_030_epoch300_hyper.pt -O v_48_030.pt
-
-    micromamba clean --all --yes
+%test
+    export PYTHONPATH=/dl_binder_design    
+    python3 /dl_binder_design/af2_initial_guess/predict.py --help
+    python3 /dl_binder_design/mpnn_fr/dl_interface_design_multi.py --help
 
 %environment
-    # so we can just run it out of the box without having to set the prefix
-    export PATH=/opt/conda/envs/mpnn/bin:$PATH
+    export PYTHONPATH=/dl_binder_design
 
-# Entry point for the container when run.
 %runscript
-    exec "$@"
+    cd /dl_binder_design
+    if [ $# -eq 0 ]; then
+        exec /bin/bash --norc
+    else
+        exec "$@"
+    fi
 
 %labels
-    Author JoshuaHardy, DylanSilke
-    Version 2.2
-    Description "Apptainer container for dl_binder_design including SolubleMPNN and HyperMPNN weights"
+    AUTHOR JoshuaHardy, DylanSilke
+    Version 3.0
+    Description "Apptainer container for dl_binder_design including ProteinMPNN scripts and AlphaFold2 Initial-Guess"
+
+%help
+    "Apptainer container for dl_binder_design including ProteinMPNN scripts and AlphaFold2 Initial-Guess with CUDA 12.9
+    Execute with GPU support using: apptainer run --nv dl_binder_design.sif

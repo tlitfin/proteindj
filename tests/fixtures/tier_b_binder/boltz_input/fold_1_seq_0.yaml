@@ -1,0 +1,12 @@
+sequences:
+- protein:
+    id: A
+    sequence: MRRRREEEERRRFEERRRRLRAELERARAALAEDPSERARVAELTAELSLLDLEEVKRKAREE
+    msa: empty
+- protein:
+    id: B
+    sequence: NAFTVTVPKDLYVVEYGSNMTIECKFPVEKQLDLAALIVYWEMEDKNIIQFVHGEEDLKVQHSSYRQRARLLKDQLSLGNAALQITDVKLQDAGVYRCMISYGGADYKRITVKVN
+    msa: empty
+templates:
+- pdb: templates/fold_1_seq_0.pdb
+  chain_id: B

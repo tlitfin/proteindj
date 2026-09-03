@@ -4,12 +4,14 @@
 
 This guide will walk you through installing ProteinDJ and all its dependencies and is intended for system admins. The installation process involves several steps that need to be completed once per cluster or system.
 
+> **Upgrading from v2?** v3 is not backwards compatible — containers and models have been updated (e.g. FreeBindCraft replaces BindCraft, and new `mpnn_models`/`bg_models` paths are required), so a fresh installation following this guide is required rather than reusing an existing v2 setup.
+
 ## Prerequisites
 
 Before starting, ensure you have:
 
 - **Linux/Unix system** with internet access
-- **Sufficient storage space**: ~11 GB for downloading models and ~50 GB for containers
+- **Sufficient storage space**: ~16 GB for downloading models and ~50 GB for containers
 - **Administrative access** or ability to install software
 - **SLURM cluster** (if using HPC environment)
 
@@ -17,7 +19,7 @@ Before starting, ensure you have:
 
 | Component   | Minimum                    | Recommended     |
 | ----------- | -------------------------- | --------------- |
-| **Storage** | 60 GB                      | 100 GB          |
+| **Storage** | 70 GB                      | 100 GB+         |
 | **RAM**     | 32 GB                      | 48 GB+          |
 | **GPU**     | NVIDIA GPU with 16GB+ VRAM | NVIDIA A30/A100 |
 | **CPU**     | 8 cores                    | 24+ cores       |
@@ -83,7 +85,7 @@ nextflow -version
 
 ## Step 3: Download Required Models
 
-> **💡 Tip:** This step downloads ~11 GB of model files. Consider doing this in a shared location so that other users can access the files.
+> **💡 Tip:** This step downloads ~16 GB of model files. Consider doing this in a shared location so that other users can access the files.
 
 ### RFdiffusion Models (~3.7 GB)
 
@@ -120,9 +122,9 @@ rm -f alphafold_params_2022-12-06.tar
 cd ../..
 ```
 
-### Boltz-2 Models (~2.2 GB)
+### Boltz-2 Models (~2.5 GB)
 
-To perform Boltz-2 predictions, you will need to download the models (download ~3.8 GB, final size ~2.2 GB). If you have not already downloaded the models, use the commands below, and update the `boltz_models` variable in `nextflow.config` to the location of the model directory (e.g. './boltz_models'):
+To perform Boltz-2 predictions, you will need to download the models (download ~3.8 GB, final size ~2.5 GB). If you have not already downloaded the models, use the commands below, and update the `boltz_models` variable in `nextflow.config` to the location of the model directory (e.g. './boltz_models'):
 
 ```bash
 mkdir -p models/boltz && cd models/boltz
@@ -139,13 +141,63 @@ touch boltz2_aff.ckpt
 cd ../..
 ```
 
+### BoltzGen Models (~4 GB)
+
+ProteinDJ only runs BoltzGen's design step (sequences are re-designed downstream via MPNN/FAMPNN), so only the diffusion checkpoints and the molecule/CCD dataset need to be downloaded — not the inverse-folding, folding, or affinity checkpoints that `boltzgen run` would otherwise also fetch. Update the `bg_models` variable in `nextflow.config` to the location of the model directory (e.g. `'./models/boltzgen'`):
+
+```bash
+mkdir -p models/boltzgen
+
+# These files are served from Hugging Face Hub's Xet storage backend. Using wget/curl is
+# very slow so we recommend using the `hf` CLI instead (fetches chunks in parallel)
+pip install -U "huggingface_hub[hf_xet]"
+hf download boltzgen/boltzgen-1 boltzgen1_diverse.ckpt boltzgen1_adherence.ckpt --local-dir models/boltzgen
+hf download boltzgen/inference-data mols.zip --repo-type dataset --local-dir models/boltzgen
+```
+
+### ProteinMPNN Model Weights (~0.1 GB)
+
+ProteinMPNN weights are required for binder sequence design. Three sets of weights are provided: vanilla (standard), soluble (optimised for solubility), and HyperMPNN (improved accuracy). Update the `mpnn_models` variable in `nextflow.config` to the location of the model directory (e.g. `'./models/mpnn'`):
+
+```bash
+mkdir -p models/mpnn && cd models/mpnn
+
+# Vanilla ProteinMPNN weights
+mkdir vanilla_model_weights && cd vanilla_model_weights
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_002.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_010.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_020.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/vanilla_model_weights/v_48_030.pt
+cd ..
+
+# Soluble ProteinMPNN weights
+mkdir soluble_model_weights && cd soluble_model_weights
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_002.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_010.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_020.pt
+wget https://github.com/dauparas/ProteinMPNN/raw/refs/heads/main/soluble_model_weights/v_48_030.pt
+cd ..
+
+# HyperMPNN weights
+mkdir hyper_model_weights && cd hyper_model_weights
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_002_epoch240_hyper.pt -O v_48_002.pt
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_010_epoch300_hyper.pt -O v_48_010.pt
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_020_epoch300_hyper.pt -O v_48_020.pt
+wget https://github.com/meilerlab/HyperMPNN/raw/refs/heads/main/retrained_models/v48_030_epoch300_hyper.pt -O v_48_030.pt
+cd ../../../
+```
+
 **Verify downloads:**
 
 ```bash
 # Check that all required files exist
-ls -la models/rfd/    # Should contain 8 .pt files
-ls -la models/af2/    # Should contain params directory
-ls -la models/boltz/  # Should contain .ckpt files and mols directory
+ls -la models/rfd/                         # Should contain 8 .pt files
+ls -la models/af2/                         # Should contain params directory
+ls -la models/boltz/                       # Should contain .ckpt files and mols directory
+ls -la models/boltzgen/                    # Should contain boltzgen1_diverse.ckpt, boltzgen1_adherence.ckpt and mols.zip
+ls -la models/mpnn/vanilla_model_weights/  # Should contain 4 .pt files
+ls -la models/mpnn/soluble_model_weights/  # Should contain 4 .pt files
+ls -la models/mpnn/hyper_model_weights/    # Should contain 4 .pt files
 ```
 
 ---
@@ -166,7 +218,7 @@ withLabel: 'BC' {
 
 We have provided a script for building the containers in a series of sbatch jobs (`apptainer/build_containers.sh`). You may need to tweak the SLURM parameters and enviroment settings for your cluster.
 
-> **⚠️ Important:** Container building requires significant resources and may take several hours.
+> **⚠️ Important:** Container building requires significant resources and may take several hours. We recommend using our pre-compiled containers unless you have reason to build your own.
 
 ### Option A: Automated Parallel Build using SLURM script
 
@@ -206,12 +258,11 @@ If you don't have SLURM or prefer manual building:
 cd apptainer
 
 # Build each container individually
-apptainer build --fakeroot af2.sif af2.def
 apptainer build --fakeroot bindsweeper.sif bindsweeper.def
 apptainer build --fakeroot boltz2.sif boltz2.def
 apptainer build --fakeroot dl_binder_design.sif dl_binder_design.def
 apptainer build --fakeroot fampnn.sif fampnn.def
-apptainer build --fakeroot pyrosetta_tools.sif pyrosetta_tools.def
+apptainer build --fakeroot python_tools.sif python_tools.def
 apptainer build --fakeroot rfdiffusion.sif rfdiffusion.def
 cd ..
 ```
@@ -237,8 +288,10 @@ nano nextflow.config
 | Parameter       | Description                                 | Examples                       |
 | --------------- | ------------------------------------------- | ------------------------------ |
 | `rfd_models`    | Path to RFdiffusion models                  | `"${projectDir}/models/rfd"`   |
+| `mpnn_models`   | Path to ProteinMPNN models                  | `"${projectDir}/models/mpnn"`  |
 | `af2_models`    | Path to AlphaFold2 models                   | `"${projectDir}/models/af2"`   |
 | `boltz_models`  | Path to Boltz-2 models                      | `"${projectDir}/models/boltz"` |
+| `bg_models`     | Path to BoltzGen models                     | `"${projectDir}/models/boltzgen"` |
 | `gpu_model`     | Your GPU type                               | `'A30'`, `'V100'`, `'A100'`    |
 | `gpus`          | Number of GPUs to request                   | `1`, `2`, `4`, `8`             |
 | `cpus_per_gpu`  | Number of CPUs to request per GPU           | `8`, `12`                      |
@@ -256,7 +309,7 @@ Before running production workloads, verify your installation works correctly.
 
 ```bash
 # From the proteindj root directory
-nextflow run main.nf -profile test,monomer_denovo
+nextflow run main.nf -profile test,rfd_denovo_monomer
 ```
 
 **Expected output:**
@@ -268,7 +321,7 @@ nextflow run main.nf -profile test,monomer_denovo
 ### Test 2: Binder Design (5-10 minutes)
 
 ```bash
-nextflow run main.nf -profile test,binder_denovo
+nextflow run main.nf -profile test,rfd_denovo_binder
 ```
 
 **Expected output:**

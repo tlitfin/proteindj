@@ -67,7 +67,9 @@ class MetadataConverter:
             'fold_helices', 'fold_strands', 'fold_total_ss', 'fold_RoG',
             # MPNN/FAMPNN fields
             'fampnn_avg_psce','mpnn_score',
+            'seq_ext_coef','seq_length','seq_MW','seq_pI',
             # AF2 fields
+            'af2_iptm',
             'af2_pae_interaction','af2_pae_overall', 'af2_pae_binder', 'af2_pae_target',
             'af2_plddt_overall', 'af2_plddt_binder', 'af2_plddt_target',
             'af2_rmsd_overall','af2_rmsd_binder_bndaln','af2_rmsd_binder_tgtaln', 'af2_rmsd_target',
@@ -75,18 +77,18 @@ class MetadataConverter:
             'boltz_conf_score','boltz_rmsd_overall', 'boltz_rmsd_binder','boltz_rmsd_target',
             'boltz_ipSAE_min','boltz_LIS','boltz_pDockQ2_min',
             'boltz_pae_interaction',
-            'boltz_pde', 'boltz_pde_interface',
-            'boltz_plddt', 'boltz_plddt_interface',
-            'boltz_ptm', 'boltz_ptm_interface','boltz_ptm_binder','boltz_ptm_target',
-            # PyRosetta Analysis fields
+            'boltz_pde', 'boltz_ipde',
+            'boltz_plddt', 'boltz_iplddt',
+            'boltz_ptm', 'boltz_iptm','boltz_ptm_binder','boltz_ptm_target',
+            'boltz_unbound_rmsd', 'boltz_unbound_conf_score', 'boltz_unbound_ptm', 'boltz_unbound_plddt', 'boltz_unbound_pde',
+            # Prediction Analysis fields
             'pr_helices','pr_strands', 'pr_total_ss','pr_RoG',
             'pr_intface_BSA','pr_intface_shpcomp',
             'pr_intface_deltaG','pr_intface_deltaGtoBSA',
             'pr_intface_hbonds','pr_intface_unsat_hbonds',
-            'pr_intface_packstat','pr_SAP','pr_SAP_complex','pr_surfhphobics','pr_TEM',
-            'seq_ext_coef','seq_length','seq_MW','seq_pI',
+            'pr_SAP','pr_SAP_complex','pr_surfhphobics',
             # Sequence at the end for readability, followed by time stats
-            'sequence','rfd_time','bc_time','af2_time'
+            'sequence','rfd_time','bc_time','mpnn_time','af2_time'
         ]
 
         try:
@@ -150,6 +152,7 @@ class MetadataConverter:
             fold_only_count = 0
             for fold_id, fold_only_entry in metadata_fold_data.items():
                 if fold_id not in metadata_fold_ids:
+                    fold_only_count += 1
                     key = (fold_id, None)
                     # Add a description field with fold_id format
                     combined_entries[key] = {
@@ -279,6 +282,8 @@ class AF2MetadataConverter(MetadataConverter):
             'rmsd_overall','rmsd_binder_bndaln','rmsd_binder_tgtaln', 'rmsd_target',
             'time'
         }
+        # ipTM is a 0-1 score, rounded with more precision than the PAE/pLDDT/RMSD fields above
+        precise_float_fields = {'iptm'}
 
         with open(input_file, 'r', encoding='utf-8') as f:
             # Read header
@@ -309,7 +314,12 @@ class AF2MetadataConverter(MetadataConverter):
                     else:
                         prefixed_key = f"af2_{key}"
                         
-                        if key in float_fields:
+                        if key in precise_float_fields:
+                            try:
+                                record[prefixed_key] = round(float(value), 3)
+                            except ValueError:
+                                record[prefixed_key] = None
+                        elif key in float_fields:
                             try:
                                 record[prefixed_key] = round(float(value), 2)
                             except ValueError:
@@ -339,6 +349,48 @@ class BCMetadataConverter(MetadataConverter):
         
         Args:
             input_file: Path to BindCraft analysis JSON file
+            
+        Yields:
+            Dictionary record with pre-formatted fields from analysis script
+        """
+        try:
+            with open(input_file, 'r') as f:
+                data = json.load(f)
+                yield data
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in {input_file}: {e}")
+        except Exception as e:
+            logging.error(f"Error processing {input_file}: {e}")
+
+    def save_jsonl_file(self, input_files: list, output_file: Path) -> bool:
+        """
+        Convert multiple JSON files to a single JSONL file with selected metadata.
+        
+        Args:
+            input_files: List of JSON file paths
+            output_file: Path to save the JSONL file
+            
+        Returns:
+            True if conversion succeeded, False otherwise
+        """
+        try:
+            with open(output_file, 'w') as out_file:
+                for input_file in input_files:
+                    for record in self._parse_metadata(input_file):
+                        json.dump(record, out_file)
+                        out_file.write('\n')
+            return True
+        except Exception as e:
+            logging.error(f"Failed to create JSONL file {output_file}: {e}")
+            return False
+
+class BGMetadataConverter(MetadataConverter):
+    def _parse_metadata(self, input_file: Path) -> Iterator[Dict[str, Any]]:
+        """
+        Parse BoltzGen analysis JSON files and yield their contents directly.
+        
+        Args:
+            input_file: Path to BoltzGen analysis JSON file
             
         Yields:
             Dictionary record with pre-formatted fields from analysis script
@@ -421,6 +473,7 @@ class FAMPNNMetadataConverter(MetadataConverter):
                 seq_id = None
             
             yield {
+                "description": design,
                 "fold_id": fold_id,
                 "seq_id": seq_id,
                 "sequence": sequence,
@@ -454,10 +507,12 @@ class MPNNMetadataConverter(MetadataConverter):
                 seq_id = None
             
             yield {
+                "description": design,
                 "fold_id": fold_id,
                 "seq_id": seq_id,
                 "sequence": sequence,
-                "mpnn_score": float(score)
+                "mpnn_score": float(score),
+                "mpnn_time": int(data['mpnn_time']) if 'mpnn_time' in data else None
             }
 
 class RFDMetadataConverter(MetadataConverter):
@@ -567,8 +622,8 @@ def main():
     parser.add_argument('--input_ext', '-e', 
                         help='Input filename extension. Only applies if using an input directory e.g. ".json"')
     parser.add_argument('--converter', '-c', default="rfd",
-                        choices=['af2','bc','boltz','fampnn','mpnn','rfd'], 
-                        help='Converter to use. e.g. af2, bc, boltz, fampnn, mpnn,rfd')
+                        choices=['af2','bc','bg','boltz','fampnn','mpnn','rfd'], 
+                        help='Converter to use. e.g. af2, bc, bg, boltz, fampnn, mpnn,rfd')
     parser.add_argument('--output_dir', 
                         help='Output directory path')
     parser.add_argument('--output_file', '-o', default='metadata.jsonl', 
@@ -582,6 +637,7 @@ def main():
     converters = {
         "af2": AF2MetadataConverter,
         "bc": BCMetadataConverter,
+        "bg": BGMetadataConverter,
         "boltz": BoltzMetadataConverter,
         "fampnn": FAMPNNMetadataConverter,
         "mpnn": MPNNMetadataConverter,
@@ -622,6 +678,25 @@ def main():
         
         return
     if args.converter == 'bc' and args.input_dir:
+        input_dir = Path(args.input_dir)
+        output_dir = Path(args.output_dir) if args.output_dir else input_dir
+        output_dir.mkdir(exist_ok=True, parents=True)
+        
+        extension = args.input_ext if args.input_ext.startswith('.') else '.' + args.input_ext
+        input_files = list(input_dir.glob(f'*{extension}'))
+        
+        if not input_files:
+            print(f"No {extension} files found in {input_dir}")
+            return
+        
+        # Create a JSONL file with selected metadata
+        output_jsonl = Path(args.output_file)
+        if selected_converter.save_jsonl_file(input_files, output_jsonl):
+            print(f"Successfully created JSONL file with selected metadata at {output_jsonl}")
+        else:
+            print(f"Failed to create JSONL file at {output_jsonl}")
+        return
+    if args.converter == 'bg' and args.input_dir:
         input_dir = Path(args.input_dir)
         output_dir = Path(args.output_dir) if args.output_dir else input_dir
         output_dir.mkdir(exist_ok=True, parents=True)

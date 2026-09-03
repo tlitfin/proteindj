@@ -1,0 +1,35 @@
+nextflow_function {
+
+    name "Test validateranking_metric"
+    script "main.nf"
+    function "validateranking_metric"
+
+    test("af2 prefix matches af2 pred_method") {
+        when {
+            function {
+                """
+                input[0] = "af2_pae_interaction"
+                input[1] = "af2"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == "af2_pae_interaction"
+        }
+    }
+
+    test("boltz prefix mismatched with af2 pred_method throws") {
+        when {
+            function {
+                """
+                input[0] = "boltz_ptm"
+                input[1] = "af2"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+}

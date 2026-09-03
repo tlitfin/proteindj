@@ -1,10 +1,13 @@
 .nextflow/*
 .nextflow.log*
+work
 .github
 .vscode
 pdj_results/
 models/
 test/
+projects/
+.nf-test*
 
 # Bindsweeper
 bindsweeper.config
@@ -21,3 +24,6 @@ bindsweeper/bindsweeper.config
 bindsweeper/quick_test_results/**
 bindsweeper/test_output/**
 bindsweeper/**/.nextflow/**
+
+*.sif
+**/__pycache__/

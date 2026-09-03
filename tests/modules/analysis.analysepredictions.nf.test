@@ -1,0 +1,51 @@
+nextflow_process {
+
+    name "Test Process AnalysePredictions"
+    script "modules/analysis.nf"
+    process "AnalysePredictions"
+
+    // Real Boltz predictions from tier_b_monomer/boltz_output (fold_0_seq_0_boltzpred,
+    // fold_1_seq_0_boltzpred) - these are the exact pre-relax inputs that produced the
+    // reference outputs already captured in tier_b_monomer/analysis_jsonl/best_designs.jsonl
+    // (pr_surfhphobics 11.3/38.8) and tier_b_monomer/analysis_relaxed/*.pdb, so real values
+    // computed here (via PDBFixer/OpenMM relax + metric calculation) can be cross-checked.
+    test("Should relax structures and compute per-design analysis metrics") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_monomer/boltz_output"
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.fixtures_dir}/fold_0_seq_0_boltzpred.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_1_seq_0_boltzpred.pdb", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.relaxed_pdbs[0].size() == 2
+
+            def lines = path(process.out.jsonl[0]).text.readLines().findAll { it.trim() }
+            assert lines.size() == 2
+
+            def slurper = new groovy.json.JsonSlurper()
+            def fold0 = slurper.parseText(lines.find { it.contains("fold_0_seq_0_boltzpred") })
+            assert fold0.pr_helices == 3
+            // OpenMM relax is not bit-exact across environments, so allow a small tolerance
+            // around the previously captured reference value (11.3).
+            assert Math.abs(fold0.pr_surfhphobics - 11.3) < 1.0
+
+            def fold1 = slurper.parseText(lines.find { it.contains("fold_1_seq_0_boltzpred") })
+            assert fold1.pr_helices == 4
+            assert Math.abs(fold1.pr_surfhphobics - 38.8) < 1.0
+        }
+
+    }
+
+}

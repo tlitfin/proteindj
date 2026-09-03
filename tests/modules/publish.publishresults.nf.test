@@ -1,0 +1,74 @@
+nextflow_process {
+
+    name "Test Process PublishResults"
+    script "modules/publish.nf"
+    process "PublishResults"
+
+    // Wiring-only smoke test: the underlying Python scripts (filter_best_designs.py,
+    // rank_designs.py, generate_success_metrics.py) are already covered by Tier A pytest,
+    // so this just confirms the Nextflow process stages/wires all 14 inputs correctly and
+    // produces the expected published outputs. Reuses the real tier_b_monomer relaxed PDBs
+    // as final_pdbs, paired with a synthetic all_designs.csv (matching fold_id/seq_id and a
+    // boltz_ptm column, since pred_method='boltz' + monomer mode defaults ranking to boltz_ptm).
+    test("Should publish results, rank designs, and generate success metrics") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_monomer/analysis_relaxed"
+                zip_pdbs = false
+                rank_designs = true
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.fixtures_dir}/fold_0_seq_0_boltzpred.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_1_seq_0_boltzpred.pdb", checkIfExists: true)
+                ]
+                input[1] = file("${projectDir}/tests/fixtures/tier_b_publish/all_designs.csv", checkIfExists: true)
+                input[2] = 2
+                input[3] = 2
+                input[4] = 2
+                input[5] = 2
+                input[6] = 2
+                input[7] = 2
+                input[8] = 2
+                input[9] = 0
+                input[10] = 0
+                input[11] = 2
+                input[12] = 2
+                input[13] = false
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // all_designs.csv is a pass-through of the staged input file
+            assert path(process.out[0][0]).text.contains("fold_0_seq_0_boltzpred")
+
+            // best_designs* and ranked_designs* are wildcard matches (csv + pdb dir each) -
+            // flatten() merges the possible per-execution List/Path shapes into a flat list.
+            def bestDesignsFiles = process.out[1].flatten().collect { file(it).getName() }
+            assert bestDesignsFiles.contains("best_designs.csv")
+            assert bestDesignsFiles.contains("best_designs")
+
+            def rankedDesignsFiles = process.out[2].flatten().collect { file(it).getName() }
+            assert rankedDesignsFiles.contains("ranked_designs.csv")
+            assert rankedDesignsFiles.contains("ranked_designs")
+
+            assert path(process.out[3][0]).text.length() > 0
+            assert path(process.out[4][0]).text.contains("Ranking by boltz_ptm")
+
+            def metrics = new groovy.json.JsonSlurper().parseText(path(process.out[5][0]).text)
+            assert metrics.successful_designs == 2
+            assert metrics.total_designs == 2
+
+            assert process.out.final_designs_count[0] == "2"
+        }
+
+    }
+
+}

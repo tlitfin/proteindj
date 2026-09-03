@@ -1,0 +1,21 @@
+{
+  "fold_id": 1,
+  "seq_id": 0,
+  "description": "fold_1_seq_0_boltzpred",
+  "boltz_rmsd_overall": 11.56,
+  "boltz_rmsd_target": 0.44,
+  "boltz_rmsd_binder": 5.65,
+  "boltz_conf_score": 0.712,
+  "boltz_ipSAE_min": 0.013,
+  "boltz_LIS": 0.073,
+  "boltz_pDockQ2_min": 0.022,
+  "boltz_pae_interaction": 14.8,
+  "boltz_ptm": 0.738,
+  "boltz_ptm_binder": 0.733,
+  "boltz_ptm_target": 0.964,
+  "boltz_iptm": 0.404,
+  "boltz_plddt": 0.789,
+  "boltz_iplddt": 0.718,
+  "boltz_pde": 0.87,
+  "boltz_ipde": 6.44
+}

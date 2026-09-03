@@ -1,0 +1,89 @@
+nextflow_process {
+
+    name "Test Process AlignBoltz"
+    script "modules/boltz.nf"
+    process "AlignBoltz"
+
+    // AlignBoltz aligns Boltz predictions onto the original design PDBs, computes RMSDs, and
+    // writes a slimmed-down metadata JSON per fold/seq. align_boltz.py reads ipSAE/pDockQ
+    // fields via data.get(..., default) so it tolerates a pre-AnalyseBoltz (raw) json fine -
+    // those fields just default to 0. Real fixtures from the SAME pipeline run:
+    // tier_b_binder/boltz_output (Boltz predictions) + tier_b_binder/fampnn_output (binder designs
+    // used as alignment reference) - confirmed matching chain A (binder: 68/63 CA atoms) and
+    // chain B (target: 115/115 CA atoms) between the two fixture sets, which the 'binder'
+    // design_type alignment path requires (it aligns target chains first, then binder chain A).
+    test("Should align Boltz predictions to binder designs and compute RMSD/metadata") {
+
+        tag "cpu"
+
+        when {
+            params {
+                boltz_dir = "${projectDir}/tests/fixtures/tier_b_binder/boltz_output"
+                design_dir = "${projectDir}/tests/fixtures/tier_b_binder/fampnn_output"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.boltz_dir}/fold_0_seq_0_boltzpred.pdb", checkIfExists: true),
+                        file("\${params.boltz_dir}/fold_1_seq_0_boltzpred.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.boltz_dir}/fold_0_seq_0_boltzpred.json", checkIfExists: true),
+                        file("\${params.boltz_dir}/fold_1_seq_0_boltzpred.json", checkIfExists: true)
+                    ]
+                ]
+                input[1] = [
+                    file("\${params.design_dir}/fold_0_seq_0.pdb", checkIfExists: true),
+                    file("\${params.design_dir}/fold_1_seq_0.pdb", checkIfExists: true)
+                ]
+                input[2] = "binder"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Tuple emit: process.out.pdbs_jsons[0] is the tuple itself
+            assert process.out.pdbs_jsons[0][0].size() == 2
+            assert process.out.pdbs_jsons[0][1].size() == 2
+
+            def outputPdbNames = process.out.pdbs_jsons[0][0].collect { file(it).getName() }
+            assert outputPdbNames.containsAll(["fold_0_seq_0_boltzpred.pdb", "fold_1_seq_0_boltzpred.pdb"])
+            def outputJsonNames = process.out.pdbs_jsons[0][1].collect { file(it).getName() }
+            assert outputJsonNames.containsAll(["fold_0_seq_0_boltzpred.json", "fold_1_seq_0_boltzpred.json"])
+
+            def jsonFiles = process.out.pdbs_jsons[0][1]
+            def fold0Json = new groovy.json.JsonSlurper().parse(
+                file(jsonFiles.find { file(it).getName() == "fold_0_seq_0_boltzpred.json" })
+            )
+
+            // RMSD depends on structural alignment, just check it's a small non-negative
+            // number (same-run design/prediction pairing should align closely)
+            assert fold0Json.fold_id == 0
+            assert fold0Json.seq_id == 0
+            assert fold0Json.boltz_rmsd_target >= 0
+            assert fold0Json.boltz_rmsd_binder >= 0
+            // Input json is pre-AnalyseBoltz (raw) - ipSAE/pDockQ fields default to 0
+            assert fold0Json.boltz_ipSAE_min == 0.0
+            assert fold0Json.boltz_LIS == 0.0
+            assert fold0Json.boltz_pDockQ2_min == 0.0
+            // Real values from raw json: ptm=0.744, ptm_binder(chains_ptm.0)=0.949,
+            // ptm_target(chains_ptm.1)=0.964, iptm(pair_chains_iptm.0.1)=0.375
+            assert fold0Json.boltz_ptm == 0.744
+            assert fold0Json.boltz_ptm_binder == 0.949
+            assert fold0Json.boltz_ptm_target == 0.964
+            assert fold0Json.boltz_iptm == 0.375
+            assert fold0Json.boltz_conf_score == 0.803
+            assert fold0Json.boltz_plddt == 0.91
+            assert fold0Json.boltz_iplddt == 0.87
+
+            // Metadata jsonl (topic output) - one line per fold/seq
+            def metadataFiles = process.out[2]
+            assert metadataFiles.size() == 1
+        }
+
+    }
+
+}

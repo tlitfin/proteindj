@@ -1,0 +1,111 @@
+nextflow_process {
+
+    name "Test Process RunBoltz"
+    script "modules/boltz.nf"
+    process "RunBoltz"
+
+    // GPU process - Boltz-2 predicts a complex structure directly from sequence (no initial
+    // backbone guess, unlike AF2). Real fixtures: tier_b_binder/boltz_input/{fold_0_seq_0,
+    // fold_1_seq_0}.yaml (binder chain A + target chain B with a structural template) and the
+    // matching templates/ dir. No MSA fixture is needed since the yamls declare "msa: empty"
+    // inline, so lib/NO_FILE is passed as the (unused) msa_file input.
+    test("Should predict a complex structure matching the input sequence") {
+
+        tag "gpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/boltz_input"
+            }
+            process {
+                """
+                input[0] = [
+                    0,
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0.yaml", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0.yaml", checkIfExists: true)
+                    ],
+                    file("\${params.fixtures_dir}/templates", checkIfExists: true),
+                    file("${projectDir}/lib/NO_FILE", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def aa3 = [
+                A: 'ALA', R: 'ARG', N: 'ASN', D: 'ASP', C: 'CYS', Q: 'GLN', E: 'GLU', G: 'GLY',
+                H: 'HIS', I: 'ILE', L: 'LEU', K: 'LYS', M: 'MET', F: 'PHE', P: 'PRO', S: 'SER',
+                T: 'THR', W: 'TRP', Y: 'TYR', V: 'VAL'
+            ]
+
+            // Parses ATOM CA lines into a map keyed by chain -> ordered list of resNames
+            def parseChainSeqs = { pdbPath ->
+                def seqs = [:].withDefault { [] }
+                path(pdbPath).text.readLines().each { line ->
+                    if (line.startsWith("ATOM") && line.substring(12, 16).trim() == "CA") {
+                        def chain = line.substring(21, 22)
+                        def resName = line.substring(17, 20).trim()
+                        seqs[chain] << resName
+                    }
+                }
+                return seqs
+            }
+
+            // Parses the "sequence: <one-letter>" lines under sequences: - protein: id: <chain>
+            def parseYamlChainSeqs = { yamlPath ->
+                def spec = new org.yaml.snakeyaml.Yaml().load(path(yamlPath).text)
+                def seqs = [:]
+                spec.sequences.each { entry ->
+                    def protein = entry.protein
+                    seqs[protein.id] = protein.sequence.collect { aa3[it as String] }
+                }
+                return seqs
+            }
+
+            def outPdbs = process.out.pdbs_jsons[0][0]
+            def outJsons = process.out.pdbs_jsons[0][1]
+            def outNpzs = process.out.npzs[0]
+
+            // Cardinality: one prediction per input, plus a pae/plddt npz pair per input
+            assert outPdbs.size() == 2
+            assert outJsons.size() == 2
+            assert outNpzs.size() == 4
+
+            // Naming convention
+            assert outPdbs.every { file(it).getName() ==~ /fold_[01]_seq_0_boltzpred\.pdb/ }
+            assert outJsons.every { file(it).getName() ==~ /fold_[01]_seq_0_boltzpred\.json/ }
+            assert outNpzs.every { file(it).getName() ==~ /(pae|plddt)_fold_[01]_seq_0_boltzpred\.npz/ }
+
+            def expectedSeqs = [
+                0: parseYamlChainSeqs("${projectDir}/tests/fixtures/tier_b_binder/boltz_input/fold_0_seq_0.yaml"),
+                1: parseYamlChainSeqs("${projectDir}/tests/fixtures/tier_b_binder/boltz_input/fold_1_seq_0.yaml")
+            ]
+
+            outPdbs.each { outPdbPath ->
+                def name = file(outPdbPath).getName()
+                def matcher = (name =~ /fold_(\d+)_seq_0_boltzpred\.pdb/)
+                assert matcher.matches()
+                def foldId = matcher[0][1].toInteger()
+                def outSeqs = parseChainSeqs(outPdbPath)
+                def expected = expectedSeqs[foldId]
+
+                // The predicted structure must be built for the exact given sequence
+                assert outSeqs["A"] == expected["A"]
+                assert outSeqs["B"] == expected["B"]
+            }
+
+            // Schema: JSON metadata has the expected raw Boltz confidence keys with sane values
+            outJsons.each { jsonPath ->
+                def data = new groovy.json.JsonSlurper().parseText(path(jsonPath).text)
+                assert data.confidence_score instanceof Number && data.confidence_score >= 0 && data.confidence_score <= 1
+                assert data.ptm instanceof Number && data.ptm >= 0 && data.ptm <= 1
+                assert data.iptm instanceof Number && data.iptm >= 0 && data.iptm <= 1
+            }
+        }
+
+    }
+
+}

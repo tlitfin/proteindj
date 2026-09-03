@@ -1,0 +1,116 @@
+nextflow_process {
+
+    name "Test Process RunBG"
+    script "modules/boltzgen.nf"
+    process "RunBG"
+
+    // GPU process - BoltzGen diffusion design. No static input fixture exists for RunBG (only
+    // post-generation bg_output/bg_processed fixtures), so these tests use PrepBG (already
+    // covered by its own Tier B1 unit test) in a setup{} block to generate a real design-spec
+    // YAML inline. batch_size (num_designs for this call) is kept at 1 to bound runtime.
+    // Covers both major BoltzGen use cases: standalone monomer design and binder design
+    // against a target.
+    test("Should generate at least one intermediate binder design cif/npz pair") {
+
+        tag "gpu"
+
+        setup {
+            run("PrepBG") {
+                script "modules/boltzgen.nf"
+                process {
+                    """
+                    input[0] = 0
+                    input[1] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                    input[2] = "boltzgen_denovo"
+                    """
+                }
+                params {
+                    design_length = "60"
+                }
+            }
+        }
+
+        when {
+            process {
+                """
+                input[0] = PrepBG.out
+                input[1] = 1
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def logFiles = process.out[0]
+            assert logFiles.size() == 1
+            assert file(logFiles[0]).getName() ==~ /boltzgen_\d+\.log/
+
+            def cifsNpzs = process.out.cifs_npzs
+            assert cifsNpzs.size() == 1
+
+            // path("*.cif")/path("*.npz") glob outputs collapse to a plain String (not a List)
+            // when only one file matches, which is expected here since num_designs == 1.
+            def rawCifs = cifsNpzs[0][0]
+            def rawNpzs = cifsNpzs[0][1]
+            def outCifs = rawCifs instanceof List ? rawCifs : [rawCifs]
+            def outNpzs = rawNpzs instanceof List ? rawNpzs : [rawNpzs]
+
+            assert outCifs.size() == 1
+            assert outNpzs.size() == 1
+            assert file(outCifs[0]).getName() ==~ /.*\.cif/
+            assert file(outNpzs[0]).getName() ==~ /.*\.npz/
+        }
+
+    }
+
+    // boltzgen_denovo mode with no input_pdb (lib/NO_FILE placeholder) - standalone monomer design.
+    test("Should generate at least one intermediate monomer design cif/npz pair") {
+
+        tag "gpu"
+
+        setup {
+            run("PrepBG") {
+                script "modules/boltzgen.nf"
+                process {
+                    """
+                    input[0] = 0
+                    input[1] = file("${projectDir}/lib/NO_FILE", checkIfExists: true)
+                    input[2] = "boltzgen_denovo"
+                    """
+                }
+                params {
+                    design_length = "60"
+                }
+            }
+        }
+
+        when {
+            process {
+                """
+                input[0] = PrepBG.out
+                input[1] = 1
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def cifsNpzs = process.out.cifs_npzs
+            assert cifsNpzs.size() == 1
+
+            def rawCifs = cifsNpzs[0][0]
+            def rawNpzs = cifsNpzs[0][1]
+            def outCifs = rawCifs instanceof List ? rawCifs : [rawCifs]
+            def outNpzs = rawNpzs instanceof List ? rawNpzs : [rawNpzs]
+
+            assert outCifs.size() == 1
+            assert outNpzs.size() == 1
+            assert file(outCifs[0]).getName() ==~ /.*\.cif/
+            assert file(outNpzs[0]).getName() ==~ /.*\.npz/
+        }
+
+    }
+
+}

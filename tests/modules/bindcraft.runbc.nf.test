@@ -1,0 +1,80 @@
+nextflow_process {
+
+    name "Test Process RunBC"
+    script "modules/bindcraft.nf"
+    process "RunBC"
+
+    // GPU process - BindCraft trajectory search (hallucination + relax). No static input
+    // fixture exists for RunBC (only post-generation bc_output/bc_processed fixtures), so this
+    // test uses PrepBC (already covered by its own Tier B1 unit test) in a setup{} block to
+    // generate a real settings/advanced-settings pair inline. batch_size is kept at 1 and
+    // filters are disabled (no_filters.json) to bound runtime and guarantee an accepted design.
+    test("Should generate at least one relaxed binder design PDB and matching CSV") {
+
+        tag "gpu"
+
+        setup {
+            run("PrepBC") {
+                script "modules/bindcraft.nf"
+                process {
+                    """
+                    input[0] = 1
+                    input[1] = 1
+                    input[2] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                    input[3] = file("${projectDir}/lib/bindcraft/settings_advanced/default_4stage_multimer.json", checkIfExists: true)
+                    """
+                }
+                params {
+                    bc_chains = "A"
+                    hotspot_residues = "A50,A75"
+                    design_length = "65"
+                    bc_omit_AAs = "C,M"
+                }
+            }
+        }
+
+        when {
+            process {
+                """
+                input[0] = PrepBC.out
+                input[1] = file("${projectDir}/lib/bindcraft/settings_filters/no_filters.json", checkIfExists: true)
+                input[2] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            def logFiles = process.out[0]
+            assert logFiles.size() == 1
+            assert file(logFiles[0]).getName() ==~ /bindcraft_\d+\.log/
+
+            // pdbs_csvs is optional - only emitted if at least one design was accepted.
+            // With max_trajectories=1 and no filters, BindCraft should produce exactly one design.
+            def pdbsCsvs = process.out.pdbs_csvs
+            assert pdbsCsvs.size() == 1
+
+            // A path("*.pdb") glob output collapses to a plain String (not a List) when only
+            // one file matches, which is expected here since max_trajectories/batch_size == 1.
+            def rawPdbs = pdbsCsvs[0][0]
+            def outPdbs = rawPdbs instanceof List ? rawPdbs : [rawPdbs]
+            def outCsv = pdbsCsvs[0][1]
+
+            assert outPdbs.size() == 1
+            assert file(outPdbs[0]).getName() ==~ /batch_1_l65_s\d+\.pdb/
+            assert file(outCsv).getName() == "batch_1.csv"
+
+            // Sanity check the relaxed PDB has both a binder and target chain
+            def chains = [] as Set
+            path(outPdbs[0]).text.readLines().each { line ->
+                if (line.startsWith("ATOM")) {
+                    chains << line.substring(21, 22)
+                }
+            }
+            assert chains.size() == 2
+        }
+
+    }
+
+}

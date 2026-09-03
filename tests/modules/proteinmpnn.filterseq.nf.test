@@ -1,0 +1,47 @@
+nextflow_process {
+
+    name "Test Process FilterSeq"
+    script "modules/proteinmpnn.nf"
+    process "FilterSeq"
+
+    // Real MPNN outputs from tier_b_binder/mpnn_output: fold_0 score=1.02 (passes a max-score
+    // 1.1 threshold), fold_1 score=1.27 (fails it) - deterministic pass/fail split.
+    test("Should keep only designs passing the max-score threshold") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/mpnn_output"
+                seq_method = "mpnn"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0.json", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0.json", checkIfExists: true)
+                    ]
+                ]
+                input[1] = "--max-score 1.1"
+                input[2] = ""
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            // Only 1 file matched each glob, so Nextflow emits scalar paths (not lists).
+            assert process.out.pdbs.size() == 1
+            assert process.out.pdbs[0].toString().contains("fold_0_seq_0.pdb")
+            assert process.out.jsons.size() == 1
+            assert process.out.jsons[0].toString().contains("fold_0_seq_0.json")
+        }
+
+    }
+
+}

@@ -1,0 +1,50 @@
+nextflow_process {
+
+    name "Test Process PrepFAMPNN"
+    script "modules/fampnn.nf"
+    process "PrepFAMPNN"
+
+    // PrepFAMPNN takes RFD output (pdb+json pairs, since RFD backbones lack side-chains) and
+    // restores missing side-chains + writes a CSV of fixed-residue ranges for FAMPNN.
+    // Real fixtures: tier_b_binder/rfd_output (2 designs, fold_0.pdb/json, fold_1.pdb/json).
+    test("Should restore side-chains and generate a fixed-residue CSV") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/rfd_output"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.fixtures_dir}/fold_0.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.fixtures_dir}/fold_0.json", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.json", checkIfExists: true)
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.pdbs[0].size() == 2
+            def pdbNames = process.out.pdbs[0].collect { file(it).getName() }
+            assert pdbNames.containsAll(["fold_0.pdb", "fold_1.pdb"])
+
+            // csv is a fixed-name (non-glob) output, so it's emitted as a scalar path.
+            assert process.out.csv.size() == 1
+            def csvText = path(process.out.csv[0]).text
+            assert csvText.readLines()[0] == "pdb,fixed_seq_positions,fixed_sidechains"
+            assert csvText.contains("fold_0")
+            assert csvText.contains("fold_1")
+        }
+
+    }
+
+}

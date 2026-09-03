@@ -1,0 +1,213 @@
+nextflow_function {
+
+    name "Test Utils.groovy pure functions"
+
+    test("getPdbChainIds finds a single chain") {
+        function "Utils.getPdbChainIds"
+        when {
+            function {
+                """
+                input[0] = file("${projectDir}/tests/fixtures/resume_monomer/5o45_pd-l1.pdb")
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result.size() == 1
+        }
+    }
+
+    test("getPdbChainIds finds two distinct chains") {
+        function "Utils.getPdbChainIds"
+        when {
+            function {
+                """
+                input[0] = file("${projectDir}/tests/fixtures/resume_binder/examplebinder.pdb")
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result.size() == 2
+        }
+    }
+
+    test("validateDesignLength accepts a single integer") {
+        function "Utils.validateDesignLength"
+        when {
+            function {
+                """
+                input[0] = "65"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("validateDesignLength accepts a valid range") {
+        function "Utils.validateDesignLength"
+        when {
+            function {
+                """
+                input[0] = "65-150"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    // Nextflow's CLI parser coerces bare-numeric params (e.g. --design_length 65) to Integer;
+    // validateDesignLength must coerce to String before splitting rather than fail on it.
+    test("validateDesignLength accepts an Integer value") {
+        function "Utils.validateDesignLength"
+        when {
+            function {
+                """
+                input[0] = 65
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("designLengthContigRange expands a bare integer to N-N") {
+        function "Utils.designLengthContigRange"
+        when {
+            function {
+                """
+                input[0] = "65"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == "65-65"
+        }
+    }
+
+    test("designLengthContigRange expands a bare Integer to N-N") {
+        function "Utils.designLengthContigRange"
+        when {
+            function {
+                """
+                input[0] = 65
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == "65-65"
+        }
+    }
+
+    test("designLengthContigRange passes through an existing range") {
+        function "Utils.designLengthContigRange"
+        when {
+            function {
+                """
+                input[0] = "65-150"
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == "65-150"
+        }
+    }
+
+    test("validateDesignLength throws on null") {
+        function "Utils.validateDesignLength"
+        when {
+            function {
+                """
+                input[0] = null
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("validateDesignLength throws on non-integer values") {
+        function "Utils.validateDesignLength"
+        when {
+            function {
+                """
+                input[0] = "abc-150"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("validateDesignLength throws when min greater than max") {
+        function "Utils.validateDesignLength"
+        when {
+            function {
+                """
+                input[0] = "150-65"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("validateDesignLength throws when min less than 1") {
+        function "Utils.validateDesignLength"
+        when {
+            function {
+                """
+                input[0] = "0-150"
+                """
+            }
+        }
+        then {
+            assert function.failed
+        }
+    }
+
+    test("formatFilterParams builds CLI args and skips null values") {
+        function "Utils.formatFilterParams"
+        when {
+            function {
+                """
+                input[0] = [fold_min_ss: 2, fold_max_ss: null, fold_min_loop: 5]
+                input[1] = "fold"
+                input[2] = ["min_ss", "max_ss", "min_loop"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == "--fold-min-ss 2 --fold-min-loop 5"
+        }
+    }
+
+    test("formatFilterParams returns empty string when all values are null") {
+        function "Utils.formatFilterParams"
+        when {
+            function {
+                """
+                input[0] = [fold_min_ss: null]
+                input[1] = "fold"
+                input[2] = ["min_ss"]
+                """
+            }
+        }
+        then {
+            assert function.success
+            assert function.result == ""
+        }
+    }
+}

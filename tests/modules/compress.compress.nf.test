@@ -1,0 +1,45 @@
+nextflow_process {
+
+    name "Test Process Compress"
+    script "modules/compress.nf"
+    process "Compress"
+
+    // Compress just tars+gzips whatever files it's given under "<program>_results/" - use
+    // real rfd_output fixture files (2 pdb + 2 json + 2 trb) as a representative payload.
+    test("Should tar.gz the given files under a program-named directory") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/rfd_output"
+            }
+            process {
+                """
+                input[0] = "rfd"
+                input[1] = [
+                    file("\${params.fixtures_dir}/fold_0.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_1.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_0.json", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_1.json", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out[0].size() == 1
+            def tarPath = file(process.out[0][0])
+            assert tarPath.getName() == "rfd_results.tar.gz"
+
+            def listing = ["tar", "-tzf", tarPath.toString()].execute().text
+            assert listing.contains("rfd_results/fold_0.pdb")
+            assert listing.contains("rfd_results/fold_1.pdb")
+            assert listing.contains("rfd_results/fold_0.json")
+            assert listing.contains("rfd_results/fold_1.json")
+        }
+
+    }
+
+}

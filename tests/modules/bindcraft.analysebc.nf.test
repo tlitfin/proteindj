@@ -1,0 +1,70 @@
+nextflow_process {
+
+    name "Test Process AnalyseBC"
+    script "modules/bindcraft.nf"
+    process "AnalyseBC"
+
+    // Real BindCraft outputs from batch_0 run: raw PDB+CSV files from RunBC that AnalyseBC
+    // will process, swap chains A<->B, and assign new sequential fold IDs. Input is a
+    // flattened mix of pdbs + csv (from RunBC's tuple output when staged).
+    // Real values cross-checked against bc_output/batch_0.csv: fold_0 = batch_0_l64_s516555
+    // (Length=64, pLDDT=0.78, Target_RMSD=0.26, TrajectoryTime="0 hours, 6 minutes, 13
+    // seconds" -> bc_time=373), fold_1 = batch_0_l93_s621777 (Length=93, pLDDT=0.95,
+    // Target_RMSD=0.22, TrajectoryTime="0 hours, 8 minutes, 56 seconds" -> bc_time=536).
+    test("Should process BindCraft outputs and generate fold-numbered PDB/JSON pairs") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/bc_output"
+                bc_fix_interface_residues = false
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.fixtures_dir}/batch_0.csv", checkIfExists: true),
+                    file("\${params.fixtures_dir}/batch_0_l64_s516555.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/batch_0_l93_s621777.pdb", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Tuple emit: a single execution emits ONE item which is itself the tuple
+            // [list_of_pdbs, list_of_jsons] - so process.out.pdbs_jsons[0] is the tuple,
+            // and [0][0]/[0][1] are the two glob-matched file lists.
+            assert process.out.pdbs_jsons[0][0].size() == 2
+            assert process.out.pdbs_jsons[0][1].size() == 2
+
+            def pdbNames = process.out.pdbs_jsons[0][0].collect { file(it).getName() }
+            assert pdbNames.containsAll(["fold_0.pdb", "fold_1.pdb"])
+            def jsonNames = process.out.pdbs_jsons[0][1].collect { file(it).getName() }
+            assert jsonNames.containsAll(["fold_0.json", "fold_1.json"])
+
+            def jsonSlurper = new groovy.json.JsonSlurper()
+            def fold0Path = process.out.pdbs_jsons[0][1].find { file(it).getName() == "fold_0.json" }
+            def fold1Path = process.out.pdbs_jsons[0][1].find { file(it).getName() == "fold_1.json" }
+            def fold0Json = jsonSlurper.parse(file(fold0Path))
+            def fold1Json = jsonSlurper.parse(file(fold1Path))
+
+            assert fold0Json.fold_id == 0
+            assert fold0Json.bc_length == 64
+            assert fold0Json.bc_plddt == 0.78
+            assert fold0Json.bc_rmsd_target == 0.26
+            assert fold0Json.bc_time == 373
+            assert fold0Json.bc_intface_res == "A2,A3,A4,A5,A6,A8,A9,A10,A12,A13,A16,A17,A20,A29,A30,A32,A33,A34,A52,A56,A59,A60,A64"
+
+            assert fold1Json.fold_id == 1
+            assert fold1Json.bc_length == 93
+            assert fold1Json.bc_plddt == 0.95
+            assert fold1Json.bc_rmsd_target == 0.22
+            assert fold1Json.bc_time == 536
+        }
+
+    }
+
+}

@@ -1,0 +1,8 @@
+sequences:
+- protein:
+    id: A
+    sequence: MSPAERERRAALLAALRRLAARAEERGDAELAARLRAALALGEISPETLEALLAALEEVDAAAAEELRAI
+    msa: empty
+templates:
+- pdb: templates/fold_1_seq_0.pdb
+  chain_id: A

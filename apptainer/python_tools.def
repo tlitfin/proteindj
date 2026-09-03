@@ -7,6 +7,7 @@ From: ubuntu:24.04
     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
         python3-venv \
         python3-pip \
+        python3-dev \
         wget \
         unzip \
         git \
@@ -14,7 +15,10 @@ From: ubuntu:24.04
         coreutils \
         grep \
         pigz \
-        sed
+        sed \
+        dssp \
+        curl \
+        build-essential
 
     # create and activate virtual environment
     python3 -m venv /opt/venv
@@ -22,8 +26,22 @@ From: ubuntu:24.04
 
     # install python tools
     export PIP_NO_CACHE_DIR=1
-    pip install biopython pandas matplotlib pyyaml
-    
+    pip install uv
+    export UV_NO_CACHE=1
+    export UV_LINK_MODE=copy
+    uv pip install \
+        arpeggia \
+        biopython \
+        matplotlib \
+        pandas \
+        pdbfixer \
+        pyfaspr \
+        prodigy-prot \
+        pyyaml
+    uv pip install \
+        torch \
+        torchvision --index-url https://download.pytorch.org/whl/cpu
+
     # cleanup build dependencies
     apt-get autoremove -y
     apt-get clean
@@ -39,9 +57,9 @@ From: ubuntu:24.04
     fi
 
 %help
-    Container with BioPython, Matplotlib, Pandas, and PyYAML installed in a Python virtual environment.
+    Container with Arpeggia, BioPython, Matplotlib, Pandas, PDBFixer, PRODIGY, PyTorch (CPU), PyYAML and DSSP (mkdssp) installed in a Python virtual environment.
     To use, run the container and your environment will be activated automatically.
 
 %labels
-    Author JoshuaHardy
-    Version 2.2
+    Author JoshuaHardy, DavidLadd
+    Version 3.0

@@ -112,18 +112,6 @@ class InputPdbParameterConverter(ParameterConverter):
         return f"--input_pdb '{value}'"
 
 
-class ContigsParameterConverter(ParameterConverter):
-    """Converter for contigs parameter."""
-
-    def to_profile_param(self, param_name: str, value: str) -> dict[str, Any]:
-        """Pass through contigs."""
-        return {"rfd_contigs": value}
-
-    def to_command_arg(self, param_name: str, value: str) -> Optional[str]:
-        """Convert to command line argument."""
-        return f"--contigs '{value}'"
-
-
 # Registry of parameter converters
 PARAMETER_CONVERTERS = {
     "models": ModelsParameterConverter(),
@@ -134,8 +122,6 @@ PARAMETER_CONVERTERS = {
     "hotspot_residues": HotspotsParameterConverter(),  # Alias
     "input_pdb": InputPdbParameterConverter(),
     "input_pdb": InputPdbParameterConverter(),  # Alias
-    "contigs": ContigsParameterConverter(),
-    "rfd_contigs": ContigsParameterConverter(),  # Alias
 }
 
 # Default converter for fallthrough

@@ -1,0 +1,44 @@
+nextflow_process {
+
+    name "Test Process AlignAF2"
+    script "modules/af2.nf"
+    process "AlignAF2"
+
+    // AlignAF2 rigid-body aligns each af2 prediction onto a reference PDB using chain B
+    // (the target) CA atoms, then writes out the transformed structure. Real fixtures from
+    // tier_b_binder_af2boltz/af2_filtered (AF2 predictions) + tier_b_binder/fampnn_output (a
+    // FAMPNN design output, used as the reference since it retains the original target
+    // chain B coordinates) - both have 115 chain-B CA atoms so alignment succeeds.
+    test("Should align AF2 predictions onto the reference target chain") {
+
+        tag "cpu"
+
+        when {
+            params {
+                af2_dir = "${projectDir}/tests/fixtures/tier_b_binder_af2boltz/af2_filtered"
+                reference_dir = "${projectDir}/tests/fixtures/tier_b_binder/fampnn_output"
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.af2_dir}/fold_0_seq_0_af2pred.pdb", checkIfExists: true),
+                    file("\${params.af2_dir}/fold_1_seq_0_af2pred.pdb", checkIfExists: true)
+                ]
+                input[1] = file("\${params.reference_dir}/fold_0_seq_0.pdb", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.pdbs[0].size() == 2
+            def alignedNames = process.out.pdbs[0].collect { file(it).getName() }
+            assert alignedNames.containsAll(["fold_0_seq_0_af2pred.pdb", "fold_1_seq_0_af2pred.pdb"])
+            def logText = path(process.out.logs[0]).text
+            assert logText.contains("Reference structure: fold_0_seq_0.pdb")
+            assert logText.contains("Successful alignments: 2")
+        }
+
+    }
+
+}

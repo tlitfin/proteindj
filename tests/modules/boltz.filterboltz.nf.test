@@ -1,0 +1,52 @@
+nextflow_process {
+
+    name "Test Process FilterBoltz"
+    script "modules/boltz.nf"
+    process "FilterBoltz"
+
+    // Real post-AnalyseBoltz predictions from tier_b_binder_af2boltz/boltz_output (already has
+    // ipSAE_min baked in): fold_0 ipSAE_min=0.033846 (passes a 0.02 threshold), fold_1
+    // ipSAE_min=0.013015 (fails it) - deterministic pass/fail split. unbound_json_files is
+    // the lib/NO_FILE placeholder, matching how main.nf wires it when
+    // boltz_predict_unbound_binder=false.
+    test("Should keep only designs passing the boltz-min-ipSAE-min threshold") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder_af2boltz/boltz_output"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0_boltzpred.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0_boltzpred.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0_boltzpred.json", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0_boltzpred.json", checkIfExists: true)
+                    ]
+                ]
+                input[1] = "--boltz-min-ipSAE-min 0.02"
+                input[2] = file("${projectDir}/lib/NO_FILE", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            // Only 1 file matched the glob, so Nextflow emits it as a scalar path (not a
+            // list) - process.out.pdbs is a channel with 1 element, that element being the path.
+            assert process.out.pdbs.size() == 1
+            assert process.out.pdbs[0].toString().contains("fold_0_seq_0_boltzpred.pdb")
+            assert process.out.jsonl.size() == 1
+            def filteredLines = path(process.out.jsonl[0]).text.readLines()
+            assert filteredLines.size() == 1
+            assert filteredLines[0].contains("fold_0_seq_0_boltzpred")
+        }
+
+    }
+
+}

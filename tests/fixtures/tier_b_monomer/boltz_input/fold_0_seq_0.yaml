@@ -1,0 +1,8 @@
+sequences:
+- protein:
+    id: A
+    sequence: SAKKEKIDKLLEELKELAKTEPEEEVKKKVEEILKEVKEKLGEEEAKELEEKWKEFLKELEKEKK
+    msa: empty
+templates:
+- pdb: templates/fold_0_seq_0.pdb
+  chain_id: A

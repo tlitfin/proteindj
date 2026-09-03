@@ -12,7 +12,7 @@ These parameters are required for ProteinDJ and are used by every mode.
 
 | Parameter         | Default         | Description                                                                                                                                                                                                         |
 | ----------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design_mode`     | null            | Pipeline mode. Choose from: `monomer_denovo`, `monomer_foldcond`, `monomer_motifscaff`, `monomer_partialdiff`, `bindcraft_denovo`, `binder_denovo`, `binder_foldcond`, `binder_motifscaff`, or `binder_partialdiff` |
+| `design_mode`     | null            | Pipeline mode. Choose from: `rfd_denovo`, `rfd_foldcond`, `rfd_motifscaff`, `rfd_partialdiff` (each automatically runs as monomer or binder design depending on `input_pdb`), `bindcraft_denovo`, `boltzgen_denovo`, or `boltzgen_motifscaff` |
 | `num_designs`     | 8               | Number of designs to generate using RFdiffusion or Bindcraft                                                                                                                                                        |
 | `seqs_per_design` | 8               | Number of sequences to generate per design                                                                                                                                                                          |
 | `out_dir`         | `./pdj_results` | Output directory for results. Existing results will be overwritten                                                                                                                                                  |
@@ -25,31 +25,64 @@ These parameters are used for some of the ProteinDJ modes.
 
 | Parameter                         | Default | Description                                                                                                                                                                                                                                                                                                                       | Required for Modes                                                                                                         |
 | --------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `design_length`                   | null    | Design length of binder or monomer. e.g. `'60'` or `'60-70'`. Pipeline will randomly sample different sizes between these values.                                                                                                                                                                                                 | `bindcraft_denovo`, `binder_denovo`, `monomer_denovo`                                                                      |
-| `input_pdb`                       | null    | Path to input PDB file (e.g. target for binders, `'./target.pdb'`). Required for several modes.                                                                                                                                                                                                                                   | `binder_denovo`, `binder_foldcond`, `binder_motifscaff`, `binder_partialdiff`, `monomer_motifscaff`, `monomer_partialdiff` |
-| `hotspot_residues`                | null    | Hotspot residues for binder design, e.g. `A56,A115,A123`. Optional for `binder_denovo` and `binder_foldcond`.                                                                                                                                                                                                                     |                                                                                                                            |
-| `rfd_contigs`                     | null    | Contigs specification strings for residues to include from input PDB and/or design length, e.g. `[A17-145/0 50-100]`. See docs for examples. Optional for multiple modes, required by `binder_motifscaff` and `monomer_motifscaff`. If null, contigs will be auto generated from input PDB (all residues) and/or `design_length`. | `binder_motifscaff`, `monomer_motifscaff`                                                                                  |
-| `rfd_scaffold_dir`                | null    | Directory containing scaffold secondary structure and block adjacency files (e.g. `'./binderscaffolds/scaffolds_assorted'`). Required for fold conditioning modes.                                                                                                                                                                | `binder_foldcond`, `monomer_foldcond`                                                                                      |
-| `rfd_mask_loops`                  | true    | Whether to ignore loops during scaffold secondary structure constraints. Optional for `binder_foldcond` and `monomer_foldcond` modes.                                                                                                                                                                                             |                                                                                                                            |
-| `rfd_inpaint_seq`                 | null    | Residues with masked sequence during diffusion, e.g. `[A17-19/A143-145]`. Optional for motif scaffolding modes `monomer_motifscaff`, `monomer_foldcond` .                                                                                                                                                                         |                                                                                                                            |
-| `rfd_length`                      | null    | Length of diffused chain during motif scaffolding, e.g. `100-100` or `100-120`. Optional for motif scaffolding modes `binder_motifscaff`, `monomer_motifscaff`.                                                                                                                                                                   |                                                                                                                            |
-| `rfd_partial_diffusion_timesteps` | null    | Number of timesteps for partial diffusion (1-50) e.g. 20. Required for partial diffusion modes.                                                                                                                                                                                                                                   | `binder_partialdiff`, `monomer_partialdiff`                                                                                |
+| `design_length`                   | null    | Design length of binder or monomer. e.g. `'60'` or `'60-70'`. Pipeline will randomly sample different sizes between these values.                                                                                                                                                                                                 | `bindcraft_denovo`, `rfd_denovo`, `boltzgen_denovo`                                                                      |
+| `input_pdb`                       | null    | Path to input PDB file (e.g. target for binders, `'./target.pdb'`). Required for all binder modes.                                                                                                                                                                                                                                   | `bindcraft_denovo`, `boltzgen_motifscaff`, `rfd_motifscaff`, `rfd_partialdiff` |
+| `hotspot_residues`                | null    | Hotspot residues on target chain(s) for binder design. Comma-separated tokens, each a chain-qualified residue (`A56`), chain-qualified range (`A115-120`), or bare chain ID meaning the whole chain (`B`), e.g. `A56,A115-120,B`. A chain identifier is always required. Optional for `rfd_denovo`/`rfd_foldcond`, `bindcraft_denovo`, `boltzgen_denovo`/`boltzgen_motifscaff` binder design modes.                                                                                                                                                                                                                     |                                                                                                                            |
+| `motifscaff_spec`                   | null    | Chain A architecture spec: an ordered, comma-separated list of chain-A keep tokens (`A<start>-<end>`/`A<n>`) and insert tokens (bare `<n>`/`<min>-<max>`). Used by `boltzgen_motifscaff` and `rfd_motifscaff`.                                                                                                                                                                                                        |                                                                                                    |
+| `motifscaff_inpaint_seq`            | null    | Chain A residues, within those kept by `motifscaff_spec`, whose sequence is allowed to change while structure stays fixed/conditioned. Comma-separated e.g. `'A10-50,A60'`. Used by `boltzgen_motifscaff` and `rfd_motifscaff`.                                                                                                                                                                                                                                  |                                                                                                    |
+| `flexible_residues`               | null    | Residues whose structure should NOT be conditioned on, useful for disordered/flexible regions e.g. loops or IDPs. Comma-separated tokens, each a chain-qualified residue e.g. `'A16'`, a chain-qualified range e.g. `'B10-13'`, or a bare chain ID e.g. `'C'` meaning the whole chain. Used by `boltzgen_denovo`, `boltzgen_motifscaff`, `rfd_motifscaff`, `rfd_partialdiff`, and binder design with `rfd_denovo`/`rfd_foldcond`.                                                                                                              |                                                                                                    |
+| `rfd_foldcond_scaffold_dir`                | null    | Directory containing scaffold secondary structure and block adjacency files (e.g. `'./binderscaffolds/scaffolds_assorted'`). Required for fold conditioning modes.                                                                                                                                                                | `rfd_foldcond`                                                                                      |
+| `rfd_foldcond_mask_loops`                  | true    | Whether to ignore loops during scaffold secondary structure constraints. Optional for `rfd_foldcond` mode.                                                                                                                                                                                             |                                                                                                                            |
+| `rfd_motifscaff_length`                      | null    | Length of diffused chain during motif scaffolding, e.g. `100-100` or `100-120`. Optional for motif scaffolding mode `rfd_motifscaff`.                                                                                                                                                                   |                                                                                                                            |
+| `rfd_partialdiff_timesteps` | null    | Number of timesteps for partial diffusion (1-50) e.g. 20. Required for partial diffusion mode.                                                                                                                                                                                                                                   | `rfd_partialdiff`                                                                                |
+| `rfd_partialdiff_fixed_seq`           | null    | Design chain residues whose sequence should be kept fixed during partial diffusion, e.g. `A17-19,A143-145`. References the design chain only (chain A in binder mode, the sole chain in monomer mode). If null, the sequence is fully redesignable. Optional for `rfd_partialdiff` mode.                                       |                                                                                                   |
+| `rfd_partialdiff_spec`                | null    | Chain A partial diffusion spec: an ordered, comma-separated list of chain-A keep tokens (`A<start>-<end>`/`A<n>`, left fully fixed) and fixed-count diffuse tokens (bare `<n>` only, no ranges since length cannot change), e.g. `A1-19,59`. If null, the whole chain is partially diffused.                                       |                                                                                                   |
 
 ### Parameter Requirements by Mode
 
 `-` = ignored
 
-| Parameter                       | monomer denovo | monomer foldcond | monomer motifscaff | monomer partialdiff | binder denovo | binder foldcond | binder motifscaff | binder partialdiff | bindcraft_denovo |
-| ------------------------------- | -------------- | ---------------- | ------------------ | ------------------- | ------------- | --------------- | ----------------- | ------------------ | ---------------- |
-| design_length                   | Required       | -                | -                  | -                   | Required      | -               | -                 | -                  | Required         |
-| input_pdb                       | -              | -                | Required           | Required            | Required      | Required        | Required          | Required           | Required         |
-| hotspot_residues                | -              | -                | -                  | -                   | _Optional_    | _Optional_      | -                 | -                  | _Optional_       |
-| rfd_contigs                     | _Optional_     | -                | Required           | _Optional_          | _Optional_    | -               | Required          | _Optional_         | -                |
-| rfd_scaffold_dir                | -              | Required         | -                  | -                   | -             | Required        | -                 | -                  | -                |
-| rfd_mask_loops                  | -              | _Optional_       | -                  | -                   | -             | _Optional_      | -                 | -                  | -                |
-| rfd_inpaint_seq                 | -              | -                | _Optional_         | -                   | -             | -               | _Optional_        | -                  | -                |
-| rfd_length                      | -              | -                | _Optional_         | -                   | -             | -               | _Optional_        | -                  | -                |
-| rfd_partial_diffusion_timesteps | -              | -                | -                  | Required            | -             | -               | -                 | Required           | -                |
+#### Monomer design
+
+| Parameter                       | rfd_denovo | rfd_foldcond | rfd_motifscaff | rfd_partialdiff | boltzgen_denovo | boltzgen_motifscaff |
+| -------------------------------- | ---------- | ------------ | --------------- | ---------------- | ---------------- | ------------------- |
+| design_length                    | Required   | -            | -               | -                 | Required          | -                   |
+| input_pdb                        | -          | -            | Required        | Required          | -                 | Required            |
+| hotspot_residues                 | -          | -            | -               | -                 | -                 | -                   |
+| bg_not_binding_residues          | -          | -            | -               | -                 | -                 | -                   |
+| motifscaff_spec                    | -          | -            | _Optional_      | -                 | -                 | _Optional_          |
+| motifscaff_inpaint_seq             | -          | -            | _Optional_      | -                 | -                 | _Optional_          |
+| flexible_residues                | -          | -            | _Optional_      | _Optional_        | -                 | _Optional_          |
+| rfd_foldcond_scaffold_dir                 | -          | Required     | -               | -                 | -                 | -                   |
+| rfd_foldcond_mask_loops                   | -          | _Optional_   | -               | -                 | -                 | -                   |
+| rfd_motifscaff_length                       | -          | -            | _Optional_      | -                 | -                 | -                   |
+| rfd_partialdiff_timesteps  | -          | -            | -               | Required          | -                 | -                   |
+| rfd_partialdiff_fixed_seq            | -          | -            | -               | _Optional_        | -                 | -                   |
+| rfd_partialdiff_spec                 | -          | -            | -               | _Optional_        | -                 | -                   |
+
+#### Binder design
+
+| Parameter                       | rfd_denovo | rfd_foldcond | rfd_motifscaff | rfd_partialdiff | bindcraft_denovo | boltzgen_denovo | boltzgen_motifscaff |
+| -------------------------------- | ---------- | ------------ | --------------- | ---------------- | ----------------- | ----------------- | ------------------- |
+| design_length                    | Required   | -            | -               | -                 | Required           | Required           | -                   |
+| input_pdb                        | Required   | Required     | Required        | Required          | Required           | Required           | Required            |
+| hotspot_residues                 | _Optional_ | _Optional_   | -               | -                 | _Optional_         | _Optional_         | _Optional_          |
+| bc_chains                        | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_design_protocol               | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_template_protocol             | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_omit_AAs                      | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_fix_interface_residues        | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bc_advanced_json                 | -          | -            | -               | -                 | _Optional_         | -                  | -                   |
+| bg_not_binding_residues          | -          | -            | -               | -                 | -                  | _Optional_         | _Optional_          |
+| motifscaff_spec                    | -          | -            | _Optional_      | -                 | -                  | -                  | _Optional_          |
+| motifscaff_inpaint_seq             | -          | -            | _Optional_      | -                 | -                  | -                  | _Optional_          |
+| flexible_residues                | _Optional_ | _Optional_   | _Optional_      | _Optional_        | -                  | _Optional_         | _Optional_          |
+| rfd_foldcond_scaffold_dir                 | -          | Required     | -               | -                 | -                  | -                  | -                   |
+| rfd_foldcond_mask_loops                   | -          | _Optional_   | -               | -                 | -                  | -                  | -                   |
+| rfd_motifscaff_length                       | -          | -            | _Optional_      | -                 | -                  | -                  | -                   |
+| rfd_partialdiff_timesteps  | -          | -            | -               | Required          | -                  | -                  | -                   |
+| rfd_partialdiff_fixed_seq            | -          | -            | -               | _Optional_        | -                  | -                  | -                   |
+| rfd_partialdiff_spec                 | -          | -            | -               | _Optional_        | -                  | -                  | -                   |
 
 ---
 
@@ -60,10 +93,10 @@ These parameters control the workflow of ProteinDJ.
 | Parameter            | Default | Description                                                                                                                                                                                                              |
 | -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `seq_method`         | 'mpnn'  | Sequence design method. Options: `'mpnn'` (ProteinMPNN Fast-Relax) or `'fampnn'` (Full-Atom MPNN).                                                                                                                       |
-| `pred_method`        | 'af2'   | Structure prediction method. Options: `'af2'` (AlphaFold2 Initial-Guess) or `'boltz'` (Boltz-2).                                                                                                                         |
+| `pred_method`        | 'af2'   | Structure prediction method. Options: `'af2'` (AlphaFold2 Initial-Guess), `'boltz'` (Boltz-2), or `'af2_boltz'` (runs AF2 first, filters, then runs Boltz-2 on the survivors for a final, more accurate prediction). |
 | `zip_pdbs`           | true    | Whether to compress output final designs in a tar.gz archive. If false, results will be output as uncompressed PDB files.                                                                                                |
 | `rank_designs`       | true   | Whether to rank final designs by prediction quality metrics and output `ranked_designs.csv` and `ranked_designs` folder (or `.tar.gz`). |
-| `ranking_metric`     | null   | Structure prediction metric to use for ranking designs (e.g., `'af2_pae_interaction'`, `'boltz_ptm_interface'`, `'boltz_ipSAE_min'`). Must match prediction method prefix (`af2_*` or `boltz_*`). If null, defaults are set depending on design_mode and pred_method: binder modes use `'af2_pae_interaction'` (AlphaFold2) or `'boltz_ipSAE_min'` (Boltz-2); monomer modes use `'af2_plddt_overall'` (AlphaFold2) or `'boltz_ptm'` (Boltz-2). See [Metrics Guide](metrics.md) for all available metrics. |
+| `ranking_metric`     | null   | Structure prediction metric to use for ranking designs (e.g., `'af2_pae_interaction'`, `'boltz_iptm'`, `'boltz_ipSAE_min'`). Must match prediction method prefix (`af2_*` or `boltz_*`; either prefix is accepted when `pred_method` is `'af2_boltz'`). If null, defaults are set depending on design_mode and pred_method: binder modes use `'af2_pae_interaction'` (AlphaFold2) or `'boltz_ipSAE_min'` (Boltz-2 or af2_boltz); monomer modes use `'af2_plddt_overall'` (AlphaFold2) or `'boltz_ptm'` (Boltz-2 or af2_boltz). See [Metrics Guide](metrics.md) for all available metrics. |
 | `max_designs`   | null    | Maximum number of top-ranked designs to output (e.g. 100). If null, all designs are ranked and output.                                                                    |
 | `max_seqs_per_fold` | null | Maximum number of sequences per fold to keep after ranking (e.g. 3). Helps increase fold diversity by limiting sequences for highly successful folds. If null, no limit is applied. |
 | `run_fold_only`      | false   | Whether to run only fold design and skip sequence design, prediction, and analysis.                                                                                                                                      |
@@ -80,7 +113,7 @@ Advanced parameters to control the behaviour of RFdiffusion. Can be used with an
 
 | Parameter           | Default | Description                                                                                                                                                                                                                                                                         |
 | ------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rfd_ckpt_override` | null    | Overrides the diffusion model checkpoint. Options include `'active_site'`, `'base'`, `'base_epoch8'`, `'complex_base'`, `'complex_beta'`, `'complex_fold_base'`, `'inpaint_seq'`, `'inpaint_seq_fold'`. Not generally recommended except for `binder_denovo` with `'complex_beta'`. |
+| `rfd_ckpt_override` | null    | Overrides the diffusion model checkpoint. Options include `'active_site'`, `'base'`, `'base_epoch8'`, `'complex_base'`, `'complex_beta'`, `'complex_fold_base'`, `'inpaint_seq'`, `'inpaint_seq_fold'`. Not generally recommended except for `rfd_denovo` binder design with `'complex_beta'`. `rfd_motifscaff` binder design already defaults to `'complex_base'` internally (unless `motifscaff_inpaint_seq`/`flexible_residues` is set) since RFdiffusion's own checkpoint auto-selection would otherwise fall back to the monomer-only checkpoint. |
 | `rfd_noise_scale`   | null    | Scale of noise applied to translations and rotations. Default is 1 for monomer modes (increases diversity), recommended 0-0.5 for binders (increases success rates).                                                                                                                |
 | `rfd_extra_config`  | null    | Additional raw configuration passed to RFdiffusion not covered by Nextflow parameters e.g. `'contigmap.inpaint_str=[B165-178]'`.                                                                                                                                                    |
 
@@ -101,9 +134,19 @@ Advanced parameters to control the behaviour of BindCraft.
 
 ---
 
-## ProteinMPNN-FastRelax Advanced Parameters
+## BoltzGen Advanced Parameters
 
-Advanced parameters to control the behaviour of ProteinMPNN-FastRelax.
+Advanced parameters to control the behaviour of BoltzGen (see [BoltzGen Design mode guide](modes.md#boltzgendesign) for detailed usage examples).
+
+| Parameter                  | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                             | Applies to        |
+| --------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `bg_not_binding_residues`   | null    | Target residues the binder should NOT contact. Comma-separated tokens, each a chain-qualified residue e.g. `'A200'`, a chain-qualified range e.g. `'A210-215'`, or a bare chain ID e.g. `'B'` meaning the whole chain.                                                                                | `boltzgen_denovo`, `boltzgen_motifscaff` |
+
+---
+
+## ProteinMPNN-OpenMMRelax Advanced Parameters
+
+Advanced parameters to control the behaviour of ProteinMPNN-OpenMMRelax.
 
 | Parameter                           | Default      | Description                                                                                                                                                                             |
 | ----------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -112,13 +155,13 @@ Advanced parameters to control the behaviour of ProteinMPNN-FastRelax.
 | `mpnn_checkpoint_type`              | `'soluble'`  | Checkpoint selection: `'vanilla'`, `'soluble'` or `'hyper'`.                                                                                                                            |
 | `mpnn_checkpoint_model`             | `'v_48_020'` | Checkpoint model variant indicating backbone noise level used during training. e.g. 'v_48_020' noised with 0.20Å Gaussian noise. Choose from 'v_48_002','v_48_010,'v_48_020','v_48_030' |
 | `mpnn_backbone_noise`               | 0            | Std dev Gaussian noise added to backbone atoms. 0 = none, 0.1-0.3 = mild perturbation.                                                                                                  |
-| `mpnn_relax_max_cycles`             | 0            | Max fast relaxation cycles per sequence; 0 disables FastRelax functionality.                                                                                                            |
+| `mpnn_relax_max_cycles`             | 0            | Max fast relaxation cycles per sequence; 0 disables OpenMMRelax functionality.                                                                                                            |
 | `mpnn_relax_seqs_per_cycle`         | 1            | Number of sequences generated between relaxation steps; best scored sequence is kept.                                                                                                   |
 | `mpnn_relax_output`                 | false        | Whether to run relaxation before saving output.                                                                                                                                         |
 | `mpnn_relax_convergence_rmsd`       | 0.2          | RMSD early convergence threshold for relaxation cycles. Design is considered converged if the C-alpha RMSD (Å) between cycles is <= this threshold.                                     |
 | `mpnn_relax_convergence_score`      | 0.1          | Score early convergence threshold for relaxation cycles. Design is considered converged if the improvement in score between cycles is <= this threshold.                                |
 | `mpnn_relax_convergence_max_cycles` | 1            | Design is considered converged if it meets both convergence criteria for n consecutive cycles.                                                                                          |
-| `mpnn_extra_config`                 | null         | Additional raw configuration passed to ProteinMPNN-FastRelax. e.g. `-protein_features="full"'`                                                                                          |
+| `mpnn_extra_config`                 | null         | Additional raw configuration passed to ProteinMPNN-OpenMMRelax. e.g. `-protein_features="full"'`                                                                                          |
 
 ---
 
@@ -143,6 +186,7 @@ Advanced parameters to control the behaviour of Full-Atom MPNN
 | `uncropped_target_pdb`     | null    | Path to uncropped target PDB for prediction (e.g., full complex).                                                                                                                    |
 | `af2_initial_guess`        | true    | Use an initial guess for target chains in AlphaFold2 structure predictions.                                                                                                          |
 | `af2_extra_config`         | null    | Additional raw parameters passed to AlphaFold2 Initial-Guess. e.g. '-recycle 3'                                                                                                      |
+| `af2_jax_compilation_cache_dir` | null | Optional existing path for the persistent JAX compilation cache used by AlphaFold2. Relative paths are resolved against the workflow launch directory. The path is bind-mounted into the container. When null, `JAX_COMPILATION_CACHE_DIR` is not set. |
 | `boltz_recycling_steps`    | 3       | Number of recycling steps in Boltz-2 predictions.                                                                                                                                    |
 | `boltz_diffusion_samples`  | 1       | Number of diffusion samples in Boltz-2 predictions.                                                                                                                                  |
 | `boltz_sampling_steps`     | 200     | Number of sampling steps in Boltz-2 predictions.                                                                                                                                     |
@@ -150,8 +194,9 @@ Advanced parameters to control the behaviour of Full-Atom MPNN
 | `boltz_use_templates`      | true    | Enable template-guided structure prediction. In binder modes, the target (chain B) is used as template, similar to AlphaFold2 Initial-Guess. In monomer modes, chain A is templated. |
 | `boltz_template_force`     | false   | Enforce template structure with potential during prediction. Requires `boltz_use_templates = true`.                                                                                  |
 | `boltz_template_threshold` | null    | Distance threshold in Angstroms for template deviation. If specified with `boltz_template_force = true`, constrains prediction near template.                                        |
-| `boltz_input_msa` | null | Path to a multiple sequence alignment (.a3m format) for the input PDB. For binder modes, MSA is applied to chain B (target), and for monomer modes, MSA is applied to chain A. MSA must match entire sequence of chain or will be ignored by Boltz. If null, single-sequence mode is used (msa: empty in YAML). e.g. 'lib/pdl1_msa.a3m' |
+| `boltz_input_msa` | null | Path to a multiple sequence alignment (.a3m format) for the input PDB. For binder modes, MSA is applied to chain B (target), and for monomer modes, MSA is applied to chain A. MSA must match entire sequence of chain or will be ignored by Boltz. It will also be ignored if there are multiple target chains. If null, single-sequence mode is used (msa: empty in YAML). e.g. 'lib/pdl1_msa.a3m' |
 | `boltz_extra_config`       | null    | Additional raw parameters for Boltz-2 predictions. e.g. '--msa_pairing_strategy complete'                                                                                            |
+| `boltz_predict_unbound_binder` | false | Also predict the binder alone (no target) as a target-free monomer prediction with Boltz-2, to check whether the binder folds consistently to the design in the absence of the target. Binder design modes only. Runs as a pure single-sequence prediction (no template, no MSA). |
 
 ---
 
@@ -162,7 +207,7 @@ Due to the inherently stochastic nature of protein design, often we see problema
 - **Fold Filtering** - Filters designs according to the number of secondary structure elements and radius of gyration.
 - **Sequence Filtering** - Filters designs according to the score of the generated sequence
 - **AlphaFold2/Boltz-2 Filtering** - Filters designs according to the quality of the structure prediction
-- **Analysis Filtering** - Filters designs according to detailed biophysical metrics calculated by PyRosetta and BioPython, including interface quality, energy, and sequence properties
+- **Analysis Filtering** - Filters designs according to detailed biophysical metrics calculated by arpeggia, PRODIGY, and BioPython on the energy-minimized structure, including interface quality, energy, and sequence properties
 
 The most powerful predictors of experimental success are structure prediction metrics, but some metrics are more effective than others. Here are some recommended filters for binder design from the literature and their corresponding parameters in ProteinDJ:
 
@@ -213,6 +258,10 @@ Sequence Filtering Parameters for ProteinMPNN and Full-Atom MPNN. Recommended to
 | ----------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `mpnn_max_score`  | Maximum MPNN score (negative log likelihood). A lower score means ProteinMPNN is more confident in the sequence. |
 | `fampnn_max_psce` | Max PSCE score for designed side-chains. A lower score means FAMPNN is more confident in the sequence.           |
+| `seq_min_ext_coef`            | Minimum extinction coefficient at 280nm (M⁻¹cm⁻¹)                                             |
+| `seq_max_ext_coef`            | Maximum extinction coefficient at 280nm (M⁻¹cm⁻¹)                                             |
+| `seq_min_pi`                  | Minimum isoelectric point (pI) of the sequence                                                |
+| `seq_max_pi`                  | Maximum isoelectric point (pI) of the sequence                                                |
 
 ### AlphaFold2 Filtering Parameters
 
@@ -220,6 +269,7 @@ AlphaFold2 Initial-Guess Filtering Parameters.
 
 | Parameter                    | Description                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `af2_min_iptm`               | Min predicted interface TM-score (ipTM) between binder and target. |
 | `af2_max_pae_interaction`    | Max predicted aligned error for interactions                                                   |
 | `af2_max_pae_overall`        | Max predicted aligned error for all chains                                                     |
 | `af2_max_pae_binder`         | Max predicted aligned error for binder                                                         |
@@ -249,15 +299,22 @@ Boltz-2 Filtering Parameters.
 | `boltz_min_ptm`             | Minimum predicted template modelling score of the prediction                                      |
 | `boltz_min_ptm_binder`      | Minimum predicted template modelling score of the binder chain. Binder modes only.                |
 | `boltz_min_ptm_target`      | Minimum predicted template modelling score of the target chain. Binder modes only.                |
-| `boltz_min_ptm_interface`   | Minimum predicted template modelling score of the prediction interface                            |
+| `boltz_min_iptm`   | Minimum predicted template modelling score of the prediction interface                            |
 | `boltz_min_plddt`           | Minimum pLDDT score of the prediction                                                             |
-| `boltz_min_plddt_interface` | Minimum pLDDT score of the prediction interface                                                   |
+| `boltz_min_iplddt` | Minimum pLDDT score of the prediction interface                                                   |
 | `boltz_max_pde`             | Maximum predicted distance error of the prediction                                                |
-| `boltz_max_pde_interface`   | Maximum predicted distance error for the prediction interface                                     |
+| `boltz_max_ipde`   | Maximum predicted distance error for the prediction interface                                     |
+| `boltz_max_unbound_rmsd`    | Max C-alpha RMSD between the unbound (target-free) binder prediction and the design*|
+| `boltz_min_unbound_conf_score` | Minimum confidence score of the unbound (target-free) binder prediction*|
+| `boltz_min_unbound_ptm`     | Minimum pTM score of the unbound (target-free) binder prediction*|
+| `boltz_min_unbound_plddt`   | Minimum pLDDT score of the unbound (target-free) binder prediction* |
+| `boltz_max_unbound_pde`     | Maximum PDE score of the unbound (target-free) binder prediction* |
+
+*Requires `boltz_predict_unbound_binder = true` to generate unbound binder predictions.
 
 ### Analysis Filtering Parameters
 
-Analysis Filtering Parameters for the final Analysis stage using PyRosetta and BioPython. These metrics provide detailed biophysical characterization of the predicted structures, particularly useful for binder design. Note that interface metrics are only calculated for binder design modes.
+Analysis Filtering Parameters for the final Analysis stage using PDBFixer/OpenMM, arpeggia, PRODIGY, and BioPython. These metrics provide detailed biophysical characterization of the predicted structures, particularly useful for binder design. Note that interface metrics are only calculated for binder design modes.
 
 | Parameter                     | Description                                                                                   |
 | ----------------------------- | --------------------------------------------------------------------------------------------- |
@@ -273,17 +330,11 @@ Analysis Filtering Parameters for the final Analysis stage using PyRosetta and B
 | `pr_min_intface_shpcomp`      | Minimum shape complementarity of interface (0-1 scale; 1 is optimal)                          |
 | `pr_min_intface_hbonds`       | Minimum number of hydrogen bonds at the interface                                             |
 | `pr_max_intface_unsat_hbonds` | Maximum number of buried, unsatisfied hydrogen bonds at the interface                         |
-| `pr_max_intface_deltag`       | Maximum solvation free energy gain at interface (Rosetta Energy Units; lower is better)       |
+| `pr_max_intface_deltag`       | Maximum predicted binding free energy at the interface (PRODIGY IC-NIS model, kcal/mol; more negative is better)       |
 | `pr_max_intface_deltagtobsa`  | Maximum ratio of delta-G to buried surface area                                               |
-| `pr_min_intface_packstat`     | Minimum packing quality of the interface (0-1 scale; higher is better)                        |
-| `pr_max_tem`                  | Maximum total energy metric score (Rosetta Energy Units; lower indicates more stable designs) |
 | `pr_max_surfhphobics`         | Maximum percentage of hydrophobic residues exposed on the surface                             |
 | `pr_max_sap`                  | Maximum mean residue Spatial Aggregation Propensity for monomer/binder (solubility prediction; lower is better) |
 | `pr_max_sap_complex`          | Maximum mean residue Spatial Aggregation Propensity for binder in complex (solubility prediction; lower is better) |
-| `seq_min_ext_coef`            | Minimum extinction coefficient at 280nm (M⁻¹cm⁻¹)                                             |
-| `seq_max_ext_coef`            | Maximum extinction coefficient at 280nm (M⁻¹cm⁻¹)                                             |
-| `seq_min_pi`                  | Minimum isoelectric point (pI) of the sequence                                                |
-| `seq_max_pi`                  | Maximum isoelectric point (pI) of the sequence                                                |
 
 ## Cluster Parameters
 
@@ -294,6 +345,8 @@ The cluster parameters may need adjusting depending on your HPC setup and availa
 | `rfd_models`   | `"${projectDir}/models/rfd"`   | Path to the RFdiffusion model checkpoints.  |
 | `af2_models `  | `"${projectDir}/models/af2"`   | Path to the AlphaFold2 models.              |
 | `boltz_models` | `"${projectDir}/models/boltz"` | Path to the Boltz-2 models.                 |
+| `mpnn_models`  | `"${projectDir}/models/mpnn"`  | Path to the ProteinMPNN model checkpoints.  |
+| `bg_models`    | `"${projectDir}/models/boltzgen"` | Path to the BoltzGen model checkpoints.  |
 | `gpu_model`    | `'A30'`                        | GPU model to request, e.g., 'A30'.          |
 | `gpus`         | `1`, `2`, `4`, `8`             | Number of GPUs to request                   |
 | `cpus_per_gpu` | `8`, `12`                      | Number of CPUs to request per GPU           |

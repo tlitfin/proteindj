@@ -190,8 +190,8 @@ def cli(
                 sweep_data = yaml.safe_load(f)
             mode = sweep_data.get("mode", "")
 
-            if mode.startswith("binder_") or mode.startswith("bindcraft_"):
-                # Use binder schema for binder and bindcraft modes
+            if mode.startswith("rfd_") or mode.startswith("bindcraft_") or mode.startswith("boltzgen_"):
+                # Use binder schema for RFdiffusion, bindcraft, and boltzgen modes
                 schema_path = os.path.join(os.path.dirname(__file__), "binder_schema.json")
             else:
                 # Use nextflow schema for other modes
@@ -230,6 +230,15 @@ def cli(
                 config, out_dir, nextflow_config_path, 
                 resume=resume, parallel=parallel, max_parallel=max_parallel
             )
+
+            # Warn if no sweep parameters are defined - only fixed_params will be run once
+            if not config.sweep_params:
+                click.echo(f"\nWARNING: No sweep parameters defined in the configuration.", err=True)
+                click.echo(f"This will run a single job using only the fixed parameters (no parameter sweep).\n", err=True)
+
+                if not skip_confirmation and not dry_run and not click.confirm("Do you want to proceed with a single run using fixed parameters only?"):
+                    click.echo("Sweep cancelled by user.")
+                    sys.exit(0)
         
         if not skip_sweep:
             # Run quick test if requested

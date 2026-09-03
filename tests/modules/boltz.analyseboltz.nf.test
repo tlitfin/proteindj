@@ -1,0 +1,75 @@
+nextflow_process {
+
+    name "Test Process AnalyseBoltz"
+    script "modules/boltz.nf"
+    process "AnalyseBoltz"
+
+    // Real Boltz raw outputs from tier_b_binder/boltz_output (confirmed pre-ipSAE/pDockQ
+    // processing - input JSONs contain only base Boltz confidence metrics: ptm/iptm/
+    // ligand_iptm/protein_iptm/complex_plddt/complex_iplddt/complex_pde/complex_ipde/
+    // chains_ptm/pair_chains_iptm). AnalyseBoltz computes ipSAE/pDockQ/LIS interface
+    // metrics from the PAE/pLDDT npz files + PDB structures and injects new keys into
+    // the output JSON files. Do NOT use tier_b_binder_af2boltz/boltz_output here - those
+    // json files already have ipSAE/pDockQ baked in from a prior AnalyseBoltz run.
+    test("Should compute ipSAE/pDockQ metrics and add them to confidence JSON files") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/boltz_output"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0_boltzpred.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0_boltzpred.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0_boltzpred.json", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0_boltzpred.json", checkIfExists: true)
+                    ]
+                ]
+                input[1] = [
+                    file("\${params.fixtures_dir}/pae_fold_0_seq_0_boltzpred.npz", checkIfExists: true),
+                    file("\${params.fixtures_dir}/plddt_fold_0_seq_0_boltzpred.npz", checkIfExists: true),
+                    file("\${params.fixtures_dir}/pae_fold_1_seq_0_boltzpred.npz", checkIfExists: true),
+                    file("\${params.fixtures_dir}/plddt_fold_1_seq_0_boltzpred.npz", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Tuple emit: a single execution emits ONE item which is itself the tuple
+            // [list_of_pdbs, list_of_jsons] - so process.out.pdbs_jsons[0] is the tuple,
+            // and [0][0]/[0][1] are the two glob-matched file lists.
+            assert process.out.pdbs_jsons[0][0].size() == 2
+            assert process.out.pdbs_jsons[0][1].size() == 2
+
+            def outputPdbNames = process.out.pdbs_jsons[0][0].collect { file(it).getName() }
+            assert outputPdbNames.containsAll(["fold_0_seq_0_boltzpred.pdb", "fold_1_seq_0_boltzpred.pdb"])
+            def outputJsonNames = process.out.pdbs_jsons[0][1].collect { file(it).getName() }
+            assert outputJsonNames.containsAll(["fold_0_seq_0_boltzpred.json", "fold_1_seq_0_boltzpred.json"])
+
+            def outputJson = new groovy.json.JsonSlurper().parse(file(process.out.pdbs_jsons[0][1][0]))
+
+            // Original Boltz keys still present
+            assert outputJson.containsKey("ptm")
+            assert outputJson.containsKey("iptm")
+            assert outputJson.containsKey("complex_plddt")
+
+            // New interface metric keys added by analyse_boltz_batch.py
+            assert outputJson.containsKey("ipSAE_min")
+            assert outputJson.containsKey("ipSAE_max")
+            assert outputJson.containsKey("pDockQ_min")
+            assert outputJson.containsKey("pDockQ_max")
+            assert outputJson.containsKey("LIS")
+        }
+
+    }
+
+}

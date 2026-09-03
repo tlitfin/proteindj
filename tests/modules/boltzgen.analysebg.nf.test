@@ -1,0 +1,47 @@
+nextflow_process {
+
+    name "Test Process AnalyseBG"
+    script "modules/boltzgen.nf"
+    process "AnalyseBG"
+
+    // Real BoltzGen outputs from tier_b_binder/bg_output (2 designs: batch0_0.cif/npz,
+    // batch0_1.cif/npz), design_mode='boltzgen_denovo' (confirmed via tier_b_binder/bg_processed
+    // reference fixtures, which carry bg_design_mode: "boltzgen_denovo").
+    test("Should convert BoltzGen cif/npz outputs to fold-numbered PDB/JSON pairs") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/bg_output"
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.fixtures_dir}/batch0_0.cif", checkIfExists: true),
+                    file("\${params.fixtures_dir}/batch0_0.npz", checkIfExists: true),
+                    file("\${params.fixtures_dir}/batch0_1.cif", checkIfExists: true),
+                    file("\${params.fixtures_dir}/batch0_1.npz", checkIfExists: true)
+                ]
+                input[1] = "boltzgen_denovo"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.pdbs_jsons[0][0].size() == 2
+            assert process.out.pdbs_jsons[0][1].size() == 2
+
+            def json0 = new groovy.json.JsonSlurper().parseText(
+                path(process.out.pdbs_jsons[0][1].find { file(it).getName() == "fold_0.json" }).text
+            )
+            assert json0.fold_id == 0
+            assert json0.bg_design_mode == "boltzgen_denovo"
+            assert json0.bg_inpaint_seq.any { it == true }
+            assert json0.bg_inpaint_seq.any { it == false }
+        }
+
+    }
+
+}

@@ -4,6 +4,8 @@ process PrepBoltz {
     input:
     path pdb_files
     path msa_file, stageAs: 'target_msa.a3m'
+    val(is_binder_mode)
+    val(binder_only)
 
     output:
     path ("output/*.yaml"), emit: yamls
@@ -11,19 +13,22 @@ process PrepBoltz {
     path ("output/*.a3m"), emit: msa_file, optional: true
 
     script:
-    // Determine template chain based on design mode
-    def templateChain = params.design_mode in ['binder_denovo', 'binder_foldcond', 'binder_motifscaff', 'binder_partialdiff', 'bindcraft_denovo'] ? 'B' : 'A'
+    // Determine template chain based on auto-detected binder/monomer status
+    def templateChain = is_binder_mode ? 'B' : 'A'
     
     // Determine MSA chain based on design mode (same as template chain)
     def msaChain = templateChain
     
-    // Build template parameters if enabled
-    def templateParams = params.boltz_use_templates ? "--use-template --template-chain ${templateChain}" : ""
-    def templateForceParam = params.boltz_use_templates && params.boltz_template_force ? "--template-force" : ""
-    def templateThresholdParam = params.boltz_use_templates && params.boltz_template_threshold ? "--template-threshold ${params.boltz_template_threshold}" : ""
+    // Build template parameters if enabled (unbound/binder-only prediction never uses templates)
+    def templateParams = (params.boltz_use_templates && !binder_only) ? "--use-template --template-chain ${templateChain}" : ""
+    def templateForceParam = (params.boltz_use_templates && !binder_only && params.boltz_template_force) ? "--template-force" : ""
+    def templateThresholdParam = (params.boltz_use_templates && !binder_only && params.boltz_template_threshold) ? "--template-threshold ${params.boltz_template_threshold}" : ""
     
-    // Build MSA parameter if provided
-    def msaParam = params.boltz_input_msa ? "--msa-file target_msa.a3m --msa-chain ${msaChain}" : ""
+    // Build MSA parameter if provided (unbound/binder-only prediction never uses an MSA)
+    def msaParam = (params.boltz_input_msa && !binder_only) ? "--msa-file target_msa.a3m --msa-chain ${msaChain}" : ""
+
+    // Restrict the YAML to just the binder chain (A) for a target-free unbound prediction
+    def binderOnlyParam = binder_only ? "--binder-only-chain A" : ""
     
     """
     # Generate yaml files containing sequences for Boltz-2 prediction 
@@ -33,9 +38,11 @@ process PrepBoltz {
         ${templateParams} \
         ${templateForceParam} \
         ${templateThresholdParam} \
-        ${msaParam}
+        ${msaParam} \
+        ${binderOnlyParam}
     """
 }
+
 
 process RunBoltz {
     label 'Boltz'
@@ -176,6 +183,8 @@ process FilterBoltz {
 
     input:
     tuple path(pdb_files), path(json_files)
+    val(paramString)
+    path(unbound_json_files)
 
     output:
     path ("output/*.pdb"), emit: pdbs, optional: true
@@ -183,33 +192,12 @@ process FilterBoltz {
     path ("filtered.jsonl"), emit: jsonl, optional: true
 
     script:
-    def paramString = Utils.formatFilterParams(
-        params,
-        "boltz",
-        [
-            "max_rmsd_overall",
-            "max_rmsd_binder",
-            "max_rmsd_target",
-            "min_conf_score",
-            "min_ptm",
-            "min_ptm_binder",
-            "min_ptm_target",
-            "min_ptm_interface",
-            "min_plddt",
-            "min_plddt_interface",
-            "max_pde",
-            "max_pde_interface",
-            "min_ipSAE_min",
-            "min_LIS",
-            "min_pDockQ2_min",
-            "max_pae_interaction",
-        ],
-    )
 
     """
     python -u /scripts/filter_boltz.py \\
         --json-directory ./ \\
         ${paramString} \\
+        --unbound-json-directory ./ \\
         --output-directory output \\
         2>&1 | tee filter_boltz_${task.index}.log
     """

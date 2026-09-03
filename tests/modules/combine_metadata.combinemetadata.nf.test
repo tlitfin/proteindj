@@ -1,0 +1,54 @@
+nextflow_process {
+
+    name "Test Process CombineMetadata"
+    script "modules/combine_metadata.nf"
+    process "CombineMetadata"
+
+    // metadata_fold: small synthetic fold-only jsonl (tests/fixtures/tier_b_combine_metadata),
+    // simulating RFD's per-fold metadata (fold_id 0, 1 with rfd_sampled_mask). NOTE:
+    // metadata_converter.py's merge_all() only keeps columns present in its hardcoded
+    // metadata_field_names allowlist - arbitrary field names (e.g. rfd_length) get silently
+    // dropped, so rfd_sampled_mask (an allowed RFdiffusion field) is used instead.
+    // metadata_fold_seq: real captured boltz_metadata_1.jsonl (fold_id + seq_id + boltz
+    // metrics for fold_0_seq_0 and fold_1_seq_0). CombineMetadata should merge the fold-only
+    // fields into the matching fold_id rows and write one combined CSV row per fold/seq.
+    test("Should merge fold-only and fold+seq metadata into a combined CSV") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fold_jsonl = "${projectDir}/tests/fixtures/tier_b_combine_metadata/metadata_fold.jsonl"
+                fold_seq_jsonl = "${projectDir}/tests/fixtures/tier_b_binder_af2boltz/boltz_aligned/boltz_metadata_1.jsonl"
+            }
+            process {
+                """
+                input[0] = file("\${params.fold_jsonl}", checkIfExists: true)
+                input[1] = file("\${params.fold_seq_jsonl}", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.csv.size() == 1
+            def lines = path(process.out.csv[0]).text.readLines()
+            // header + 2 data rows (fold_0_seq_0, fold_1_seq_0)
+            assert lines.size() == 3
+            def header = lines[0].split(",")
+            assert header.contains("fold_id")
+            assert header.contains("seq_id")
+            assert header.contains("rfd_sampled_mask")
+            assert header.contains("boltz_ptm")
+
+            def row0 = lines.find { it.contains("fold_0_seq_0_boltzpred") }
+            assert row0 != null
+            assert row0.contains("60-60")   // rfd_sampled_mask merged in from the fold-only file
+            def row1 = lines.find { it.contains("fold_1_seq_0_boltzpred") }
+            assert row1 != null
+            assert row1.contains("65-65")
+        }
+
+    }
+
+}

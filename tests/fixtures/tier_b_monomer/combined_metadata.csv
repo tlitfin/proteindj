@@ -1,0 +1,3 @@
+description,fold_id,seq_id,rfd_sampled_mask,fold_helices,fold_strands,fold_total_ss,fold_RoG,fampnn_avg_psce,seq_ext_coef,seq_length,seq_MW,seq_pI,boltz_conf_score,boltz_rmsd_overall,boltz_pde,boltz_plddt,boltz_ptm,pr_helices,pr_strands,pr_total_ss,pr_RoG,pr_SAP,pr_surfhphobics,sequence,rfd_time
+fold_0_seq_0,0,0,['65-65'],3,0,3,11.81,1.03,5500,65,7839,5.12,0.934,0.52,0.33,0.946,0.886,3,0,3,12.29,0.542,11.3,SAKKEKIDKLLEELKELAKTEPEEEVKKKVEEILKEVKEKLGEEEAKELEEKWKEFLKELEKEKK,29
+fold_1_seq_0,1,0,['70-70'],4,0,4,11.51,0.91,0,70,7434,4.81,0.914,1.16,0.34,0.923,0.878,4,0,4,11.78,0.229,38.8,A:MSPAERERRAALLAALRRLAARAEERGDAELAARLRAALALGEISPETLEALLAALEEVDAAAAEELRAI,30

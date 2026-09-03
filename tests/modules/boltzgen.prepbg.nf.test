@@ -1,0 +1,68 @@
+nextflow_process {
+
+    name "Test Process PrepBG"
+    script "modules/boltzgen.nf"
+    process "PrepBG"
+
+    // boltzgen_denovo mode: with no input_pdb (lib/NO_FILE placeholder), generate_boltzgen_yaml.py
+    // designs a standalone monomer and writes an empty "placeholder_boltzgen.pdb" file.
+    test("Should generate a monomer design-spec YAML with no target") {
+
+        tag "cpu"
+
+        when {
+            params {
+                design_length = "80"
+            }
+            process {
+                """
+                input[0] = 0
+                input[1] = file("${projectDir}/lib/NO_FILE", checkIfExists: true)
+                input[2] = "boltzgen_denovo"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def yamlFile = file(process.out[0][0][0])
+            assert yamlFile.getName() == "batch0.yaml"
+            def spec = new org.yaml.snakeyaml.Yaml().load(yamlFile.text)
+            assert spec.entities.size() == 1
+            assert process.out[0][0][1] == 0
+            assert process.out[0][0][2] == "boltzgen_denovo"
+            assert file(process.out[0][0][3]).getName() == "placeholder_boltzgen.pdb"
+        }
+
+    }
+
+    // boltzgen_denovo mode with a target: designs a binder against benchmarkdata/5o45_pd-l1.pdb
+    // (single chain A, residues 17-131), so the spec should have 2 entities (binder + target).
+    test("Should generate a binder design-spec YAML against a target PDB") {
+
+        tag "cpu"
+
+        when {
+            params {
+                design_length = "60"
+            }
+            process {
+                """
+                input[0] = 0
+                input[1] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                input[2] = "boltzgen_denovo"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            def yamlFile = file(process.out[0][0][0])
+            def spec = new org.yaml.snakeyaml.Yaml().load(yamlFile.text)
+            assert spec.entities.size() == 2
+            assert file(process.out[0][0][3]).getName() == "5o45_pd-l1_boltzgen.pdb"
+        }
+
+    }
+
+}

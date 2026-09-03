@@ -1,0 +1,10 @@
+{
+  "fold_id": 1,
+  "seq_id": 0,
+  "description": "fold_1_seq_0_boltzpred",
+  "boltz_unbound_rmsd": 4.58,
+  "boltz_unbound_conf_score": 0.692,
+  "boltz_unbound_ptm": 0.643,
+  "boltz_unbound_plddt": 0.704,
+  "boltz_unbound_pde": 0.77
+}

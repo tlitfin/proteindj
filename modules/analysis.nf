@@ -1,5 +1,5 @@
 process AnalysePredictions {
-    label 'pyrosetta_tools'
+    label 'python_tools'
 
     publishDir "${params.out_dir}/results", mode: 'copy', pattern: "*.csv"
     publishDir "${params.out_dir}/run/analysis", mode: 'copy', pattern: "analysis.log"
@@ -10,6 +10,7 @@ process AnalysePredictions {
     output:
     path "best_designs.jsonl", emit: jsonl, topic: metadata_ch_fold_seq
     path "analysis.log", emit: log
+    path "relaxed_pdbs/*.pdb", emit: relaxed_pdbs
 
     script:
     def num_processes = task.cpus - 1
@@ -29,6 +30,7 @@ process FilterAnalysis {
     input:
     path(jsonl_file)
     path(pdb_files)
+    val(paramString)
 
     output:
     path ("output/*.pdb"), emit: pdbs, optional: true
@@ -36,41 +38,6 @@ process FilterAnalysis {
     path ("filtered.jsonl"), emit: jsonl, optional: true
 
     script:
-    // Format parameters for analysis filtering
-    def paramString = Utils.formatFilterParams(
-        params,
-        "pr",
-        [
-            "min_helices",
-            "max_helices",
-            "min_strands",
-            "max_strands",
-            "min_total_ss",
-            "max_total_ss",
-            "min_rog",
-            "max_rog",
-            "min_intface_bsa",
-            "min_intface_shpcomp",
-            "min_intface_hbonds",
-            "max_intface_unsat_hbonds",
-            "max_intface_deltag",
-            "max_intface_deltagtobsa",
-            "min_intface_packstat",
-            "max_tem",
-            "max_surfhphobics",
-            "max_sap",
-            "max_sap_complex"
-        ],
-    ) + " " + Utils.formatFilterParams(
-        params,
-        "seq",
-        [
-            "min_ext_coef",
-            "max_ext_coef",
-            "min_pi",
-            "max_pi"
-        ],
-    )
 
     """    
     python -u /scripts/filter_analysis.py \

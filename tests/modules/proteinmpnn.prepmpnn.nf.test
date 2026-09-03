@@ -1,0 +1,47 @@
+nextflow_process {
+
+    name "Test Process PrepMPNN"
+    script "modules/proteinmpnn.nf"
+    process "PrepMPNN"
+
+    // PrepMPNN adds "REMARK PDBinfo-LABEL: <resnum> FIXED" lines to RFD output PDBs so
+    // ProteinMPNN keeps target/fixed residues unchanged during sequence design.
+    // Real fixtures: tier_b_binder/rfd_output (2 designs, fold_0.pdb/json, fold_1.pdb/json).
+    test("Should add FIXED remarks to RFD output PDBs") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/rfd_output"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.fixtures_dir}/fold_0.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.fixtures_dir}/fold_0.json", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.json", checkIfExists: true)
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.pdbs[0].size() == 2
+            def pdbNames = process.out.pdbs[0].collect { file(it).getName() }
+            assert pdbNames.containsAll(["fold_0.pdb", "fold_1.pdb"])
+
+            def pdb0Text = path(process.out.pdbs[0].find { file(it).getName() == "fold_0.pdb" }).text
+            assert pdb0Text.contains("REMARK PDBinfo-LABEL:")
+            assert pdb0Text.contains("FIXED")
+        }
+
+    }
+
+}

@@ -1,0 +1,59 @@
+nextflow_process {
+
+    name "Test Process GenerateRFDContigs"
+    script "modules/rfdiffusion.nf"
+    process "GenerateRFDContigs"
+
+    // benchmarkdata/5o45_pd-l1.pdb is a single-chain (A, residues 17-131) target PDB.
+    // Verified locally: `generate_contigs.py ... --design_mode rfd_denovo --design_length 80`
+    // -> "[80]" (monomer), and with --is_binder -> "[A17-131/0 80]" (binder, appends target
+    // chain A range + design_length).
+    test("Should generate a monomer denovo contig from design_length only") {
+
+        tag "cpu"
+
+        when {
+            params {
+                design_length = "80"
+            }
+            process {
+                """
+                input[0] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                input[1] = "rfd_denovo"
+                input[2] = false
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out[0][0] == "[80-80]"
+        }
+
+    }
+
+    test("Should generate a binder denovo contig with target chain range + design_length") {
+
+        tag "cpu"
+
+        when {
+            params {
+                design_length = "80"
+            }
+            process {
+                """
+                input[0] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                input[1] = "rfd_denovo"
+                input[2] = true
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out[0][0] == "[A17-131/0 80]"
+        }
+
+    }
+
+}

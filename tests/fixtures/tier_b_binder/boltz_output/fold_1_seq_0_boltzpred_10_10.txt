@@ -1,0 +1,6 @@
+
+Chn1 Chn2  PAE Dist  Type   ipSAE    ipSAE_avg    ipSAE_min_in_calculation    ipSAE_d0chn ipSAE_d0dom  ipTM_af  ipTM_d0chn     pDockQ     pDockQ2    LIS   ipae    n0res  n0chn  n0dom   d0res   d0chn   d0dom  nres1   nres2   dist1   dist2  Model
+A    B     10   10   asym  0.752080    0.486297    0.077668    0.825182    0.823608    0.839    0.825182      0.3434     0.7107     0.6281     4.4080     115    178    176    3.96    4.97    4.95     61     115      25      26   ./fold_1_seq_0_boltzpred
+B    A     10   10   asym  0.581090    0.386108    0.013864    0.799321    0.799321    0.859    0.799321      0.3434     0.7108     0.6844     4.4080      63    178    178    2.71    4.97    4.97    115      63      26      25   ./fold_1_seq_0_boltzpred
+A    B     10   10   max   0.752080    0.486297    0.077668    0.825182    0.823608    0.859    0.825182      0.3434     0.7108     0.6563     4.4080     115    178    176    3.96    4.97    4.95     63     115      25      26   ./fold_1_seq_0_boltzpred
+

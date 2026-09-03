@@ -1,8 +1,5 @@
 import argparse
-import os
 from pathlib import Path
-import pyrosetta as pr
-from pyrosetta.rosetta.core.scoring import dssp
 from multiprocessing import Pool
 import logging
 import sys
@@ -10,6 +7,10 @@ import uuid
 import json
 import shutil
 import re
+
+from Bio.PDB import PDBParser
+
+from metrics_utils import compute_dssp_chars_by_chain, count_ss_elements, calculate_rog
 
 def setup_logger():
     """Configure logging to output to both file and stdout"""
@@ -39,6 +40,18 @@ def extract_fold_id(pdb_filename):
     else:
         return None
 
+def parse_structure(pdb_path):
+    """Parse PDB file and return (structure, model)."""
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("s", str(pdb_path))
+    return structure, structure[0]
+
+
+def get_chain_ids(model):
+    """Get ordered list of chain IDs from a BioPython model."""
+    return [chain.get_id() for chain in model.get_chains()]
+
+
 def analyze_structure(args):
     """Analyze structure with automatic chain detection"""
     (pdb_file, fold_min_ss, fold_max_ss, fold_min_helices, fold_max_helices, 
@@ -48,57 +61,42 @@ def analyze_structure(args):
     logger = logging.getLogger('filter_fold')
 
     try:
-        # Load structure with PyRosetta
-        pose = pr.pose_from_pdb(str(pdb_file))
+        # Load structure with BioPython PDB parser
+        structure, model = parse_structure(pdb_file)
 
         # Autodetect chain structure
-        chains = pose.split_by_chain()
-        num_chains = len(chains)
+        chain_ids = get_chain_ids(model)
+        num_chains = len(chain_ids)
+
+        # Run mkdssp once regardless of chain count; per-chain counts are
+        # then derived from the cached result instead of re-running mkdssp.
+        dssp_chars_by_chain = compute_dssp_chars_by_chain(model, pdb_file)
 
         if num_chains == 1:
             # Monomer - analyze entire structure (single chain)
-            pose_to_analyze = pose
+            primary_chain = chain_ids[0]
+            helix_count, strand_count = count_ss_elements(dssp_chars_by_chain.get(primary_chain, []))
+            rog = calculate_rog(model[primary_chain])
             logger.info(f"{pdb_file.name}: Single chain detected - treating as monomer")
         elif num_chains == 2:
             # Binder - analyze first chain only
-            pose_to_analyze = chains[1]
+            first_chain_id = chain_ids[0]
+            helix_count, strand_count = count_ss_elements(dssp_chars_by_chain.get(first_chain_id, []))
+            rog = calculate_rog(model[first_chain_id])
             logger.info(f"{pdb_file.name}: Two chains detected ({num_chains}) - treating as binder, analyzing first chain only")
         elif num_chains >= 3:
-            # Oligomer - analyse all chains
-            pose_to_analyze = pose
+            # Oligomer - aggregate per-chain SS counts and whole-structure RoG
+            helix_count = 0
+            strand_count = 0
+            for chain_id in chain_ids:
+                chain_helices, chain_strands = count_ss_elements(dssp_chars_by_chain.get(chain_id, []))
+                helix_count += chain_helices
+                strand_count += chain_strands
+            rog = calculate_rog(model)
             logger.info(f"{pdb_file.name}: More than two chains detected - treating as oligomer, analysing all chains")
         else:
             logger.error(f"{pdb_file.name}: No chains found, skipping")
             return None
-
-        # Calculate radius of gyration
-        scorefxn = pr.ScoreFunction()
-        scorefxn.set_weight(pr.rosetta.core.scoring.rg, 1.0)
-        rog = round(scorefxn(pose_to_analyze), 2)
-
-        # Count secondary structures
-        dssp_obj = dssp.Dssp(pose_to_analyze)
-        dssp_string = dssp_obj.get_dssp_secstruct()
-
-        helix_count = 0
-        strand_count = 0
-        current_helix = False
-        current_strand = False
-
-        for ss in dssp_string:
-            if ss == 'H':
-                if not current_helix:
-                    helix_count += 1
-                    current_helix = True
-                current_strand = False
-            elif ss == 'E':
-                if not current_strand:
-                    strand_count += 1
-                    current_strand = True
-                current_helix = False
-            else:
-                current_helix = False
-                current_strand = False
 
         total_ss = helix_count + strand_count
         fold_id = extract_fold_id(pdb_file)
@@ -194,9 +192,6 @@ def main():
     logger = setup_logger()
     logger.info(f"Starting analysis with parameters: {vars(args)}")
     
-    # initialise pyrosetta
-    pr.init("-out:levels all:error")
-    
     # create output directory
     output_dir = args.output_dir
     output_dir.mkdir(exist_ok=True)
@@ -207,7 +202,7 @@ def main():
     pdb_files = list(Path(args.input_dir).glob('*.pdb'))
     if not pdb_files:
         logger.error(f"No PDB files found in {args.input_dir}")
-        return
+        sys.exit(1)
     
     logger.info(f"Found {len(pdb_files)} PDB files to analyze")
     logger.info(f"Looking for JSON files in {json_dir}")
@@ -231,6 +226,12 @@ def main():
     
     # filter out None results
     valid_results = [result for result in results if result is not None]
+    
+    if not valid_results:
+        logger.error(
+            f"All {len(pdb_files)} PDB files failed analysis"
+        )
+        sys.exit(1)
     
     # save analysis data to JSONL
     output_filename = f'fold_data_{str(uuid.uuid4())[:8]}.jsonl'

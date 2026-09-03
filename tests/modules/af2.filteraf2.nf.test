@@ -1,0 +1,47 @@
+nextflow_process {
+
+    name "Test Process FilterAF2"
+    script "modules/af2.nf"
+    process "FilterAF2"
+
+    // Real AF2 outputs from a completed rfd_denovo_binder + af2_boltz run (see
+    // /memories/repo/tier-b-fixtures.md): fold_0 has af2_iptm 0.591 (passes a 0.5 threshold),
+    // fold_1 has af2_iptm 0.204 (fails it) - gives a deterministic pass/fail split.
+    test("Should keep only designs passing the af2-min-iptm threshold") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder_af2boltz/af2_output"
+            }
+            process {
+                """
+                input[0] = [
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0_af2pred.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0_af2pred.pdb", checkIfExists: true)
+                    ],
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0_af2pred.json", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0_af2pred.json", checkIfExists: true)
+                    ]
+                ]
+                input[1] = "--af2-min-iptm 0.5"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.pdbs.size() == 1
+            assert process.out.pdbs[0].toString().contains("fold_0_seq_0_af2pred.pdb")
+            assert process.out.jsonl.size() == 1
+            def filteredLines = path(process.out.jsonl[0]).text.readLines()
+            assert filteredLines.size() == 1
+            assert filteredLines[0].contains("fold_0_seq_0_af2pred")
+        }
+
+    }
+
+}

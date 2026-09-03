@@ -1,4 +1,4 @@
-mode: binder_denovo
+mode: rfd_denovo
 profile: milton
 
 fixed_params:

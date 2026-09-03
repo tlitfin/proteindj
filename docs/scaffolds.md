@@ -22,18 +22,19 @@ The initials following the prefix indicate the source author and publication:
 - lc - Longxing Cao - Scaffolds published in _Design of protein-binding proteins from the target structure alone_
 - bc - Brian Coventry - Scaffolds published in _Design of protein-binding proteins from the target structure alone_
 
-For binder design we recommend using these scaffolds, as they have been short-listed by the Baker Lab from millions of folds according to their in silico metrics (see supplementary files of [Cao et al. 2021](https://doi.org/10.1038/s41586-022-04654-9)). For other applications, or if you want to generate your own scaffold pytorch files, you can use the script `scripts/create_scaffolds.py` (a parallelised version of a script from https://github.com/RosettaCommons/RFdiffusion/tree/main/helper_scripts). We have noticed that ligands, insertion codes (e.g. res 82A, 82B), and non-standard amino acid codes (e.g. TPO, SEP) cause errors, so it is best to remove them from input structures first. You will need a python environment with pyrosetta and pytorch installed. e.g. for micromamba:
+For binder design we recommend using these scaffolds, as they have been short-listed by the Baker Lab from millions of folds according to their in silico metrics (see supplementary files of [Cao et al. 2021](https://doi.org/10.1038/s41586-022-04654-9)). For other applications, or if you want to generate your own scaffold pytorch files, you can use the script `scripts/create_scaffolds.py` (a parallelised version of a script from https://github.com/RosettaCommons/RFdiffusion/tree/main/helper_scripts). We have noticed that ligands, insertion codes (e.g. res 82A, 82B), and non-standard amino acid codes (e.g. TPO, SEP) cause errors, so it is best to remove them from input structures first. You will need a python environment with BioPython and pytorch installed. e.g. for micromamba:
 
 ```
-micromamba create -n pyrosetta
-micromamba activate pyrosetta
-micromamba install -c https://conda.rosettacommons.org pyrosetta pytorch
+micromamba create -n scaffold_gen python=3.11 -c conda-forge
+micromamba activate scaffold_gen
+micromamba install biopython -c conda-forge
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
 You need to provide the directory containing your input PDB files, the output directory, and the number of CPUs for parallel processing (defaults to 1). e.g.
 
 ```
-micromamba activate pyrosetta
+micromamba activate scaffold_gen
 python scripts/create_scaffolds.py --pdb_dir inputpdbs/ --out_dir scaffolds/ --num_processes 4
 ```
 

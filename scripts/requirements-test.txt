@@ -1,0 +1,14 @@
+pytest
+biopython
+gemmi
+pandas
+numpy
+pyyaml
+torch
+pdbfixer
+pyfaspr
+pdbutil
+openmm
+
+# Also required (not pip-installable):
+# mkdssp binary, e.g. `micromamba install -c conda-forge "dssp=4.5.*"`

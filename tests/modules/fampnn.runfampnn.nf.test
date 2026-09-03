@@ -1,0 +1,112 @@
+nextflow_process {
+
+    name "Test Process RunFAMPNN"
+    script "modules/fampnn.nf"
+    process "RunFAMPNN"
+
+    // GPU process - non-deterministic sequence sampling, so we assert INVARIANTS that must
+    // hold regardless of random seed rather than exact sequences/scores. Real backbones from
+    // tier_b_binder/fampnn_input/{fold_0,fold_1}.pdb (binder chain A + cropped target chain B)
+    // paired with the real fampnn.csv that fixes the target chain
+    // (fold_0: "B69-183", fold_1: "B64-178") so the target sequence/identity must be
+    // preserved while the binder chain A is free to be redesigned.
+    test("Should preserve fixed target-chain identity and backbone while redesigning the binder") {
+
+        tag "gpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/fampnn_input"
+                seqs_per_design = 2
+            }
+            process {
+                """
+                input[0] = [
+                    0,
+                    [
+                        file("\${params.fixtures_dir}/fold_0.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1.pdb", checkIfExists: true)
+                    ],
+                    file("\${params.fixtures_dir}/fampnn.csv", checkIfExists: true)
+                ]
+                input[1] = "A"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Parses ATOM CA lines into a map keyed by "<chain><resnum>" -> [resName, x, y, z]
+            def parseCA = { pdbPath ->
+                def m = [:]
+                path(pdbPath).text.readLines().each { line ->
+                    if (line.startsWith("ATOM") && line.substring(12, 16).trim() == "CA") {
+                        def chain = line.substring(21, 22)
+                        def resnum = line.substring(22, 26).trim().toInteger()
+                        def resName = line.substring(17, 20).trim()
+                        def x = line.substring(30, 38).trim().toDouble()
+                        def y = line.substring(38, 46).trim().toDouble()
+                        def z = line.substring(46, 54).trim().toDouble()
+                        m["${chain}${resnum}"] = [resName: resName, x: x, y: y, z: z]
+                    }
+                }
+                return m
+            }
+
+            def outPdbs = process.out.pdbs_jsons[0][0]
+            def outJsons = process.out.pdbs_jsons[0][1]
+
+            // Cardinality: seqs_per_design designs per fold
+            assert outPdbs.size() == 4
+
+            // Naming convention: the "sample" -> "seq_" rename in RunFAMPNN's script must hold
+            assert outPdbs.every { file(it).getName() ==~ /fold_[01]_seq_[01]\.pdb/ }
+
+            def inputMaps = [
+                0: parseCA("${projectDir}/tests/fixtures/tier_b_binder/fampnn_input/fold_0.pdb"),
+                1: parseCA("${projectDir}/tests/fixtures/tier_b_binder/fampnn_input/fold_1.pdb")
+            ]
+            def fixedRanges = [0: (69..183), 1: (64..178)]
+
+            outPdbs.each { outPdbPath ->
+                def name = file(outPdbPath).getName()
+                def matcher = (name =~ /fold_(\d+)_seq_(\d+)\.pdb/)
+                assert matcher.matches()
+                def foldId = matcher[0][1].toInteger()
+                def outMap = parseCA(outPdbPath)
+                def inMap = inputMaps[foldId]
+
+                // Masking held: fixed target-chain residues keep the same amino acid identity
+                fixedRanges[foldId].each { resnum ->
+                    def key = "B${resnum}"
+                    assert outMap[key].resName == inMap[key].resName
+                }
+
+                // Backbone unchanged: sequence design must not move any Cα coordinates
+                inMap.each { key, val ->
+                    def outVal = outMap[key]
+                    assert outVal != null
+                    assert Math.abs(outVal.x - val.x) < 0.01
+                    assert Math.abs(outVal.y - val.y) < 0.01
+                    assert Math.abs(outVal.z - val.z) < 0.01
+                }
+
+                // Binder chain was actually redesigned away from the poly-glycine input scaffold
+                def binderResNames = outMap.findAll { key, val -> key.startsWith("A") }.collect { key, val -> val.resName }
+                assert binderResNames.size() > 0
+                assert binderResNames.any { it != "GLY" }
+                assert binderResNames.unique().size() >= 3
+            }
+
+            // Schema: JSON metadata has the expected keys with sane values
+            outJsons.each { jsonPath ->
+                def data = new groovy.json.JsonSlurper().parseText(path(jsonPath).text)
+                assert data.sequence instanceof String && data.sequence.length() > 0
+                assert data.fampnn_avg_psce instanceof Number
+            }
+        }
+
+    }
+
+}

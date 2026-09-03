@@ -1,0 +1,87 @@
+nextflow_process {
+
+    name "Test Process PrepBoltz"
+    script "modules/boltz.nf"
+    process "PrepBoltz"
+
+    // PrepBoltz converts FAMPNN design PDBs into Boltz-2 YAML config files. In normal
+    // bound-complex mode it includes all chains (binder A + target B), while binder-only
+    // mode restricts to chain A for unbound predictions. Real fixtures from tier_b_binder/
+    // fampnn_output (fold_0_seq_0.pdb, fold_1_seq_0.pdb) - FAMPNN design outputs with chains
+    // A (binder) and B (target).
+    test("Should generate YAML configs with both binder and target chains in normal mode") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/fampnn_output"
+                boltz_use_templates = false
+                boltz_input_msa = false
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.fixtures_dir}/fold_0_seq_0.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_1_seq_0.pdb", checkIfExists: true)
+                ]
+                input[1] = file("${projectDir}/lib/NO_FILE", checkIfExists: true)
+                input[2] = true
+                input[3] = false
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.yamls[0].size() == 2
+            def yamlNames = process.out.yamls[0].collect { file(it).getName() }
+            assert yamlNames.containsAll(["fold_0_seq_0.yaml", "fold_1_seq_0.yaml"])
+
+            def yaml0 = new org.yaml.snakeyaml.Yaml().load(file(process.out.yamls[0][0]).text)
+            assert yaml0.sequences.size() == 2
+            def chainIds = yaml0.sequences.collect { it.protein.id }
+            assert chainIds.containsAll(['A', 'B'])
+        }
+
+    }
+
+    // In binder-only mode (for unbound/target-free predictions), PrepBoltz restricts the
+    // YAML to only chain A (the binder) and disables templates/MSA regardless of params.
+    test("Should generate YAML configs with only binder chain A in binder-only mode") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/fampnn_output"
+                boltz_use_templates = false
+                boltz_input_msa = false
+            }
+            process {
+                """
+                input[0] = [
+                    file("\${params.fixtures_dir}/fold_0_seq_0.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/fold_1_seq_0.pdb", checkIfExists: true)
+                ]
+                input[1] = file("${projectDir}/lib/NO_FILE", checkIfExists: true)
+                input[2] = true
+                input[3] = true
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.yamls[0].size() == 2
+            def yamlNames = process.out.yamls[0].collect { file(it).getName() }
+            assert yamlNames.containsAll(["fold_0_seq_0.yaml", "fold_1_seq_0.yaml"])
+
+            def yaml0 = new org.yaml.snakeyaml.Yaml().load(file(process.out.yamls[0][0]).text)
+            assert yaml0.sequences.size() == 1
+            assert yaml0.sequences[0].protein.id == 'A'
+        }
+
+    }
+
+}

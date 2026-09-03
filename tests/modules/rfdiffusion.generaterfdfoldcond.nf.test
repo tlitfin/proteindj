@@ -1,0 +1,37 @@
+nextflow_process {
+
+    name "Test Process GenerateRFDFoldCond"
+    script "modules/rfdiffusion.nf"
+    process "GenerateRFDFoldCond"
+
+    // GenerateRFDFoldCond runs create_scaffolds.py (mkdssp-based) to produce secondary
+    // structure + adjacency torch tensors for RFdiffusion fold-conditioning, from a single
+    // target PDB. Just check the tensor files get created with non-trivial size (can't
+    // easily load torch tensors from Groovy assertions).
+    test("Should generate target secondary-structure and adjacency tensor files") {
+
+        tag "cpu"
+
+        when {
+            process {
+                """
+                input[0] = file("${projectDir}/benchmarkdata/5o45_pd-l1.pdb", checkIfExists: true)
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.target_ss.size() == 1
+            assert process.out.target_adj.size() == 1
+            def ssFile = file(process.out.target_ss[0])
+            def adjFile = file(process.out.target_adj[0])
+            assert ssFile.getName() == "target_ss.pt"
+            assert adjFile.getName() == "target_adj.pt"
+            assert ssFile.size() > 0
+            assert adjFile.size() > 0
+        }
+
+    }
+
+}

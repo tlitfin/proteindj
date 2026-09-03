@@ -1,0 +1,6 @@
+design_mode: 'boltzgen_denovo'
+input_pdb: 'tutorial/tutorial.pdb'
+hotspot_residues: 'A91,A115,A123'
+bg_not_binding_residues: 'A43'
+design_length: '60-150'
+out_dir: 'tutorial_test'

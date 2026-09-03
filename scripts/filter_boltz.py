@@ -26,15 +26,15 @@ def parse_arguments():
                     help='Minimum pTM score for binder chain')
     parser.add_argument('--boltz-min-ptm-target', type=float,
                     help='Minimum pTM score for target chain')
-    parser.add_argument('--boltz-min-ptm-interface', type=float,
+    parser.add_argument('--boltz-min-iptm', type=float,
                     help='Minimum interface pTM score')
     parser.add_argument('--boltz-min-plddt', type=float,
                     help='Minimum complex pLDDT score')
-    parser.add_argument('--boltz-min-plddt-interface', type=float,
+    parser.add_argument('--boltz-min-iplddt', type=float,
                     help='Minimum interface-weighted pLDDT')
     parser.add_argument('--boltz-max-pde', type=float,
                     help='Maximum complex PDE score')
-    parser.add_argument('--boltz-max-pde-interface', type=float,
+    parser.add_argument('--boltz-max-ipde', type=float,
                     help='Maximum interface-weighted PDE')
     parser.add_argument('--boltz-min-ipSAE-min', type=float,
                     help='Minimum interaction Prediction Score from Aligned Errors (ipSAE)')
@@ -44,6 +44,19 @@ def parse_arguments():
                     help='Minimum predicted DockQ Score v2')
     parser.add_argument('--boltz-max-pae-interaction', type=float,
                     help='Maximum predicted aligned error at interface')
+    parser.add_argument('--boltz-max-unbound-rmsd', type=float,
+                    help='Maximum allowed C-alpha RMSD between the unbound (target-free) binder prediction and the design')
+    parser.add_argument('--boltz-min-unbound-conf-score', type=float,
+                    help='Minimum confidence score for the unbound (target-free) binder prediction')
+    parser.add_argument('--boltz-min-unbound-ptm', type=float,
+                    help='Minimum pTM score for the unbound (target-free) binder prediction')
+    parser.add_argument('--boltz-min-unbound-plddt', type=float,
+                    help='Minimum pLDDT score for the unbound (target-free) binder prediction')
+    parser.add_argument('--boltz-max-unbound-pde', type=float,
+                    help='Maximum PDE score for the unbound (target-free) binder prediction')
+    parser.add_argument('--unbound-json-directory',
+                    help='Path to directory containing unbound (target-free) binder prediction JSON files '
+                         '(fold_*_seq_*_unbound_boltzpred.json), merged into each matching entry before filtering')
     parser.add_argument('--output-directory', default='output', help='Directory to copy passing PDB files to')
     parser.add_argument('--output-score-file', default='filtered.jsonl')
     parser.add_argument('--num-to-extract', type=int, help='Number of designs to extract (extracts all if not specified)')
@@ -75,6 +88,10 @@ def read_data_from_directory(directory_path, pattern='*.json'):
             try:
                 # Extract metadata from filename
                 filename = Path(json_file).stem
+                if filename.endswith('_unbound_boltzpred'):
+                    # Unbound (target-free) binder predictions are merged in separately via
+                    # --unbound-json-directory, not treated as independent bound-design entries
+                    continue
                 match = re.match(r'fold_(\d+)_seq_(\d+)_.*', filename)
                 if not match:
                     print(f"Skipping invalid filename format: {filename}")
@@ -129,6 +146,32 @@ def read_data_from_directory(directory_path, pattern='*.json'):
         print(f"Error reading JSON files from directory: {e}", file=sys.stderr)
         sys.exit(1)
 
+UNBOUND_METRIC_KEYS = ('boltz_unbound_rmsd', 'boltz_unbound_conf_score', 'boltz_unbound_ptm', 'boltz_unbound_plddt', 'boltz_unbound_pde')
+
+def load_unbound_metadata(directory):
+    """
+    Load unbound (target-free) binder prediction JSON files and index by (fold_id, seq_id).
+
+    Only the boltz_unbound_* metric keys are kept, so merging can never clobber unrelated
+    fields (e.g. description) on the matching bound entry.
+
+    Returns:
+        Dict mapping (fold_id, seq_id) -> dict of boltz_unbound_* metrics
+    """
+    lookup = {}
+    json_files = glob.glob(os.path.join(directory, 'fold_*_seq_*_unbound_boltzpred.json'))
+    for json_file in json_files:
+        match = re.match(r'fold_(\d+)_seq_(\d+)_unbound_boltzpred', Path(json_file).stem)
+        if not match:
+            continue
+        fold_id = int(match.group(1))
+        seq_id = int(match.group(2))
+        with open(json_file, 'r') as f:
+            entry = json.load(f)
+        lookup[(fold_id, seq_id)] = {k: v for k, v in entry.items() if k in UNBOUND_METRIC_KEYS}
+    print(f"Loaded {len(lookup)} unbound binder prediction entries from {directory}")
+    return lookup
+
 def filter_data(data, args):
     passed_designs = []
     passed_entries = []
@@ -138,92 +181,118 @@ def filter_data(data, args):
             failures = []
             
             # Overall RMSD check
-            if args.boltz_max_rmsd_overall:
+            if args.boltz_max_rmsd_overall is not None:
                 rmsd = entry.get('boltz_rmsd_overall', 1000)
                 if rmsd > args.boltz_max_rmsd_overall:
                     failures.append(f"rmsd_overall {rmsd:.2f} > {args.boltz_max_rmsd_overall}")
             
             # Binder RMSD check
-            if args.boltz_max_rmsd_binder:
+            if args.boltz_max_rmsd_binder is not None:
                 rmsd_binder = entry.get('boltz_rmsd_binder', 1000)
                 if rmsd_binder > args.boltz_max_rmsd_binder:
                     failures.append(f"rmsd_binder {rmsd_binder:.2f} > {args.boltz_max_rmsd_binder}")
             
             # Target RMSD check
-            if args.boltz_max_rmsd_target:
+            if args.boltz_max_rmsd_target is not None:
                 rmsd_target = entry.get('boltz_rmsd_target', 1000)
                 if rmsd_target > args.boltz_max_rmsd_target:
                     failures.append(f"rmsd_target {rmsd_target:.2f} > {args.boltz_max_rmsd_target}")
 
             # Confidence score check
-            if args.boltz_min_conf_score:
+            if args.boltz_min_conf_score is not None:
                 score = entry.get('boltz_conf_score', 0)
                 if score < args.boltz_min_conf_score:
                     failures.append(f"conf_score {score:.3f} < {args.boltz_min_conf_score}")
             
             # PTM/iPTM checks
-            if args.boltz_min_ptm:
+            if args.boltz_min_ptm is not None:
                 ptm = entry.get('boltz_ptm', 0)
                 if ptm < args.boltz_min_ptm:
                     failures.append(f"ptm {ptm:.3f} < {args.boltz_min_ptm}")
             
-            if args.boltz_min_ptm_binder:
+            if args.boltz_min_ptm_binder is not None:
                 ptm_binder = entry.get('boltz_ptm_binder', 0)
                 if ptm_binder < args.boltz_min_ptm_binder:
                     failures.append(f"ptm_binder {ptm_binder:.3f} < {args.boltz_min_ptm_binder}")
             
-            if args.boltz_min_ptm_target:
+            if args.boltz_min_ptm_target is not None:
                 ptm_target = entry.get('boltz_ptm_target', 0)
                 if ptm_target < args.boltz_min_ptm_target:
                     failures.append(f"ptm_target {ptm_target:.3f} < {args.boltz_min_ptm_target}")
             
-            if args.boltz_min_ptm_interface:
-                ptm_interface = entry.get('boltz_ptm_interface', 0)
-                if ptm_interface < args.boltz_min_ptm_interface:
-                    failures.append(f"ptm_interface {ptm_interface:.3f} < {args.boltz_min_ptm_interface}")
+            if args.boltz_min_iptm is not None:
+                iptm = entry.get('boltz_iptm', 0)
+                if iptm < args.boltz_min_iptm:
+                    failures.append(f"iptm {iptm:.3f} < {args.boltz_min_iptm}")
             
             # Structure quality checks
-            if args.boltz_min_plddt:
+            if args.boltz_min_plddt is not None:
                 plddt = entry.get('boltz_plddt', 0)
                 if plddt < args.boltz_min_plddt:
                     failures.append(f"plddt {plddt:.3f} < {args.boltz_min_plddt}")
             
-            if args.boltz_min_plddt_interface:
-                plddt_interface = entry.get('boltz_plddt_interface', 0)
-                if plddt_interface < args.boltz_min_plddt_interface:
-                    failures.append(f"plddt_interface {plddt_interface:.3f} < {args.boltz_min_plddt_interface}")
+            if args.boltz_min_iplddt is not None:
+                iplddt = entry.get('boltz_iplddt', 0)
+                if iplddt < args.boltz_min_iplddt:
+                    failures.append(f"iplddt {iplddt:.3f} < {args.boltz_min_iplddt}")
             
             # Energy metric checks
-            if args.boltz_max_pde:
+            if args.boltz_max_pde is not None:
                 pde = entry.get('boltz_pde', 0)
                 if pde > args.boltz_max_pde:
                     failures.append(f"pde {pde:.2f} > {args.boltz_max_pde}")
             
-            if args.boltz_max_pde_interface:
-                pde_interface = entry.get('boltz_pde_interface', 0)
-                if pde_interface > args.boltz_max_pde_interface:
-                    failures.append(f"pde_interface {pde_interface:.2f} > {args.boltz_max_pde_interface}")
+            if args.boltz_max_ipde is not None:
+                ipde = entry.get('boltz_ipde', 0)
+                if ipde > args.boltz_max_ipde:
+                    failures.append(f"ipde {ipde:.2f} > {args.boltz_max_ipde}")
             
             # Interface interaction metrics
-            if args.boltz_min_ipSAE_min:
+            if args.boltz_min_ipSAE_min is not None:
                 ipsae_min = entry.get('ipSAE_min', 0)
                 if ipsae_min < args.boltz_min_ipSAE_min:
                     failures.append(f"ipSAE_min {ipsae_min:.3f} < {args.boltz_min_ipSAE_min}")
             
-            if args.boltz_min_LIS:
+            if args.boltz_min_LIS is not None:
                 lis = entry.get('LIS', 0)
                 if lis < args.boltz_min_LIS:
                     failures.append(f"LIS {lis:.3f} < {args.boltz_min_LIS}")
             
-            if args.boltz_min_pDockQ2_min:
+            if args.boltz_min_pDockQ2_min is not None:
                 pdockq2_min = entry.get('pDockQ2_min', 0)
                 if pdockq2_min < args.boltz_min_pDockQ2_min:
                     failures.append(f"pDockQ2_min {pdockq2_min:.3f} < {args.boltz_min_pDockQ2_min}")
             
-            if args.boltz_max_pae_interaction:
+            if args.boltz_max_pae_interaction is not None:
                 pae_interaction = entry.get('boltz_pae_interaction', 1000)
                 if pae_interaction > args.boltz_max_pae_interaction:
                     failures.append(f"pae_interaction {pae_interaction:.2f} > {args.boltz_max_pae_interaction}")
+
+            # Unbound (target-free) binder prediction checks
+            if args.boltz_max_unbound_rmsd is not None:
+                unbound_rmsd = entry.get('boltz_unbound_rmsd', 1000)
+                if unbound_rmsd > args.boltz_max_unbound_rmsd:
+                    failures.append(f"unbound_rmsd {unbound_rmsd:.2f} > {args.boltz_max_unbound_rmsd}")
+
+            if args.boltz_min_unbound_conf_score is not None:
+                unbound_conf_score = entry.get('boltz_unbound_conf_score', 0)
+                if unbound_conf_score < args.boltz_min_unbound_conf_score:
+                    failures.append(f"unbound_conf_score {unbound_conf_score:.3f} < {args.boltz_min_unbound_conf_score}")
+
+            if args.boltz_min_unbound_ptm is not None:
+                unbound_ptm = entry.get('boltz_unbound_ptm', 0)
+                if unbound_ptm < args.boltz_min_unbound_ptm:
+                    failures.append(f"unbound_ptm {unbound_ptm:.3f} < {args.boltz_min_unbound_ptm}")
+
+            if args.boltz_min_unbound_plddt is not None:
+                unbound_plddt = entry.get('boltz_unbound_plddt', 0)
+                if unbound_plddt < args.boltz_min_unbound_plddt:
+                    failures.append(f"unbound_plddt {unbound_plddt:.3f} < {args.boltz_min_unbound_plddt}")
+
+            if args.boltz_max_unbound_pde is not None:
+                unbound_pde = entry.get('boltz_unbound_pde', 0)
+                if unbound_pde > args.boltz_max_unbound_pde:
+                    failures.append(f"unbound_pde {unbound_pde:.2f} > {args.boltz_max_unbound_pde}")
 
             if not failures:
                 passed_designs.append(entry['description'])
@@ -280,13 +349,19 @@ def main():
     
     # Read and filter data from directory
     data = read_data_from_directory(args.json_directory, args.json_pattern)
-    
+
     if not data:
         print("No data found in the JSON files. Exiting.")
         sys.exit(0)
-        
+
     print(f"Total entries loaded from all JSON files: {len(data)}")
-    
+
+    # Merge in unbound (target-free) binder prediction metrics, keyed by (fold_id, seq_id)
+    if args.unbound_json_directory:
+        unbound_lookup = load_unbound_metadata(args.unbound_json_directory)
+        for entry in data:
+            entry.update(unbound_lookup.get((entry.get('fold_id'), entry.get('seq_id')), {}))
+
     # Check if any filter is applied
     any_filter_applied = (
         args.boltz_max_rmsd_overall is not None or
@@ -296,11 +371,16 @@ def main():
         args.boltz_min_ptm is not None or
         args.boltz_min_ptm_binder is not None or
         args.boltz_min_ptm_target is not None or
-        args.boltz_min_ptm_interface is not None or
+        args.boltz_min_iptm is not None or
         args.boltz_min_plddt is not None or
-        args.boltz_min_plddt_interface is not None or
+        args.boltz_min_iplddt is not None or
         args.boltz_max_pde is not None or
-        args.boltz_max_pde_interface is not None
+        args.boltz_max_ipde is not None or
+        args.boltz_max_unbound_rmsd is not None or
+        args.boltz_min_unbound_conf_score is not None or
+        args.boltz_min_unbound_ptm is not None or
+        args.boltz_min_unbound_plddt is not None or
+        args.boltz_max_unbound_pde is not None
     )
     
     if not any_filter_applied:

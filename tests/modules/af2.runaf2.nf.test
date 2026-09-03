@@ -1,0 +1,98 @@
+nextflow_process {
+
+    name "Test Process RunAF2"
+    script "modules/af2.nf"
+    process "RunAF2"
+
+    // GPU process - AlphaFold2 "initial guess" structure prediction. Unlike FAMPNN/MPNN this
+    // does NOT design a new sequence: it predicts a 3D structure for the EXACT sequence given
+    // in the input pdb (using the input coordinates as an initial guess), so the invariant here
+    // is sequence identity preservation (not masking) plus real confidence-metric schema.
+    // Real fixtures: tier_b_binder/af2_input/{fold_0_seq_0,fold_1_seq_0}.pdb (binder chain A +
+    // cropped target chain B, chain lengths A=68/B=115 for fold_0, A=63/B=115 for fold_1).
+    test("Should predict structure for the given sequence and preserve chain identities") {
+
+        tag "gpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_binder/af2_input"
+            }
+            process {
+                """
+                input[0] = [
+                    0,
+                    [
+                        file("\${params.fixtures_dir}/fold_0_seq_0.pdb", checkIfExists: true),
+                        file("\${params.fixtures_dir}/fold_1_seq_0.pdb", checkIfExists: true)
+                    ]
+                ]
+                """
+            }
+        }
+
+        then {
+            assert process.success
+
+            // Parses ATOM CA lines into a map keyed by chain -> ordered list of resNames
+            def parseChainSeqs = { pdbPath ->
+                def seqs = [:].withDefault { [] }
+                path(pdbPath).text.readLines().each { line ->
+                    if (line.startsWith("ATOM") && line.substring(12, 16).trim() == "CA") {
+                        def chain = line.substring(21, 22)
+                        def resName = line.substring(17, 20).trim()
+                        seqs[chain] << resName
+                    }
+                }
+                return seqs
+            }
+
+            def outPdbs = process.out.pdbs_jsons[0][0]
+            def outJsons = process.out.pdbs_jsons[0][1]
+
+            // Cardinality: AF2 predicts exactly one structure per input (no multiplication)
+            assert outPdbs.size() == 2
+            assert outJsons.size() == 2
+
+            // Naming convention
+            assert outPdbs.every { file(it).getName() ==~ /fold_[01]_seq_0_af2pred\.pdb/ }
+            assert outJsons.every { file(it).getName() ==~ /fold_[01]_seq_0_af2pred\.json/ }
+
+            def inputSeqs = [
+                0: parseChainSeqs("${projectDir}/tests/fixtures/tier_b_binder/af2_input/fold_0_seq_0.pdb"),
+                1: parseChainSeqs("${projectDir}/tests/fixtures/tier_b_binder/af2_input/fold_1_seq_0.pdb")
+            ]
+
+            outPdbs.each { outPdbPath ->
+                def name = file(outPdbPath).getName()
+                def matcher = (name =~ /fold_(\d+)_seq_0_af2pred\.pdb/)
+                assert matcher.matches()
+                def foldId = matcher[0][1].toInteger()
+                def outSeqs = parseChainSeqs(outPdbPath)
+                def inSeqs = inputSeqs[foldId]
+
+                // Sequence identity preserved: AF2 predicts structure, it does not redesign
+                assert outSeqs["A"] == inSeqs["A"]
+                assert outSeqs["B"] == inSeqs["B"]
+            }
+
+            // Schema: JSON metadata has the expected confidence-metric keys with sane values
+            outJsons.each { jsonPath ->
+                def name = file(jsonPath).getName()
+                def matcher = (name =~ /fold_(\d+)_seq_0_af2pred\.json/)
+                assert matcher.matches()
+                def foldId = matcher[0][1].toInteger()
+
+                def data = new groovy.json.JsonSlurper().parseText(path(jsonPath).text)
+                assert data.description == "fold_${foldId}_seq_0_af2pred"
+                assert data.fold_id == foldId
+                assert data.seq_id == 0
+                assert data.af2_iptm instanceof Number && data.af2_iptm >= 0 && data.af2_iptm <= 1
+                assert data.af2_plddt_overall instanceof Number && data.af2_plddt_overall >= 0 && data.af2_plddt_overall <= 100
+                assert data.af2_pae_interaction instanceof Number
+            }
+        }
+
+    }
+
+}

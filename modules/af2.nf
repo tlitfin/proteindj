@@ -15,7 +15,13 @@ process RunAF2 {
     path "*.log"
 
     script:
+    def jaxCompilationCacheExport = params.af2_jax_compilation_cache_dir \
+        ? 'export JAX_COMPILATION_CACHE_DIR="/af2_jax_compilation_cache"' \
+        : ''
+
     """
+        ${jaxCompilationCacheExport}
+
         python3 /dl_binder_design/af2_initial_guess/predict.py \
             -pdbdir ./ \
             -outpdbdir outputs \
@@ -65,6 +71,7 @@ process FilterAF2 {
 
     input:
     tuple path(pdb_files), path(json_files)
+    val(paramString)
 
     output:
     path ("output/*.pdb"), emit: pdbs, optional: true
@@ -72,24 +79,6 @@ process FilterAF2 {
     path ("filtered.jsonl"), emit: jsonl, optional: true
 
     script:
-    // Only pass parameters if filter values are provided
-    def paramString = Utils.formatFilterParams(
-        params,
-        "af2",
-        [
-            "max_pae_interaction",
-            "max_pae_overall",
-            "max_pae_binder",
-            "max_pae_target",
-            "min_plddt_overall",
-            "min_plddt_binder",
-            "min_plddt_target",
-            "max_rmsd_overall",
-            "max_rmsd_binder_bndaln",
-            "max_rmsd_binder_tgtaln",
-            "max_rmsd_target"
-        ],
-    )
 
     """    
     python -u /scripts/filter_af2.py \

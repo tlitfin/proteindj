@@ -1,0 +1,13 @@
+mode: boltzgen_denovo
+profile: example_filters
+
+fixed_params:
+  design_length: '60-150'
+  input_pdb: 'tutorial/tutorial.pdb'
+  bg_not_binding_residues: 'A43'
+
+sweep_params:
+  hotspot_residues:
+    values:
+      - null
+      - 'A91,A115,A123'

@@ -18,15 +18,19 @@ mkdir -p "${LOG_DIR}"
 
 # Test modes to run
 declare -a MODES=(
-    "monomer_denovo"
-    "monomer_foldcond" 
-    "monomer_motifscaff"
-    "monomer_partialdiff"
+    "rfd_denovo_monomer"
+    "rfd_foldcond_monomer"
+    "rfd_motifscaff_monomer"
+    "rfd_partialdiff_monomer"
     "bindcraft_denovo"
-    "binder_denovo"
-    "binder_foldcond"
-    "binder_motifscaff"
-    "binder_partialdiff"
+    "boltzgen_denovo_monomer"
+    "boltzgen_motifscaff_monomer"
+    "rfd_denovo_binder"
+    "rfd_foldcond_binder"
+    "rfd_motifscaff_binder"
+    "rfd_partialdiff_binder"
+    "boltzgen_denovo_binder"
+    "boltzgen_motifscaff_binder"
 )
 
 # Function to log with timestamp

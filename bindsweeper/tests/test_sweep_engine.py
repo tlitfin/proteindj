@@ -51,7 +51,7 @@ class TestSweepCombination:
     def test_sweep_combination_creation(self):
         """Test creating a sweep combination."""
         combo = SweepCombination(
-            mode="binder_denovo",
+            mode="rfd_denovo",
             all_params={"num_designs": 8, "rfd_noise_scale": 0.5},
             swept_params={"rfd_noise_scale": 0.5},
             profile_name="test_profile",
@@ -59,7 +59,7 @@ class TestSweepCombination:
             command="nextflow run main.nf",
         )
 
-        assert combo.mode == "binder_denovo"
+        assert combo.mode == "rfd_denovo"
         assert combo.swept_params == {"rfd_noise_scale": 0.5}
         assert combo.profile_name == "test_profile"
 
@@ -71,7 +71,7 @@ class TestSweepEngine:
     def mock_config(self):
         """Mock sweep configuration."""
         config = Mock(spec=SweepConfig)
-        config.mode = "binder_denovo"
+        config.mode = "rfd_denovo"
         config.fixed_params = {"design_length": "50-100", "num_designs": 4}
         config.profile = "milton"
         config.pipeline_path = "main.nf"
@@ -114,14 +114,14 @@ class TestSweepEngine:
 
         # Check first combination
         combo = combinations[0]
-        assert combo.mode == "binder_denovo"
+        assert combo.mode == "rfd_denovo"
         assert "rfd_noise_scale" in combo.swept_params
         assert "models" in combo.swept_params
         assert combo.swept_params["rfd_noise_scale"] == 0.0
         assert combo.swept_params["models"] == "default"
 
     def test_generate_combinations_no_sweep_params(self, temp_dir, config_files):
-        """Test generating combinations with no sweep parameters."""
+        """Test generating combinations with no sweep parameters produces a single fixed-params run."""
         config = Mock(spec=SweepConfig)
         config.mode = "denovo"
         config.fixed_params = {"num_designs": 4}
@@ -132,7 +132,9 @@ class TestSweepEngine:
         engine = SweepEngine(config, temp_dir, config_files["nextflow_config"])
 
         combinations = engine.generate_combinations()
-        assert len(combinations) == 0
+        assert len(combinations) == 1
+        assert combinations[0].swept_params == {}
+        assert combinations[0].all_params == config.fixed_params
 
     def test_generate_output_dir(self, sweep_engine):
         """Test output directory generation."""

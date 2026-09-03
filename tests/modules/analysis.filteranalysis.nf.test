@@ -1,0 +1,44 @@
+nextflow_process {
+
+    name "Test Process FilterAnalysis"
+    script "modules/analysis.nf"
+    process "FilterAnalysis"
+
+    // Real analysis outputs from tier_b_monomer fixtures: fold_0 has pr_surfhphobics=11.3
+    // (passes --pr-max-surfhphobics 20), fold_1 has pr_surfhphobics=38.8 (fails) - gives
+    // a deterministic pass/fail split that exercises the filtering logic.
+    test("Should keep only designs passing the pr-max-surfhphobics threshold") {
+
+        tag "cpu"
+
+        when {
+            params {
+                fixtures_dir = "${projectDir}/tests/fixtures/tier_b_monomer"
+            }
+            process {
+                """
+                input[0] = file("\${params.fixtures_dir}/analysis_jsonl/best_designs.jsonl", checkIfExists: true)
+                input[1] = [
+                    file("\${params.fixtures_dir}/analysis_relaxed/fold_0_seq_0_boltzpred.pdb", checkIfExists: true),
+                    file("\${params.fixtures_dir}/analysis_relaxed/fold_1_seq_0_boltzpred.pdb", checkIfExists: true)
+                ]
+                input[2] = "--pr-max-surfhphobics 20"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            // Only 1 pdb matches the glob (fold_1 was filtered out) - a single-file glob
+            // match emits the bare path directly, not wrapped in a list.
+            assert process.out.pdbs.size() == 1
+            assert process.out.pdbs[0].toString().contains("fold_0_seq_0_boltzpred.pdb")
+            assert process.out.jsonl.size() == 1
+            def filteredLines = path(process.out.jsonl[0]).text.readLines()
+            assert filteredLines.size() == 1
+            assert filteredLines[0].contains('"description": "fold_0_seq_0_boltzpred"')
+        }
+
+    }
+
+}

@@ -128,10 +128,9 @@ class SweepEngine:
         combinations = []
         
         # Generate values for each sweep parameter
+        # When no sweep params are defined, product() of no iterables yields one
+        # empty combo, so a single fixed_params-only run is produced below.
         param_names = list(unpaired_params.keys())
-        if not param_names:
-            # No parameters to sweep
-            return []
 
         param_values = []
         for param_name in param_names:
@@ -289,7 +288,7 @@ class SweepEngine:
                 components.append(f"{param_short}{formatted_value}")
 
         # Create simplified path structure
-        dir_name = "_".join(components)
+        dir_name = "_".join(components) if components else "fixed_params"
         return os.path.join(self.base_output_dir, dir_name)
 
     def _generate_command(self, profile_name: str, output_dir: str, param_combo: str = None) -> str:
