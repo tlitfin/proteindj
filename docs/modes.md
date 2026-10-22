@@ -17,6 +17,33 @@ Due to the creative nature of protein design and the complexity of RFdiffusion t
 - [**boltzgen_denovo**](#mode-boltzgendenovo) – generative design of new monomers/binders using BoltzGen
 - [**boltzgen_motifscaff**](#mode-boltzgenmotifscaff) – redesign/rediffusion of an existing monomer/binder using BoltzGen
 
+[**RFD4-Proteina design**](#rfd4design)
+- [**rfd4_denovo**](#mode-rfd4denovo) – co-design a binder's sequence and structure against a single-chain target, then refold it for evaluation
+
+## RFD4-Proteina Binder Design <a name="rfd4design"></a>
+
+### RFD4 De Novo Mode (rfd4_denovo) <a name="mode-rfd4denovo"></a>
+
+RFD4-Proteina generates a binder sequence and structure together. ProteinDJ therefore skips ProteinMPNN/FAMPNN for this mode, keeps one sequence per design, and sends each generated complex through the selected AF2 or Boltz-2 prediction, filtering, ranking, and analysis stages. `pred_method = 'boltz'` is the pipeline default; `af2` and `af2_boltz` also work. Sequence extinction coefficient and pI filters still apply.
+
+The `RFD4` process label uses the same `container_registry` and `container_version` settings as the other modes, with the image name `rfd4`. The standard model download script places the pinned RFD4 bundle under `models/rfd4`, which is mounted into the container through `rfd4_models`. RFD4's [setup and model requirements](https://github.com/RosettaCommons/RFD4-Proteina) include Python 3.12 and a CUDA-capable NVIDIA GPU. The supplied definition uses the upstream CUDA 12 package; adjust it for your GPU driver if needed.
+
+```groovy
+params {
+    design_mode = 'rfd4_denovo'
+    input_pdb = './benchmarkdata/5o45_pd-l1.pdb'
+    design_length = '60-100'
+    hotspot_residues = 'A56,A115,A123' // optional
+    seqs_per_design = 1
+    rfd4_models = '/path/to/rfd4/models' // contains config.json and model.safetensors
+    rfd4_triton_cache = '/path/to/rfd4/kernel-cache' // optional; defaults under $HOME
+    rfd4_inference_batch_size = 4 // optional; tune to available GPU memory
+    pred_method = 'boltz'
+}
+```
+
+The target PDB must contain one protein chain with standard amino acids. ProteinDJ converts it to CIF, renumbers it continuously, and maps the given hotspot residue numbers to the CIF numbering. RFD4 generates plain CIF complexes; ProteinDJ verifies that each still contains the original target sequence, converts the binder to chain A and target to chain B, then names the designed sequence `fold_N_seq_0`. As in the other pathways, ProteinDJ divides the requested designs across the available GPUs. Within each GPU task, `rfd4_inference_batch_size` controls how many designs RFD4 samples simultaneously. The effective value is capped at the number of designs assigned to that GPU. It defaults to 1 to limit memory use; increase it for throughput when GPU memory permits. For this mode, `seqs_per_design` must be 1.
+
 ## Preparing Target Structures for Binder Design <a name="binderdesign"></a>
 
 To design binders with ProteinDJ, it is important to prepare your target structure. Ideally, your structure will be a high-resolution experimental structure or a high-confidence structural prediction. Ligands are not compatible with ProteinDJ. Non-natural amino acids in protein chains will result in an error from RFdiffusion and be replaced by alanines in BindCraft, so it is best to replace these with a suitable natural amino acid before running ProteinDJ. Since the runtime of these programs scale exponentially with target size you might want to crop the size of your target to a minimal domain. See below for an example of how to prepare a structure. You should avoid exposing hydrophobic cores of your target domain as RFdiffusion/BindCraft/BoltzGen will likely want to design a binder there (since they have a bias towards hydrophobic patches).

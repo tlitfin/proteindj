@@ -18,6 +18,7 @@
             "bindcraft_denovo",
             "boltzgen_denovo",
             "boltzgen_motifscaff",
+            "rfd4_denovo",
             "rfd_denovo",
             "rfd_foldcond",
             "rfd_motifscaff",
@@ -216,6 +217,18 @@
           "format": "directory-path",
           "hidden": true,
           "default": null
+        },
+        "rfd4_models": {
+          "type": "string",
+          "format": "directory-path",
+          "default": "${projectDir}/models/rfd4",
+          "description": "Directory containing the RFD4-Proteina config.json and model.safetensors files, populated by scripts/download_models.sh."
+        },
+        "rfd4_inference_batch_size": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "description": "RFD4 designs sampled simultaneously within each GPU task. Capped at the designs assigned to that GPU; does not change pipeline GPU allocation."
         }
       }
     },
