@@ -270,21 +270,21 @@
         },
         "fold_min_ss": {
           "type": "integer",
-          "description": "Minimum number of secondary structure elements (α-helices + β-strands). e.g. 3"
+          "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
         },
         "fold_max_ss": {
           "type": "integer",
-          "description": "Maximum number of secondary structure elements (α-helices + β-strands). e.g. 8",
+          "description": "Maximum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 8",
           "hidden": true
         },
         "fold_min_rog": {
           "type": "number",
-          "description": "Minimum radius of gyration (Å). e.g. 10",
+          "description": "Minimum radius of gyration (\u00c5). e.g. 10",
           "hidden": true
         },
         "fold_max_rog": {
           "type": "number",
-          "description": "Maximum radius of gyration (Å). e.g. 20",
+          "description": "Maximum radius of gyration (\u00c5). e.g. 20",
           "hidden": true
         },
         "af2_min_iptm": {
@@ -468,27 +468,27 @@
         },
         "pr_min_total_ss": {
           "type": "integer",
-          "description": "Minimum total secondary structure elements (α-helices + β-strands) in predicted structure",
+          "description": "Minimum total secondary structure elements (\u03b1-helices + \u03b2-strands) in predicted structure",
           "hidden": true
         },
         "pr_max_total_ss": {
           "type": "integer",
-          "description": "Maximum total secondary structure elements (α-helices + β-strands) in predicted structure",
+          "description": "Maximum total secondary structure elements (\u03b1-helices + \u03b2-strands) in predicted structure",
           "hidden": true
         },
         "pr_min_rog": {
           "type": "number",
-          "description": "Minimum radius of gyration (Å) of predicted structure",
+          "description": "Minimum radius of gyration (\u00c5) of predicted structure",
           "hidden": true
         },
         "pr_max_rog": {
           "type": "number",
-          "description": "Maximum radius of gyration (Å) of predicted structure",
+          "description": "Maximum radius of gyration (\u00c5) of predicted structure",
           "hidden": true
         },
         "pr_min_intface_bsa": {
           "type": "number",
-          "description": "Minimum buried surface area (Å²) at the binding interface",
+          "description": "Minimum buried surface area (\u00c5\u00b2) at the binding interface",
           "hidden": true
         },
         "pr_min_intface_shpcomp": {
@@ -523,12 +523,12 @@
         },
         "seq_min_ext_coef": {
           "type": "number",
-          "description": "Minimum extinction coefficient at 280nm (M⁻¹cm⁻¹)",
+          "description": "Minimum extinction coefficient at 280nm (M\u207b\u00b9cm\u207b\u00b9)",
           "hidden": true
         },
         "seq_max_ext_coef": {
           "type": "number",
-          "description": "Maximum extinction coefficient at 280nm (M⁻¹cm⁻¹)",
+          "description": "Maximum extinction coefficient at 280nm (M\u207b\u00b9cm\u207b\u00b9)",
           "hidden": true
         },
         "seq_min_pi": {
