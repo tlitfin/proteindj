@@ -329,7 +329,7 @@
                 "mpnn_checkpoint_model": {
                     "type": "string",
                     "default": "v_48_020",
-                    "description": "Checkpoint model to use for ProteinMPNN. Indicates noise level used during training for backbone atoms.  Choose from 'v_48_002','v_48_010,'v_48_020','v_48_030'. (default = 'v_48_020', noised with 0.20\u00c5 Gaussian noise)",
+                    "description": "Checkpoint model to use for ProteinMPNN. Indicates noise level used during training for backbone atoms.  Choose from 'v_48_002','v_48_010,'v_48_020','v_48_030'. (default = 'v_48_020', noised with 0.20Å Gaussian noise)",
                     "enum": [
                         "v_48_002",
                         "v_48_010",
@@ -363,7 +363,7 @@
                 "mpnn_relax_convergence_rmsd": {
                     "type": "number",
                     "default": 0.2,
-                    "description": "Design is considered converged if the C-alpha RMSD (\u00c5) between cycles is <= this threshold.",
+                    "description": "Design is considered converged if the C-alpha RMSD (Å) between cycles is <= this threshold.",
                     "hidden": true
                 },
                 "mpnn_relax_convergence_score": {
@@ -543,21 +543,21 @@
                 },
                 "fold_min_ss": {
                     "type": "integer",
-                    "description": "Minimum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 3"
+                    "description": "Minimum number of secondary structure elements (α-helices + β-strands). e.g. 3"
                 },
                 "fold_max_ss": {
                     "type": "integer",
-                    "description": "Maximum number of secondary structure elements (\u03b1-helices + \u03b2-strands). e.g. 8",
+                    "description": "Maximum number of secondary structure elements (α-helices + β-strands). e.g. 8",
                     "hidden": true
                 },
                 "fold_min_rog": {
                     "type": "number",
-                    "description": "Minimum radius of gyration (\u00c5). e.g. 10",
+                    "description": "Minimum radius of gyration (Å). e.g. 10",
                     "hidden": true
                 },
                 "fold_max_rog": {
                     "type": "number",
-                    "description": "Maximum radius of gyration (\u00c5). e.g. 20",
+                    "description": "Maximum radius of gyration (Å). e.g. 20",
                     "hidden": true
                 },
                 "mpnn_max_score": {
@@ -751,27 +751,27 @@
                 },
                 "pr_min_total_ss": {
                     "type": "integer",
-                    "description": "Minimum total secondary structure elements (\u03b1-helices + \u03b2-strands) in predicted structure",
+                    "description": "Minimum total secondary structure elements (α-helices + β-strands) in predicted structure",
                     "hidden": true
                 },
                 "pr_max_total_ss": {
                     "type": "integer",
-                    "description": "Maximum total secondary structure elements (\u03b1-helices + \u03b2-strands) in predicted structure",
+                    "description": "Maximum total secondary structure elements (α-helices + β-strands) in predicted structure",
                     "hidden": true
                 },
                 "pr_min_rog": {
                     "type": "number",
-                    "description": "Minimum radius of gyration (\u00c5) of predicted structure",
+                    "description": "Minimum radius of gyration (Å) of predicted structure",
                     "hidden": true
                 },
                 "pr_max_rog": {
                     "type": "number",
-                    "description": "Maximum radius of gyration (\u00c5) of predicted structure",
+                    "description": "Maximum radius of gyration (Å) of predicted structure",
                     "hidden": true
                 },
                 "pr_min_intface_bsa": {
                     "type": "number",
-                    "description": "Minimum buried surface area (\u00c5\u00b2) at the binding interface",
+                    "description": "Minimum buried surface area (Å²) at the binding interface",
                     "hidden": true
                 },
                 "pr_min_intface_shpcomp": {
@@ -816,12 +816,12 @@
                 },
                 "seq_min_ext_coef": {
                     "type": "number",
-                    "description": "Minimum extinction coefficient at 280nm (M\u207b\u00b9cm\u207b\u00b9)",
+                    "description": "Minimum extinction coefficient at 280nm (M⁻¹cm⁻¹)",
                     "hidden": true
                 },
                 "seq_max_ext_coef": {
                     "type": "number",
-                    "description": "Maximum extinction coefficient at 280nm (M\u207b\u00b9cm\u207b\u00b9)",
+                    "description": "Maximum extinction coefficient at 280nm (M⁻¹cm⁻¹)",
                     "hidden": true
                 },
                 "seq_min_pi": {
